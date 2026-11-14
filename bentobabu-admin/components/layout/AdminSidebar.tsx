@@ -131,7 +131,7 @@ export function AdminSidebar({ mobileOpen, onCloseMobile }: AdminSidebarProps) {
       {/* Bottom Storefront Link */}
       <div className="p-4 border-t border-[#2C3E2C] space-y-2">
         <a
-          href="http://localhost:3000"
+          href={process.env.NEXT_PUBLIC_STOREFRONT_URL || "https://bentobabu.com"}
           target="_blank"
           rel="noreferrer"
           className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-[#253525] border border-[#354B35] text-xs font-semibold text-[#DFC89B] hover:bg-[#354B35] transition-colors"

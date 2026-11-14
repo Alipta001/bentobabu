@@ -324,6 +324,7 @@ class AuthController {
       res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
       res.clearCookie('refreshToken', getClearCookieOptions('/'));
       res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth'));
+      res.clearCookie('bb_csrf_token', getClearCookieOptions('/'));
 
       return res.status(200).json({
         success: true,
@@ -348,6 +349,7 @@ class AuthController {
       res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
       res.clearCookie('refreshToken', getClearCookieOptions('/'));
       res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth'));
+      res.clearCookie('bb_csrf_token', getClearCookieOptions('/'));
 
       return res.status(200).json({
         success: true,

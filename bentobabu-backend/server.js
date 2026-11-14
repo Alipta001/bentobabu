@@ -20,14 +20,35 @@ const app = express();
 // 1. Secure HTTP Headers
 app.use(helmet());
 
-// 2. CORS Configuration (Strict Origins & Credentials)
-const allowedOrigins = [
+// 2. CORS Configuration (Strict Production & Development Origins with Credentials)
+const productionOrigins = [
+  'https://bentobabu.com',
+  'https://www.bentobabu.com',
+  'https://admin.bentobabu.com',
+  ...(env.frontendUrl && env.frontendUrl.startsWith('https://') ? [env.frontendUrl] : []),
+  ...(env.adminFrontendUrl && env.adminFrontendUrl.startsWith('https://') ? [env.adminFrontendUrl] : []),
+  ...(process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter((o) => o.startsWith('https://'))
+    : []),
+];
+
+const developmentOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
-  ...(env.frontendUrl ? [env.frontendUrl] : []),
-  ...(env.adminFrontendUrl ? [env.adminFrontendUrl] : []),
-  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()) : []),
-].filter(Boolean);
+  'http://localhost:3005',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+  'http://127.0.0.1:3005',
+  ...(env.frontendUrl && !env.frontendUrl.startsWith('https://') ? [env.frontendUrl] : []),
+  ...(env.adminFrontendUrl && !env.adminFrontendUrl.startsWith('https://') ? [env.adminFrontendUrl] : []),
+  ...(process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter((o) => !o.startsWith('https://'))
+    : []),
+];
+
+const allowedOrigins = Array.from(new Set(
+  env.isProduction ? productionOrigins : [...productionOrigins, ...developmentOrigins]
+)).filter(Boolean);
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -38,8 +59,8 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    // In development mode, allow standard localhost ports 3000, 3001, and 3005
-    if (!env.isProduction && /^http:\/\/localhost:(3000|3001|3005)$/.test(origin)) {
+    // In development mode only, permit localhost ports 3000, 3001, and 3005
+    if (!env.isProduction && /^http:\/\/(localhost|127\.0\.0\.1):(3000|3001|3005)$/.test(origin)) {
       return callback(null, true);
     }
     return callback(new Error(`Not allowed by CORS origin: ${origin}`));

@@ -115,6 +115,51 @@ const runTests = async () => {
     assert.strictEqual(postRootRes.body.message, 'Resource not found: POST /');
     console.log('✅ [PASS] POST / returns HTTP 404 (method not supported on root)');
 
+    // 5. Test Production Domain CORS Configuration
+    console.log('Testing Production CORS for custom domains...');
+    for (const prodOrigin of ['https://bentobabu.com', 'https://www.bentobabu.com', 'https://admin.bentobabu.com']) {
+      const corsRes = await makeRequest({
+        hostname: host,
+        port,
+        path: '/api/v1/health',
+        method: 'OPTIONS',
+        headers: {
+          Origin: prodOrigin,
+          'Access-Control-Request-Method': 'GET',
+          'Access-Control-Request-Headers': 'X-CSRF-Token',
+        },
+      });
+
+      assert.strictEqual(
+        corsRes.headers['access-control-allow-origin'],
+        prodOrigin,
+        `CORS must allow ${prodOrigin}`
+      );
+      assert.strictEqual(
+        corsRes.headers['access-control-allow-credentials'],
+        'true',
+        'CORS must permit credentials'
+      );
+      console.log(`✅ [PASS] CORS allows origin ${prodOrigin} with credentials`);
+    }
+
+    // 6. Test CORS rejects unauthorized origin
+    console.log('Testing CORS rejection for unauthorized origin...');
+    const unauthorizedCorsRes = await makeRequest({
+      hostname: host,
+      port,
+      path: '/api/v1/health',
+      method: 'GET',
+      headers: {
+        Origin: 'https://evil-phishing-domain.com',
+      },
+    });
+
+    assert.strictEqual(unauthorizedCorsRes.statusCode, 403, 'Unauthorized origin must return HTTP 403');
+    assert.strictEqual(unauthorizedCorsRes.body.success, false);
+    assert.ok(unauthorizedCorsRes.body.message.includes('Not allowed by CORS origin'));
+    console.log('✅ [PASS] CORS strictly rejects unauthorized origin with HTTP 403');
+
     console.log('\n====================================================');
     console.log('ALL ROOT ENDPOINT VERIFICATION TESTS PASSED');
     console.log('====================================================\n');

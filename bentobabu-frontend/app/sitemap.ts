@@ -2,7 +2,7 @@ import { MetadataRoute } from "next";
 import { INITIAL_CATEGORIES } from "@/lib/data/categories";
 import { INITIAL_PRODUCTS } from "@/lib/data/products";
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://bentobabu.in";
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://bentobabu.com";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticPages: MetadataRoute.Sitemap = [
