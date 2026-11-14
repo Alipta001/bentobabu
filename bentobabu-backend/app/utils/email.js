@@ -20,19 +20,20 @@ const getTransporter = () => {
     return customTransporter;
   }
 
-  if (!env.smtpHost) {
+  const activeEnv = validateEnv();
+  if (!activeEnv.smtpHost) {
     return null;
   }
 
   return nodemailer.createTransport({
-    host: env.smtpHost,
-    port: env.smtpPort,
-    secure: env.smtpSecure,
+    host: activeEnv.smtpHost,
+    port: activeEnv.smtpPort,
+    secure: activeEnv.smtpSecure,
     auth:
-      env.smtpUser && env.smtpPassword
+      activeEnv.smtpUser && activeEnv.smtpPassword
         ? {
-            user: env.smtpUser,
-            pass: env.smtpPassword,
+            user: activeEnv.smtpUser,
+            pass: activeEnv.smtpPassword,
           }
         : undefined,
   });
@@ -333,9 +334,11 @@ const sendEmail = async ({ to, subject, html, text }) => {
     };
   }
 
+  const activeEnv = validateEnv();
+
   try {
     const info = await transporter.sendMail({
-      from: env.emailFrom,
+      from: activeEnv.emailFrom,
       to,
       subject,
       html,
@@ -355,9 +358,54 @@ const sendEmail = async ({ to, subject, html, text }) => {
   }
 };
 
+/**
+ * Sends a responsive, branded Signup Verification OTP email
+ */
+const sendSignupOtpEmail = async ({ to, name, otp, expiryMinutes = 5 }) => {
+  const title = 'Verify Your BentoBabu Account';
+  const preheader = `Your BentoBabu verification code is ${otp}. Valid for ${expiryMinutes} minutes.`;
+  const customerName = name || 'Valued Customer';
+
+  const content = `
+    <p style="font-size: 15px; color: #374151; margin: 0 0 16px 0; line-height: 1.5;">
+      Welcome to <strong>BentoBabu</strong>! Thank you for starting your registration. To complete your account verification, please enter the one-time verification code below:
+    </p>
+    <div style="background-color: #F7F3EA; border: 2px dashed #354B35; border-radius: 8px; padding: 24px 16px; text-align: center; margin: 24px 0;">
+      <span style="font-size: 34px; font-weight: 700; letter-spacing: 10px; color: #166534; font-family: 'Courier New', Courier, monospace; display: inline-block;">${otp}</span>
+      <p style="margin: 10px 0 0 0; font-size: 13px; color: #4b5563; font-weight: 500;">
+        This code expires in <strong>${expiryMinutes} minutes</strong>
+      </p>
+    </div>
+    <div style="background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 20px 0; border-radius: 0 4px 4px 0;">
+      <p style="margin: 0; font-size: 13px; color: #92400e; font-weight: 600;">
+        ⚠️ Security Notice
+      </p>
+      <p style="margin: 4px 0 0 0; font-size: 12px; color: #b45309; line-height: 1.4;">
+        Never share this verification code with anyone, including anyone claiming to be BentoBabu support. Our team will never ask for your code.
+      </p>
+    </div>`;
+
+  const html = buildEmailLayout({
+    title,
+    preheader,
+    content,
+    customerName,
+  });
+
+  const text = `Verify Your BentoBabu Account\n\nHello ${customerName},\n\nYour BentoBabu verification code is: ${otp}\nThis code is valid for ${expiryMinutes} minutes.\n\nSECURITY NOTICE: Never share this code with anyone.\n\nBentoBabu - Healthy, Fresh & Nutritious Bento Delivery`;
+
+  return sendEmail({
+    to,
+    subject: `🍱 Your BentoBabu Verification Code: ${otp}`,
+    html,
+    text,
+  });
+};
+
 module.exports = {
   setTransporter,
   getTransporter,
   getEmailTemplate,
   sendEmail,
+  sendSignupOtpEmail,
 };

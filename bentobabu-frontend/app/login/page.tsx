@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Lock, Mail, ArrowRight, AlertCircle, Sparkles } from "lucide-react";
+import { Lock, Mail, ArrowRight, AlertCircle, Sparkles, CheckCircle2 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
@@ -15,12 +15,22 @@ import {
   DEFAULT_POST_LOGIN_PATH,
 } from "@/lib/authRedirect";
 
-function LoginUrlSync({ onTarget }: { onTarget: (t: string) => void }) {
+function LoginUrlSync({
+  onTarget,
+  onVerified,
+}: {
+  onTarget: (t: string) => void;
+  onVerified: (v: boolean) => void;
+}) {
   const searchParams = useSearchParams();
   const rawTarget = searchParams.get("returnTo") || searchParams.get("redirect");
+  const verifiedParam = searchParams.get("verified");
+
   useEffect(() => {
     if (rawTarget) onTarget(rawTarget);
-  }, [rawTarget, onTarget]);
+    if (verifiedParam === "true") onVerified(true);
+  }, [rawTarget, verifiedParam, onTarget, onVerified]);
+
   return null;
 }
 
@@ -37,9 +47,15 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isVerifiedNotice, setIsVerifiedNotice] = useState(false);
+  const [unverifiedNotice, setUnverifiedNotice] = useState(false);
 
   const handleTarget = React.useCallback((t: string) => {
     setReturnToTarget(t);
+  }, []);
+
+  const handleVerifiedParam = React.useCallback((v: boolean) => {
+    setIsVerifiedNotice(v);
   }, []);
 
   // Redirect if user is already authenticated
@@ -54,6 +70,7 @@ function LoginForm() {
     e.preventDefault();
     if (isLoading || isRedirectingRef.current) return;
     setError("");
+    setUnverifiedNotice(false);
     setIsLoading(true);
 
     try {
@@ -66,7 +83,16 @@ function LoginForm() {
       isRedirectingRef.current = true;
       router.replace(returnTo);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to log in.");
+      const errMsg = err instanceof Error ? err.message : "Failed to log in.";
+      if (
+        errMsg.toLowerCase().includes("not verified") ||
+        errMsg.toLowerCase().includes("requiresverification") ||
+        (err as any)?.response?.data?.data?.requiresVerification
+      ) {
+        setUnverifiedNotice(true);
+      } else {
+        setError(errMsg);
+      }
       setIsLoading(false);
     }
   };
@@ -74,7 +100,10 @@ function LoginForm() {
   return (
     <div className="max-w-md w-full mx-auto px-4 sm:px-6">
       <Suspense fallback={null}>
-        <LoginUrlSync onTarget={handleTarget} />
+        <LoginUrlSync
+          onTarget={handleTarget}
+          onVerified={handleVerifiedParam}
+        />
       </Suspense>
       <div className="bg-white rounded-3xl p-8 sm:p-10 border border-[#E5DFC5] shadow-xs space-y-6">
         <div className="text-center space-y-2">
@@ -89,6 +118,31 @@ function LoginForm() {
             Sign in to track orders, manage addresses, and access member perks.
           </p>
         </div>
+
+        {isVerifiedNotice && (
+          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>Account verified successfully! Please sign in with your password.</span>
+          </div>
+        )}
+
+        {unverifiedNotice && (
+          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+            <div>
+              <p className="font-semibold">Account not verified</p>
+              <p className="mt-0.5">
+                Please verify your account to continue.{" "}
+                <Link
+                  href="/register"
+                  className="font-bold underline text-[#354B35] hover:text-[#B99A60]"
+                >
+                  Verify or Register &rarr;
+                </Link>
+              </p>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">

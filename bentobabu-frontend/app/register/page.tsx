@@ -66,12 +66,23 @@ function RegisterForm() {
     setIsLoading(true);
 
     try {
-      await register({
+      const result = await register({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         phone: phoneClean,
         password,
       });
+
+      if (result.requiresVerification) {
+        isRedirectingRef.current = true;
+        const channel = result.channel || "email";
+        const destination = result.destination || "";
+        const challengeId = result.challengeId || "";
+        const verifyUrl = `/verify-otp?challengeId=${encodeURIComponent(challengeId)}${channel ? `&channel=${encodeURIComponent(channel)}` : ""}${destination ? `&dest=${encodeURIComponent(destination)}` : ""}&returnTo=${encodeURIComponent(returnTo)}`;
+        router.push(verifyUrl);
+        return;
+      }
+
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER_PROFILE });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ORDERS });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ADDRESSES });

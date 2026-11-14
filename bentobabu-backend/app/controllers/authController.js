@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const { User } = require('../models');
+const { User, OtpChallenge } = require('../models');
 const {
   generateAccessToken,
   generateRefreshToken,
@@ -14,8 +14,18 @@ const {
   clearFailedLogin,
 } = require('../config/redis');
 const { validateEnv } = require('../config/env');
+const { sendSignupOtpEmail } = require('../utils/email');
+const {
+  normalizePhone,
+  maskEmail,
+  maskPhoneNumber,
+  generateNumericOtp,
+  generateChallengeToken,
+  hashOtp,
+  verifyOtpHash,
+  sendSms,
+} = require('../utils/sms');
 
-const env = validateEnv();
 const BCRYPT_ROUNDS = 12;
 
 /**
@@ -26,25 +36,60 @@ const normalizeEmail = (email) => {
 };
 
 /**
- * Normalizes 10-digit Indian mobile number
+ * Helper to resolve user by identifier, email, or phone
  */
-const normalizePhone = (phone) => {
-  if (typeof phone !== 'string') return '';
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 12 && digits.startsWith('91')) {
-    return digits.slice(2);
+const resolveUserFromIdentifier = async ({ identifier, email, phone }) => {
+  const input = (identifier || email || phone || '').trim();
+  if (!input) return null;
+
+  const cleanEmail = normalizeEmail(input);
+  const cleanPhone = normalizePhone(input);
+
+  const conditions = [];
+  if (cleanEmail && /^\S+@\S+\.\S+$/.test(cleanEmail)) {
+    conditions.push({ email: cleanEmail });
   }
-  return digits;
+  if (cleanPhone && cleanPhone.length === 10) {
+    conditions.push({ phone: cleanPhone });
+  }
+
+  if (conditions.length === 0) return null;
+  return User.findOne({ $or: conditions });
+};
+
+/**
+ * Helper to resolve challenge and associated user by challengeId or fallback credentials
+ */
+const resolveChallenge = async ({ challengeId, identifier, email, phone }) => {
+  if (challengeId && typeof challengeId === 'string' && challengeId.trim()) {
+    const challenge = await OtpChallenge.findOne({ challengeToken: challengeId.trim() }).select('+otpHash');
+    if (challenge) {
+      const user = await User.findById(challenge.user);
+      return { challenge, user };
+    }
+  }
+
+  // Fallback to identifier lookup
+  const user = await resolveUserFromIdentifier({ identifier, email, phone });
+  if (!user) return { challenge: null, user: null };
+
+  const challenge = await OtpChallenge.findOne({
+    user: user._id,
+    isConsumed: false,
+  }).sort({ createdAt: -1 }).select('+otpHash');
+
+  return { challenge, user };
 };
 
 class AuthController {
   /**
    * POST /api/v1/auth/register
-   * Register a new CUSTOMER account with HttpOnly cookies
+   * Registers a customer account and initiates OTP verification (Email or SMS)
    */
   static async register(req, res, next) {
     try {
       const { name, email, phone, password } = req.body;
+      const activeEnv = validateEnv();
 
       // 1. Validation
       if (!name || typeof name !== 'string' || !name.trim()) {
@@ -90,48 +135,429 @@ class AuthController {
       });
 
       if (existingUser) {
-        if (existingUser.email === cleanEmail) {
-          return res.status(409).json({
-            success: false,
-            message: 'An account with this email address already exists',
-          });
-        }
-        if (existingUser.phone === cleanPhone) {
-          return res.status(409).json({
-            success: false,
-            message: 'An account with this mobile number already exists',
-          });
+        const isVerified = existingUser.isEmailVerified || existingUser.isPhoneVerified;
+        if (isVerified) {
+          if (existingUser.email === cleanEmail) {
+            return res.status(409).json({
+              success: false,
+              message: 'An account with this email address already exists',
+            });
+          }
+          if (existingUser.phone === cleanPhone) {
+            return res.status(409).json({
+              success: false,
+              message: 'An account with this mobile number already exists',
+            });
+          }
         }
       }
 
       // 3. Hash password
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-      // 4. Force CUSTOMER role
-      const newUser = await User.create({
-        name: name.trim(),
-        email: cleanEmail,
-        phone: cleanPhone,
-        password: hashedPassword,
-        role: 'CUSTOMER',
-        isActive: true,
-        isEmailVerified: false,
-        isPhoneVerified: false,
+      // 4. Create or update unverified user
+      let user;
+      if (existingUser && !(existingUser.isEmailVerified || existingUser.isPhoneVerified)) {
+        existingUser.name = name.trim();
+        existingUser.password = hashedPassword;
+        await existingUser.save();
+        await OtpChallenge.deleteMany({ user: existingUser._id, isConsumed: false });
+        user = existingUser;
+      } else {
+        user = await User.create({
+          name: name.trim(),
+          email: cleanEmail,
+          phone: cleanPhone,
+          password: hashedPassword,
+          role: 'CUSTOMER',
+          isActive: true,
+          isEmailVerified: false,
+          isPhoneVerified: false,
+        });
+      }
+
+      // 5. Generate opaque challenge token and hash OTP with separate OTP_HASH_SECRET
+      const channel = activeEnv.otpEmailEnabled ? 'email' : 'sms';
+      const identifier = channel === 'email' ? cleanEmail : cleanPhone;
+      const challengeToken = generateChallengeToken();
+      const otp = generateNumericOtp(activeEnv.otpLength);
+      const otpHash = hashOtp(otp, activeEnv.otpHashSecret);
+      const expiresAt = new Date(Date.now() + activeEnv.otpExpiryMinutes * 60 * 1000);
+
+      await OtpChallenge.create({
+        challengeToken,
+        user: user._id,
+        identifier,
+        channel,
+        otpHash,
+        expiresAt,
+        attempts: 0,
+        maxAttempts: activeEnv.otpMaxAttempts,
+        resendCount: 0,
+        lastSentAt: new Date(),
+        isConsumed: false,
       });
 
-      // 5. Generate stateless JWTs
-      const accessToken = generateAccessToken(newUser);
-      const refreshToken = generateRefreshToken(newUser);
+      // 6. Deliver OTP via configured channel
+      let sendResult;
+      if (channel === 'email') {
+        sendResult = await sendSignupOtpEmail({
+          to: cleanEmail,
+          name: user.name,
+          otp,
+          expiryMinutes: activeEnv.otpExpiryMinutes,
+        });
+      } else {
+        sendResult = await sendSms({
+          to: cleanPhone,
+          message: `Your BentoBabu verification code is ${otp}. Valid for ${activeEnv.otpExpiryMinutes} minutes. Do not share it with anyone.`,
+        });
+      }
 
-      // 6. Set HttpOnly cookies (No raw JWTs in JSON response)
-      res.cookie(env.accessTokenCookieName, accessToken, getAccessTokenCookieOptions());
-      res.cookie(env.refreshTokenCookieName, refreshToken, getRefreshCookieOptions());
+      if (!sendResult || !sendResult.success) {
+        // Rollback challenge creation and unverified new user to prevent orphaned conflict
+        await OtpChallenge.deleteOne({ challengeToken });
+        if (!existingUser) {
+          await User.deleteOne({ _id: user._id });
+        }
+        return res.status(502).json({
+          success: false,
+          message: `Failed to deliver verification code via ${channel}. Please try again later.`,
+        });
+      }
 
+      // 7. Return 201 without session cookies and without PII in payload
       return res.status(201).json({
         success: true,
-        message: 'Account created successfully',
+        message: `Verification code sent to your registered ${channel}. Please verify your account.`,
         data: {
-          user: newUser.toJSON(),
+          requiresVerification: true,
+          challengeId: challengeToken,
+          channel,
+          destination: channel === 'email' ? maskEmail(cleanEmail) : maskPhoneNumber(cleanPhone),
+          cooldownSeconds: activeEnv.otpResendCooldownSeconds,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/auth/otp-status
+   * Safe status check for active OTP challenge using opaque challengeId (no PII exposed)
+   */
+  static async getOtpStatus(req, res, next) {
+    try {
+      const { challengeId } = req.query;
+      if (!challengeId || typeof challengeId !== 'string' || !challengeId.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Challenge ID is required',
+        });
+      }
+
+      const challenge = await OtpChallenge.findOne({ challengeToken: challengeId.trim() });
+      if (!challenge) {
+        return res.status(404).json({
+          success: false,
+          message: 'Verification challenge not found or expired',
+        });
+      }
+
+      const activeEnv = validateEnv();
+      const elapsedSeconds = Math.floor((Date.now() - new Date(challenge.lastSentAt).getTime()) / 1000);
+      const cooldownRemaining = Math.max(0, activeEnv.otpResendCooldownSeconds - elapsedSeconds);
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          challengeId: challenge.challengeToken,
+          channel: challenge.channel,
+          destination: challenge.channel === 'email' ? maskEmail(challenge.identifier) : maskPhoneNumber(challenge.identifier),
+          isConsumed: challenge.isConsumed,
+          isExpired: new Date() > challenge.expiresAt,
+          cooldownRemaining,
+          resendCount: challenge.resendCount,
+          maxResends: activeEnv.otpMaxResends,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/verify-signup-otp
+   * Atomically verifies signup OTP and marks user verified. Does NOT issue session cookies.
+   */
+  static async verifySignupOtp(req, res, next) {
+    try {
+      const { challengeId, identifier, email, phone, otp } = req.body;
+      const activeEnv = validateEnv();
+
+      if (!otp || typeof otp !== 'string' || !/^\d{4,8}$/.test(otp.trim())) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide a valid numeric verification code',
+        });
+      }
+
+      const { challenge, user } = await resolveChallenge({ challengeId, identifier, email, phone });
+      if (!challenge || !user) {
+        return res.status(404).json({
+          success: false,
+          message: 'Verification challenge or user account not found. Please register first.',
+        });
+      }
+
+      const isAlreadyVerified = user.isEmailVerified || user.isPhoneVerified;
+      if (isAlreadyVerified) {
+        return res.status(400).json({
+          success: false,
+          message: 'Account is already verified. Please log in.',
+        });
+      }
+
+      if (challenge.isConsumed) {
+        return res.status(400).json({
+          success: false,
+          message: 'Verification code has already been used.',
+        });
+      }
+
+      if (new Date() > challenge.expiresAt) {
+        return res.status(400).json({
+          success: false,
+          message: 'Verification code has expired. Please request a new code.',
+          data: { expired: true },
+        });
+      }
+
+      if (challenge.attempts >= challenge.maxAttempts) {
+        return res.status(400).json({
+          success: false,
+          message: 'Maximum verification attempts exceeded. Please request a new code.',
+          data: { attemptsRemaining: 0 },
+        });
+      }
+
+      // Step 1: Atomically increment attempt counter with concurrency protection
+      const updatedChallenge = await OtpChallenge.findOneAndUpdate(
+        {
+          _id: challenge._id,
+          isConsumed: false,
+          attempts: { $lt: challenge.maxAttempts },
+          expiresAt: { $gt: new Date() },
+        },
+        { $inc: { attempts: 1 } },
+        { returnDocument: 'after' }
+      ).select('+otpHash');
+
+      if (!updatedChallenge) {
+        return res.status(400).json({
+          success: false,
+          message: 'Verification code has expired, already been consumed, or exceeded maximum attempts.',
+          data: { attemptsRemaining: 0 },
+        });
+      }
+
+      // Step 2: Timing-safe comparison using dedicated OTP_HASH_SECRET
+      const isMatch = verifyOtpHash(otp.trim(), updatedChallenge.otpHash, activeEnv.otpHashSecret);
+
+      if (!isMatch) {
+        const remaining = Math.max(0, updatedChallenge.maxAttempts - updatedChallenge.attempts);
+        if (remaining === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Incorrect verification code. Maximum attempts exceeded. Please request a new code.',
+            data: { attemptsRemaining: 0 },
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          message: `Incorrect verification code. You have ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
+          data: { attemptsRemaining: remaining },
+        });
+      }
+
+      // Step 3: Atomic conditional consumption ensuring exactly one concurrent request succeeds
+      const consumedChallenge = await OtpChallenge.findOneAndUpdate(
+        {
+          _id: updatedChallenge._id,
+          isConsumed: false,
+          user: user._id,
+        },
+        {
+          $set: {
+            isConsumed: true,
+            consumedAt: new Date(),
+          },
+        },
+        { returnDocument: 'after' }
+      );
+
+      if (!consumedChallenge) {
+        return res.status(400).json({
+          success: false,
+          message: 'Verification code has already been consumed or used by another request.',
+        });
+      }
+
+      // Step 4: Authoritatively mark user as verified
+      const updateFields = updatedChallenge.channel === 'email'
+        ? { isEmailVerified: true }
+        : { isPhoneVerified: true };
+      await User.updateOne({ _id: user._id }, { $set: updateFields });
+
+      // Invalidate any other pending unconsumed challenges for this user
+      await OtpChallenge.updateMany(
+        { user: user._id, _id: { $ne: updatedChallenge._id }, isConsumed: false },
+        { $set: { isConsumed: true, consumedAt: new Date() } }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'Account verified successfully. You can now log in.',
+        data: {
+          verified: true,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/resend-signup-otp
+   * Resends signup verification OTP respecting cooldown and persistent resend limits
+   */
+  static async resendSignupOtp(req, res, next) {
+    try {
+      const { challengeId, identifier, email, phone } = req.body;
+      const activeEnv = validateEnv();
+
+      const { challenge, user } = await resolveChallenge({ challengeId, identifier, email, phone });
+      if (!challenge || !user) {
+        return res.status(404).json({
+          success: false,
+          message: 'Verification challenge or user account not found. Please register first.',
+        });
+      }
+
+      const isAlreadyVerified = user.isEmailVerified || user.isPhoneVerified;
+      if (isAlreadyVerified) {
+        return res.status(400).json({
+          success: false,
+          message: 'Account is already verified. Please log in.',
+        });
+      }
+
+      if (challenge.isConsumed) {
+        return res.status(400).json({
+          success: false,
+          message: 'Verification code has already been used. Please log in.',
+        });
+      }
+
+      // Persistent resend limit check
+      if (challenge.resendCount >= activeEnv.otpMaxResends) {
+        return res.status(429).json({
+          success: false,
+          message: 'Maximum verification code resend limit reached. Please register again later.',
+          data: { maxResendsExceeded: true },
+        });
+      }
+
+      // Cooldown check
+      const cooldownSeconds = activeEnv.otpResendCooldownSeconds;
+      if (challenge.lastSentAt) {
+        const elapsedSeconds = Math.floor((Date.now() - new Date(challenge.lastSentAt).getTime()) / 1000);
+        const cooldownRemaining = cooldownSeconds - elapsedSeconds;
+        if (cooldownRemaining > 0) {
+          return res.status(429).json({
+            success: false,
+            message: `Please wait ${cooldownRemaining} seconds before requesting a new code.`,
+            data: { cooldownRemaining },
+          });
+        }
+      }
+
+      // Generate fresh OTP and new expiration
+      const otp = generateNumericOtp(activeEnv.otpLength);
+      const otpHash = hashOtp(otp, activeEnv.otpHashSecret);
+      const expiresAt = new Date(Date.now() + activeEnv.otpExpiryMinutes * 60 * 1000);
+      const cooldownDate = new Date(Date.now() - (cooldownSeconds * 1000));
+
+      // Atomic conditional update on the challenge document to prevent concurrent resend bypass
+      const updatedChallenge = await OtpChallenge.findOneAndUpdate(
+        {
+          _id: challenge._id,
+          isConsumed: false,
+          resendCount: { $lt: activeEnv.otpMaxResends },
+          lastSentAt: { $lte: cooldownDate },
+        },
+        {
+          $inc: { resendCount: 1 },
+          $set: {
+            otpHash,
+            expiresAt,
+            attempts: 0,
+            lastSentAt: new Date(),
+          },
+        },
+        { returnDocument: 'after' }
+      );
+
+      if (!updatedChallenge) {
+        const latestCheck = await OtpChallenge.findById(challenge._id);
+        if (latestCheck && latestCheck.resendCount >= activeEnv.otpMaxResends) {
+          return res.status(429).json({
+            success: false,
+            message: 'Maximum verification code resend limit reached. Please register again later.',
+            data: { maxResendsExceeded: true },
+          });
+        }
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${cooldownSeconds} seconds before requesting a new code.`,
+          data: { cooldownRemaining: cooldownSeconds },
+        });
+      }
+
+      // Dispatch new OTP via configured channel
+      let sendResult;
+      if (updatedChallenge.channel === 'email') {
+        sendResult = await sendSignupOtpEmail({
+          to: user.email,
+          name: user.name,
+          otp,
+          expiryMinutes: activeEnv.otpExpiryMinutes,
+        });
+      } else {
+        sendResult = await sendSms({
+          to: user.phone,
+          message: `Your BentoBabu verification code is ${otp}. Valid for ${activeEnv.otpExpiryMinutes} minutes. Do not share it with anyone.`,
+        });
+      }
+
+      if (!sendResult || !sendResult.success) {
+        return res.status(502).json({
+          success: false,
+          message: `Failed to deliver verification code via ${updatedChallenge.channel}. Please try again later.`,
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `A fresh verification code has been sent to your registered ${updatedChallenge.channel}.`,
+        data: {
+          challengeId: updatedChallenge.challengeToken,
+          channel: updatedChallenge.channel,
+          destination: updatedChallenge.channel === 'email' ? maskEmail(user.email) : maskPhoneNumber(user.phone),
+          cooldownSeconds: activeEnv.otpResendCooldownSeconds,
+          resendCount: updatedChallenge.resendCount,
+          maxResends: activeEnv.otpMaxResends,
         },
       });
     } catch (err) {
@@ -220,15 +646,35 @@ class AuthController {
 
       // 5. Successful login: clear failed attempts
       await clearFailedLogin(cleanInput);
+
+      // 6. Verify customer account verification status
+      const activeEnv = validateEnv();
+      if (user.role === 'CUSTOMER') {
+        const isVerified = user.isEmailVerified || user.isPhoneVerified;
+        if (!isVerified) {
+          const channel = activeEnv.otpEmailEnabled ? 'email' : 'sms';
+          const destination = channel === 'email' ? maskEmail(user.email) : maskPhoneNumber(user.phone);
+          return res.status(403).json({
+            success: false,
+            message: 'Account not verified. Please verify your account before logging in.',
+            data: {
+              requiresVerification: true,
+              channel,
+              destination,
+            },
+          });
+        }
+      }
+
       console.log(`[AuthController.login] Successful login for: "${cleanInput}" (${user.role})`);
 
-      // 6. Generate stateless JWTs
+      // 7. Generate stateless JWTs
       const accessToken = generateAccessToken(user);
       const refreshToken = generateRefreshToken(user);
 
-      // 7. Set HttpOnly cookies (No raw JWTs in response body)
-      res.cookie(env.accessTokenCookieName, accessToken, getAccessTokenCookieOptions());
-      res.cookie(env.refreshTokenCookieName, refreshToken, getRefreshCookieOptions());
+      // 8. Set HttpOnly cookies (No raw JWTs in response body)
+      res.cookie(activeEnv.accessTokenCookieName, accessToken, getAccessTokenCookieOptions());
+      res.cookie(activeEnv.refreshTokenCookieName, refreshToken, getRefreshCookieOptions());
 
       return res.status(200).json({
         success: true,

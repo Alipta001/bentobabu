@@ -19,6 +19,7 @@
     "test:phase8": "node test/phase8.test.js",
     "test:cookie-auth": "node test/cookie_auth_redis.test.js",
     "test:admin-workflows": "node test/admin_workflows.test.js",
+    "test:otp": "node test/otp_signup_verification.test.js",
     "test:all": "npm test"
   },
   "author": "Alipta Ghosh",

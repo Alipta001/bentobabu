@@ -3,7 +3,7 @@ const router = express.Router();
 
 const AuthController = require('../controllers/authController');
 const { authenticate } = require('../middleware/authMiddleware');
-const { authRateLimiter, refreshRateLimiter } = require('../middleware/rateLimiter');
+const { authRateLimiter, refreshRateLimiter, otpRateLimiter } = require('../middleware/rateLimiter');
 const { getCsrfTokenHandler } = require('../middleware/csrfMiddleware');
 
 // CSRF Token generation
@@ -11,6 +11,9 @@ router.get('/csrf-token', getCsrfTokenHandler);
 
 // Public authentication routes
 router.post('/register', authRateLimiter, AuthController.register);
+router.get('/otp-status', otpRateLimiter, AuthController.getOtpStatus);
+router.post('/verify-signup-otp', otpRateLimiter, AuthController.verifySignupOtp);
+router.post('/resend-signup-otp', otpRateLimiter, AuthController.resendSignupOtp);
 router.post('/login', authRateLimiter, AuthController.login);
 router.post('/refresh', refreshRateLimiter, AuthController.refresh);
 router.post('/logout', AuthController.logout);

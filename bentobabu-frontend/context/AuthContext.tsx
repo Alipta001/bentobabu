@@ -16,6 +16,7 @@ import {
   authService,
   LoginCredentials,
   RegisterData,
+  RegisterResponse,
 } from "@/services/authService";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
@@ -26,7 +27,7 @@ export interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (credentials: LoginCredentials) => Promise<User>;
-  register: (data: RegisterData) => Promise<User>;
+  register: (data: RegisterData) => Promise<RegisterResponse>;
   logout: () => Promise<void>;
   verifySession: () => Promise<User | null>;
 }
@@ -99,12 +100,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const register = useCallback(
-    async (data: RegisterData): Promise<User> => {
-      const authData = await authService.register(data);
-      const registeredUser = authData.user;
-      setUser(registeredUser);
-      setStatus("authenticated");
-      return registeredUser;
+    async (data: RegisterData): Promise<RegisterResponse> => {
+      const regData = await authService.register(data);
+      if (regData.user) {
+        setUser(regData.user);
+        setStatus("authenticated");
+      }
+      return regData;
     },
     []
   );

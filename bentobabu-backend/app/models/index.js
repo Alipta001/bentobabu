@@ -14,6 +14,7 @@ const CouponUsage = require('./CouponUsage');
 const InventoryLog = require('./InventoryLog');
 const Notification = require('./Notification');
 const RefreshSession = require('./RefreshSession');
+const OtpChallenge = require('./OtpChallenge');
 
 module.exports = {
   User,
@@ -32,5 +33,6 @@ module.exports = {
   InventoryLog,
   Notification,
   RefreshSession,
+  OtpChallenge,
 };
 

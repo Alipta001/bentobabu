@@ -16,6 +16,41 @@ export interface RegisterData {
   password?: string;
 }
 
+export interface RegisterResponse {
+  requiresVerification?: boolean;
+  challengeId?: string;
+  channel?: "email" | "sms";
+  destination?: string;
+  cooldownSeconds?: number;
+  user?: User;
+}
+
+export interface VerifyOtpPayload {
+  challengeId?: string;
+  identifier?: string;
+  email?: string;
+  phone?: string;
+  otp: string;
+}
+
+export interface ResendOtpPayload {
+  challengeId?: string;
+  identifier?: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface OtpStatusResponse {
+  challengeId: string;
+  channel: "email" | "sms";
+  destination: string;
+  isConsumed: boolean;
+  isExpired: boolean;
+  cooldownRemaining: number;
+  resendCount: number;
+  maxResends: number;
+}
+
 export interface AuthResponse {
   user: User;
 }
@@ -82,11 +117,11 @@ export const authService = {
   },
 
   /**
-   * User registration. Creates customer account with HttpOnly cookies.
+   * User registration. Creates customer account and dispatches verification OTP.
    */
-  async register(data: RegisterData): Promise<AuthResponse> {
+  async register(data: RegisterData): Promise<RegisterResponse> {
     const response = await apiClient.post<
-      ApiResponse<{ user: User }> | AuthResponse
+      ApiResponse<RegisterResponse> | RegisterResponse
     >(API_ENDPOINTS.AUTH.REGISTER, {
       name: data.name.trim(),
       email: data.email.trim().toLowerCase(),
@@ -95,20 +130,77 @@ export const authService = {
     });
 
     const raw = response.data;
-    let authData: AuthResponse;
+    let registerData: RegisterResponse;
 
     if (raw && "data" in raw && raw.data) {
-      authData = {
-        user: raw.data.user,
-      };
+      registerData = raw.data;
     } else {
-      authData = raw as AuthResponse;
+      registerData = raw as RegisterResponse;
     }
 
-    if (authData.user && typeof window !== "undefined") {
-      localStorage.setItem("bb_user", JSON.stringify(authData.user));
+    if (registerData.user && typeof window !== "undefined") {
+      localStorage.setItem("bb_user", JSON.stringify(registerData.user));
     }
-    return authData;
+    return registerData;
+  },
+
+  /**
+   * Verifies signup OTP code for an unverified customer account
+   */
+  async verifySignupOtp(payload: VerifyOtpPayload): Promise<{ verified: boolean }> {
+    const response = await apiClient.post<
+      ApiResponse<{ verified: boolean }> | { verified: boolean }
+    >(API_ENDPOINTS.AUTH.VERIFY_SIGNUP_OTP, payload);
+
+    const raw = response.data;
+    if (raw && "data" in raw && raw.data) {
+      return raw.data;
+    }
+    return raw as { verified: boolean };
+  },
+
+  /**
+   * Resends fresh signup OTP code to the registered email/mobile
+   */
+  async resendSignupOtp(payload: ResendOtpPayload): Promise<{
+    challengeId?: string;
+    channel: string;
+    destination: string;
+    cooldownSeconds: number;
+    resendCount: number;
+    maxResends?: number;
+  }> {
+    const response = await apiClient.post<
+      ApiResponse<{
+        challengeId?: string;
+        channel: string;
+        destination: string;
+        cooldownSeconds: number;
+        resendCount: number;
+        maxResends?: number;
+      }>
+    >(API_ENDPOINTS.AUTH.RESEND_SIGNUP_OTP, payload);
+
+    const raw = response.data;
+    if (raw && "data" in raw && raw.data) {
+      return raw.data;
+    }
+    return raw as any;
+  },
+
+  /**
+   * Fetches status and masked destination of an active OTP challenge (no PII exposed)
+   */
+  async getOtpStatus(challengeId: string): Promise<OtpStatusResponse> {
+    const response = await apiClient.get<ApiResponse<OtpStatusResponse>>(
+      `${API_ENDPOINTS.AUTH.OTP_STATUS}?challengeId=${encodeURIComponent(challengeId)}`
+    );
+
+    const raw = response.data;
+    if (raw && "data" in raw && raw.data) {
+      return raw.data;
+    }
+    return raw as any;
   },
 
   /**
