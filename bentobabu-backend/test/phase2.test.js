@@ -329,10 +329,11 @@ const runTests = async () => {
 
     // Test unique email on User
     const testEmail = `test_unique_${Date.now()}@bentobabu.in`;
+    const testPhone = `9${Math.floor(100000000 + Math.random() * 900000000)}`;
     const user1 = await User.create({
       name: 'User 1',
       email: testEmail,
-      phone: '9876543211',
+      phone: testPhone,
       password: 'password123',
     });
 
@@ -341,7 +342,7 @@ const runTests = async () => {
       await User.create({
         name: 'User 2',
         email: testEmail,
-        phone: '9876543212',
+        phone: `9${Math.floor(100000000 + Math.random() * 900000000)}`,
         password: 'password123',
       });
     } catch (err) {

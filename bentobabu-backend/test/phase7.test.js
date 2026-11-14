@@ -35,7 +35,7 @@ const AdminDeliveryController = require('../app/controllers/adminDeliveryControl
 const AdminOrderController = require('../app/controllers/adminOrderController');
 const AdminSettingsController = require('../app/controllers/adminSettingsController');
 
-const BASE_URL = 'http://127.0.0.1:5000';
+const BASE_URL = `http://127.0.0.1:${process.env.PORT || 4000}`;
 
 const makeRequest = ({ method, path, headers = {}, body = null }) => {
   return new Promise((resolve, reject) => {

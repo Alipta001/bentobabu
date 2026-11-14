@@ -13,6 +13,7 @@ const WebhookEvent = require('./WebhookEvent');
 const CouponUsage = require('./CouponUsage');
 const InventoryLog = require('./InventoryLog');
 const Notification = require('./Notification');
+const RefreshSession = require('./RefreshSession');
 
 module.exports = {
   User,
@@ -30,5 +31,6 @@ module.exports = {
   CouponUsage,
   InventoryLog,
   Notification,
+  RefreshSession,
 };
 

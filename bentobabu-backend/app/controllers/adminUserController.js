@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { User } = require('../models');
+const { User, RefreshSession } = require('../models');
 
 const BCRYPT_ROUNDS = 12;
 
@@ -182,6 +182,10 @@ class AdminUserController {
 
       targetUser.isActive = isActive;
       await targetUser.save();
+
+      if (isActive === false) {
+        await RefreshSession.deleteMany({ user: targetUser._id });
+      }
 
       const userObj = targetUser.toObject();
       delete userObj.password;

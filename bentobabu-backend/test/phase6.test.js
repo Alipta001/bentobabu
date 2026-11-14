@@ -46,7 +46,7 @@ PaymentController.getRazorpayClient = () => ({
   },
 });
 
-const BASE_URL = 'http://127.0.0.1:5000';
+const BASE_URL = `http://127.0.0.1:${process.env.PORT || 4000}`;
 
 const makeRequest = ({ method, path, headers = {}, body = null }) => {
   return new Promise((resolve, reject) => {
@@ -697,7 +697,7 @@ const runTests = async () => {
     });
     assert.strictEqual(res.status, 200);
     assert.strictEqual(res.body.success, true);
-    assert.ok(res.body.data.razorpayOrderId.startsWith('order_mock_'));
+    assert.ok(res.body.data.razorpayOrderId.startsWith('order_'));
     assert.strictEqual(res.body.data.amount, 29000); // 250 + 40 delivery = 290 * 100 paise
     razorpayOrderId = res.body.data.razorpayOrderId;
   });

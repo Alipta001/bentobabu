@@ -3,7 +3,7 @@ const { validateEnv } = require('../config/env');
 
 const env = validateEnv();
 
-let customTransporter = null;
+let customTransporter = undefined;
 
 /**
  * Allows tests to supply a mock transporter
@@ -16,7 +16,7 @@ const setTransporter = (transporter) => {
  * Returns active nodemailer transporter
  */
 const getTransporter = () => {
-  if (customTransporter) {
+  if (customTransporter !== undefined) {
     return customTransporter;
   }
 

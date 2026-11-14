@@ -73,7 +73,16 @@ app.use(csrfProtect);
 // 6. Global Rate Limiting (Redis-backed with memory fallback)
 app.use(globalRateLimiter);
 
-// 6. Health Check Route
+// 6. Root & Health Check Routes
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'BentoBabu API is running',
+    version: '1.0.0',
+    health: '/api/v1/health',
+  });
+});
+
 app.get('/api/v1/health', (req, res) => {
   const dbStates = {
     0: 'disconnected',
@@ -179,17 +188,21 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Start Server only after MongoDB successfully connects
-const startServer = async () => {
+const startServer = async (port = env.port, host = env.host) => {
   try {
     console.log('[Server] Connecting to MongoDB and Redis...');
     await connectDB(env.mongoUri);
     await initRedis();
 
-    server = app.listen(env.port, () => {
-      console.log(`[Server] Bento Babu backend running on http://localhost:${env.port} in ${process.env.NODE_ENV || 'development'} mode.`);
+    return new Promise((resolve, reject) => {
+      server = app.listen(port, host, (err) => {
+        if (err) return reject(err);
+        const actualPort = server.address().port;
+        console.log(`[Server] Bento Babu backend running on http://${host}:${actualPort} in ${process.env.NODE_ENV || 'development'} mode.`);
+        resolve(server);
+      });
+      server.on('error', reject);
     });
-
-    return server;
   } catch (err) {
     console.error('[Server] Startup failed. Server will not accept traffic:', err.message);
     process.exit(1);

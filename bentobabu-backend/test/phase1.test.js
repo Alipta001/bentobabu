@@ -112,13 +112,29 @@ const runTests = async () => {
 
   // Test 1 & 2: Server starts successfully and connects to MongoDB
   await test('Server starts successfully and MongoDB connects', async () => {
-    serverInstance = await startServer();
+    serverInstance = await startServer(0);
     assert.ok(serverInstance, 'Server instance should be returned');
     assert.strictEqual(mongoose.connection.readyState, 1, 'MongoDB connection readyState should be 1 (connected)');
   });
 
-  const port = process.env.PORT || 5000;
+  const port = serverInstance.address().port;
   const host = '127.0.0.1';
+
+  // Test: Root endpoint works
+  await test('GET / returns 200 with BentoBabu API status response', async () => {
+    const res = await makeRequest({
+      hostname: host,
+      port,
+      path: '/',
+      method: 'GET',
+    });
+
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(res.body.success, true);
+    assert.strictEqual(res.body.message, 'BentoBabu API is running');
+    assert.strictEqual(res.body.version, '1.0.0');
+    assert.strictEqual(res.body.health, '/api/v1/health');
+  });
 
   // Test 10: Health check endpoint works
   await test('GET /api/v1/health returns healthy status and DB connected', async () => {
