@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: #F7F3EA;
+    --foreground: #222922;
+    --primary: #354B35;
+    --primary-foreground: #FFFFFF;
+    --secondary: #F7F3EA;
+    --accent: #B99A60;
+    --accent-light: #DFC89B;
+    --accent-dark: #755C2B;
+    --sage: #8A9A86;
+    --sage-light: #EBF0E9;
+    --sand: #EDE8DE;
+    --terracotta: #C86D51;
+    --card: #FFFFFF;
+    --card-foreground: #222922;
+    --border: #E8E2D2;
+    --muted: #626F62;
+    --radius: 1rem;
+  }
+}
+
+/* Custom design token utility classes */
+.bg-botanical {
+  background-color: #354B35;
+}
+
+.text-botanical {
+  color: #354B35;
+}
+
+.border-botanical {
+  border-color: #354B35;
+}
+
+.bg-ivory {
+  background-color: #F7F3EA;
+}
+
+.bg-sand {
+  background-color: #EDE8DE;
+}
+
+.bg-gold {
+  background-color: #B99A60;
+}
+
+.text-gold {
+  color: #B99A60;
+}
+
+.border-gold {
+  border-color: #B99A60;
+}
+
+.bg-sage-light {
+  background-color: #EBF0E9;
+}
+
+.text-sage {
+  color: #8A9A86;
+}
+
+.font-serif {
+  font-family: "Playfair Display", Georgia, Cambria, "Times New Roman", Times, serif;
+}
+
+.font-sans {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Smooth custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F7F3EA;
+}
+::-webkit-scrollbar-thumb {
+  background: #B99A60;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #354B35;
+}
