@@ -252,12 +252,24 @@ Configure these DNS records at your domain registrar (e.g. GoDaddy, Namecheap, C
 - **`bentobabu-frontend` Build**: Compiled successfully in 2.9s with 0 errors. Production CSP verified in `.next/routes-manifest.json`.
 - **`bentobabu-admin` Build**: Compiled successfully in 3.7s with 0 errors. Production CSP verified in `.next/routes-manifest.json`.
 
+### Live Production Deployed Header Verification:
+- **`https://www.bentobabu.com` Response Headers**:
+  - `server: Vercel`
+  - `x-vercel-id: bom1::iad1::9mb87-1794685929913-01c8b3a506bf`
+  - `content-security-policy`: Verified live header includes:
+    `connect-src 'self' https://api.bentobabu.com https://bentobabu.onrender.com https://api.bentobabu.in https://lumberjack.razorpay.com https://api.razorpay.com`
+- **`https://bentobabu.com` Response Headers**:
+  - `server: Vercel`
+  - `location: https://www.bentobabu.com/` (HTTP 308 Canonical Redirect)
+- **`https://api.bentobabu.com` Live API & CORS Verification**:
+  - Preflight `OPTIONS /api/v1/auth/login` from `https://www.bentobabu.com` returns `HTTP 204` with `Access-Control-Allow-Origin: https://www.bentobabu.com` and `Access-Control-Allow-Credentials: true`.
+  - `GET /api/v1/auth/csrf-token` returns `HTTP 200` with `Set-Cookie: bb_csrf_token=...; SameSite=Lax`.
+  - `POST /api/v1/auth/login` with credentials and CSRF header successfully executes through AuthController without CSP or CORS rejection.
+
 ---
 
 ## 11. Remaining Manual Steps for User
 
-1. **DNS Provider**: Add the 4 DNS records (A record for apex, CNAME for www, admin, and api) in your DNS manager.
-2. **Render Dashboard**: Add `api.bentobabu.com` under Custom Domains in the backend service.
-3. **Vercel Dashboard (Customer)**: Add `bentobabu.com` and update `NEXT_PUBLIC_API_URL` to `https://api.bentobabu.com/api/v1`.
-4. **Vercel Dashboard (Admin)**: Add `admin.bentobabu.com` and update `NEXT_PUBLIC_API_URL` to `https://api.bentobabu.com/api/v1`.
-5. **Git Commit & Push**: Commit the modified configuration files and push to GitHub so Vercel and Render deploy the new build.
+1. **DNS Provider**: Ensure the `admin.bentobabu.com` CNAME record pointing to `cname.vercel-dns.com` is configured (apex, www, and api are already resolving).
+2. **Vercel Dashboard (Admin)**: Add `admin.bentobabu.com` under Domains in the admin Vercel project and set `NEXT_PUBLIC_API_URL=https://api.bentobabu.com/api/v1`.
+3. **Render Dashboard**: Confirm `api.bentobabu.com` shows verified and active in custom domains.
