@@ -1,0 +1,614 @@
+const mongoose = require('mongoose');
+const { Product, Category } = require('../models');
+const { slugify } = require('../utils/slugify');
+const { redisGet, redisSet, redisDelPattern } = require('../config/redis');
+
+class ProductController {
+  /**
+   * GET /api/v1/products
+   * Public: List active products with pagination, search, filters, and sorting (cached)
+   */
+  static async getProducts(req, res, next) {
+    try {
+      const cacheKey = 'cache:products:list:' + Buffer.from(JSON.stringify(req.query)).toString('base64');
+      const cached = await redisGet(cacheKey);
+      if (cached) {
+        return res.status(200).json(cached);
+      }
+      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
+      const skip = (page - 1) * limit;
+
+      // Base query: Only active products are visible publicly
+      const filter = { isActive: true };
+
+      // Availability: Exclude unavailable products from normal customer browsing unless specified
+      if (req.query.isAvailable !== undefined) {
+        filter.isAvailable = req.query.isAvailable === 'true';
+      } else {
+        filter.isAvailable = true;
+      }
+
+      // Keyword Search: Sanitize string to prevent ReDoS / NoSQL injection
+      if (req.query.search && typeof req.query.search === 'string') {
+        const sanitized = req.query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (sanitized) {
+          filter.$or = [
+            { name: { $regex: sanitized, $options: 'i' } },
+            { description: { $regex: sanitized, $options: 'i' } },
+          ];
+        }
+      }
+
+      // Category Filter: Supports either Category Slug or Category ObjectId
+      if (req.query.category && typeof req.query.category === 'string') {
+        const catParam = req.query.category.trim();
+        if (mongoose.Types.ObjectId.isValid(catParam)) {
+          filter.category = new mongoose.Types.ObjectId(catParam);
+        } else {
+          const categoryDoc = await Category.findOne({ slug: catParam.toLowerCase() });
+          if (categoryDoc) {
+            filter.category = categoryDoc._id;
+          } else {
+            // Non-existent category slug produces empty results safely
+            filter.category = new mongoose.Types.ObjectId();
+          }
+        }
+      }
+
+      // Dietary Tags Filter: Supports comma-separated string or array
+      if (req.query.dietaryTags) {
+        const tags = Array.isArray(req.query.dietaryTags)
+          ? req.query.dietaryTags
+          : req.query.dietaryTags.split(',').map((t) => t.trim()).filter(Boolean);
+        if (tags.length > 0) {
+          filter.dietaryTags = { $in: tags };
+        }
+      }
+
+      // Meal Types Filter: Supports comma-separated string or array
+      if (req.query.mealTypes) {
+        const meals = Array.isArray(req.query.mealTypes)
+          ? req.query.mealTypes
+          : req.query.mealTypes.split(',').map((m) => m.trim()).filter(Boolean);
+        if (meals.length > 0) {
+          filter.mealTypes = { $in: meals };
+        }
+      }
+
+      // Price Range Filter
+      if (req.query.minPrice !== undefined || req.query.maxPrice !== undefined) {
+        filter.price = {};
+        if (req.query.minPrice !== undefined) {
+          const min = Number(req.query.minPrice);
+          if (!isNaN(min) && min >= 0) {
+            filter.price.$gte = min;
+          }
+        }
+        if (req.query.maxPrice !== undefined) {
+          const max = Number(req.query.maxPrice);
+          if (!isNaN(max) && max >= 0) {
+            filter.price.$lte = max;
+          }
+        }
+        if (Object.keys(filter.price).length === 0) {
+          delete filter.price;
+        }
+      }
+
+      // Sorting Options
+      let sort = { createdAt: -1 };
+      const sortBy = req.query.sortBy;
+      if (sortBy === 'price_low_to_high' || sortBy === 'price_asc') {
+        sort = { price: 1 };
+      } else if (sortBy === 'price_high_to_low' || sortBy === 'price_desc') {
+        sort = { price: -1 };
+      } else if (sortBy === 'name') {
+        sort = { name: 1 };
+      } else if (sortBy === 'newest') {
+        sort = { createdAt: -1 };
+      } else if (sortBy === 'popularity' || sortBy === 'rating_desc') {
+        sort = { isFeatured: -1, isBestseller: -1, createdAt: -1 };
+      }
+
+      const [products, total] = await Promise.all([
+        Product.find(filter)
+          .sort(sort)
+          .skip(skip)
+          .limit(limit)
+          .populate('category', 'name slug'),
+        Product.countDocuments(filter),
+      ]);
+
+      const responsePayload = {
+        success: true,
+        data: products,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit) || 0,
+        },
+      };
+
+      await redisSet(cacheKey, responsePayload, 600); // 10 minutes TTL
+
+      res.status(200).json(responsePayload);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/products/featured
+   * Public: Return a curated collection of featured, active, and available items
+   */
+  static async getFeaturedProducts(req, res, next) {
+    try {
+      const limit = Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 8));
+
+      const featuredProducts = await Product.find({
+        isActive: true,
+        isAvailable: true,
+        $or: [{ isFeatured: true }, { isBestseller: true }],
+      })
+        .limit(limit)
+        .populate('category', 'name slug');
+
+      res.status(200).json({
+        success: true,
+        data: featuredProducts,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/products/:slug
+   * Public: Fetch an active product by slug with category details
+   */
+  static async getProductBySlug(req, res, next) {
+    try {
+      const { slug } = req.params;
+
+      if (!slug || typeof slug !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: 'Product slug is required',
+        });
+      }
+
+      const cacheKey = 'cache:products:detail:' + slug.toLowerCase().trim();
+      const cached = await redisGet(cacheKey);
+      if (cached) {
+        return res.status(200).json({
+          success: true,
+          data: cached,
+        });
+      }
+
+      const product = await Product.findOne({
+        slug: slug.toLowerCase().trim(),
+        isActive: true,
+      }).populate('category', 'name slug');
+
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found or unavailable',
+        });
+      }
+
+      await redisSet(cacheKey, product, 1800); // 30 minutes TTL
+
+      res.status(200).json({
+        success: true,
+        data: product,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/v1/products
+   * ADMIN only: Create a new product
+   */
+  static async createProduct(req, res, next) {
+    try {
+      const {
+        name,
+        slug,
+        description,
+        category,
+        images,
+        price,
+        compareAtPrice,
+        ingredients,
+        portionSize,
+        dietaryTags,
+        mealTypes,
+        nutrition,
+        allergens,
+        stockQuantity,
+        isAvailable,
+        isFeatured,
+        isActive,
+      } = req.body;
+
+      if (!name || typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Product name is required and must be a non-empty string',
+        });
+      }
+
+      if (price === undefined || typeof price !== 'number' || price < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'A valid non-negative product price is required',
+        });
+      }
+
+      if (!category || !mongoose.Types.ObjectId.isValid(category)) {
+        return res.status(400).json({
+          success: false,
+          message: 'A valid Category identifier is required',
+        });
+      }
+
+      const categoryDoc = await Category.findById(category);
+      if (!categoryDoc || !categoryDoc.isActive) {
+        return res.status(400).json({
+          success: false,
+          message: 'Referenced category does not exist or is inactive',
+        });
+      }
+
+      const generatedSlug = slugify(slug || name);
+      if (!generatedSlug) {
+        return res.status(400).json({
+          success: false,
+          message: 'A valid URL-friendly slug is required',
+        });
+      }
+
+      const existingProduct = await Product.findOne({ slug: generatedSlug });
+      if (existingProduct) {
+        return res.status(409).json({
+          success: false,
+          message: 'A product with this slug already exists',
+        });
+      }
+
+      const initialStock = Number.isInteger(stockQuantity) && stockQuantity >= 0 ? stockQuantity : 0;
+      const initialAvailability = initialStock === 0 ? false : (isAvailable !== undefined ? Boolean(isAvailable) : true);
+
+      const product = await Product.create({
+        name: name.trim(),
+        slug: generatedSlug,
+        description: typeof description === 'string' ? description.trim() : '',
+        category: categoryDoc._id,
+        images: Array.isArray(images) ? images : [],
+        price,
+        compareAtPrice: typeof compareAtPrice === 'number' && compareAtPrice >= 0 ? compareAtPrice : null,
+        ingredients: Array.isArray(ingredients) ? ingredients : [],
+        portionSize: typeof portionSize === 'string' ? portionSize.trim() : '',
+        dietaryTags: Array.isArray(dietaryTags) ? dietaryTags : [],
+        mealTypes: Array.isArray(mealTypes) ? mealTypes : [],
+        nutrition: nutrition && typeof nutrition === 'object' ? nutrition : undefined,
+        allergens: Array.isArray(allergens) ? allergens : [],
+        stockQuantity: initialStock,
+        isAvailable: initialAvailability,
+        isFeatured: Boolean(isFeatured),
+        isActive: isActive !== undefined ? Boolean(isActive) : true,
+      });
+
+      await redisDelPattern('cache:products:*');
+      await redisDelPattern('cache:admin:dashboard:*');
+
+      res.status(201).json({
+        success: true,
+        message: 'Product created successfully',
+        data: product,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/products/:id
+   * ADMIN only: Update permitted product fields
+   */
+  static async updateProduct(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid product identifier format',
+        });
+      }
+
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found',
+        });
+      }
+
+      const {
+        name,
+        slug,
+        description,
+        category,
+        images,
+        price,
+        compareAtPrice,
+        ingredients,
+        portionSize,
+        dietaryTags,
+        mealTypes,
+        nutrition,
+        allergens,
+        isFeatured,
+      } = req.body;
+
+      if (name !== undefined) {
+        if (typeof name !== 'string' || !name.trim()) {
+          return res.status(400).json({ success: false, message: 'Name must be a non-empty string' });
+        }
+        product.name = name.trim();
+      }
+
+      if (slug !== undefined) {
+        const newSlug = slugify(slug);
+        if (!newSlug) {
+          return res.status(400).json({ success: false, message: 'Slug cannot be empty' });
+        }
+        const duplicate = await Product.findOne({ slug: newSlug, _id: { $ne: id } });
+        if (duplicate) {
+          return res.status(409).json({ success: false, message: 'A product with this slug already exists' });
+        }
+        product.slug = newSlug;
+      }
+
+      if (category !== undefined) {
+        if (!mongoose.Types.ObjectId.isValid(category)) {
+          return res.status(400).json({ success: false, message: 'Invalid category identifier' });
+        }
+        const categoryDoc = await Category.findById(category);
+        if (!categoryDoc || !categoryDoc.isActive) {
+          return res.status(400).json({ success: false, message: 'Referenced category does not exist or is inactive' });
+        }
+        product.category = categoryDoc._id;
+      }
+
+      if (price !== undefined) {
+        if (typeof price !== 'number' || price < 0) {
+          return res.status(400).json({ success: false, message: 'Price must be a non-negative number' });
+        }
+        product.price = price;
+      }
+
+      if (compareAtPrice !== undefined) {
+        product.compareAtPrice = typeof compareAtPrice === 'number' && compareAtPrice >= 0 ? compareAtPrice : null;
+      }
+
+      if (description !== undefined) product.description = typeof description === 'string' ? description.trim() : '';
+      if (images !== undefined && Array.isArray(images)) product.images = images;
+      if (ingredients !== undefined && Array.isArray(ingredients)) product.ingredients = ingredients;
+      if (portionSize !== undefined) product.portionSize = typeof portionSize === 'string' ? portionSize.trim() : '';
+      if (dietaryTags !== undefined && Array.isArray(dietaryTags)) product.dietaryTags = dietaryTags;
+      if (mealTypes !== undefined && Array.isArray(mealTypes)) product.mealTypes = mealTypes;
+      if (nutrition !== undefined && typeof nutrition === 'object') product.nutrition = nutrition;
+      if (allergens !== undefined && Array.isArray(allergens)) product.allergens = allergens;
+      if (isFeatured !== undefined) product.isFeatured = Boolean(isFeatured);
+
+      await product.save();
+
+      await redisDelPattern('cache:products:*');
+      await redisDelPattern('cache:admin:dashboard:*');
+
+      res.status(200).json({
+        success: true,
+        message: 'Product updated successfully',
+        data: product,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/products/:id/status
+   * ADMIN only: Toggle or set product active status
+   */
+  static async updateProductStatus(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid product identifier format',
+        });
+      }
+
+      const { isActive } = req.body;
+      if (typeof isActive !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          message: 'isActive status must be a boolean (true or false)',
+        });
+      }
+
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found',
+        });
+      }
+
+      product.isActive = isActive;
+      await product.save();
+
+      await redisDelPattern('cache:products:*');
+      await redisDelPattern('cache:admin:dashboard:*');
+
+      res.status(200).json({
+        success: true,
+        message: `Product ${isActive ? 'activated' : 'deactivated'} successfully`,
+        data: product,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/products/:id/availability
+   * ADMIN only: Toggle or set ordering availability
+   */
+  static async updateProductAvailability(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid product identifier format',
+        });
+      }
+
+      const { isAvailable } = req.body;
+      if (typeof isAvailable !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          message: 'isAvailable status must be a boolean (true or false)',
+        });
+      }
+
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found',
+        });
+      }
+
+      product.isAvailable = isAvailable;
+      await product.save();
+
+      await redisDelPattern('cache:products:*');
+      await redisDelPattern('cache:admin:dashboard:*');
+
+      res.status(200).json({
+        success: true,
+        message: `Product ordering ${isAvailable ? 'enabled' : 'disabled'} successfully`,
+        data: product,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/products/:id/stock
+   * ADMIN only: Update inventory stock quantity
+   */
+  static async updateProductStock(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid product identifier format',
+        });
+      }
+
+      const { stockQuantity } = req.body;
+      if (!Number.isInteger(stockQuantity) || stockQuantity < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Stock quantity must be a non-negative integer',
+        });
+      }
+
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found',
+        });
+      }
+
+      product.stockQuantity = stockQuantity;
+      // If stock reaches 0, automatically mark as unavailable
+      if (stockQuantity === 0) {
+        product.isAvailable = false;
+      }
+      await product.save();
+
+      await redisDelPattern('cache:products:*');
+      await redisDelPattern('cache:admin:dashboard:*');
+
+      res.status(200).json({
+        success: true,
+        message: 'Product stock updated successfully',
+        data: product,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE /api/v1/products/:id
+   * ADMIN only: Soft-delete product (sets isActive = false)
+   */
+  static async deleteProduct(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid product identifier format',
+        });
+      }
+
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found',
+        });
+      }
+
+      // Soft deletion: preserve record for historical order integrity
+      product.isActive = false;
+      product.isAvailable = false;
+      await product.save();
+
+      await redisDelPattern('cache:products:*');
+      await redisDelPattern('cache:admin:dashboard:*');
+
+      res.status(200).json({
+        success: true,
+        message: 'Product soft-deleted successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+}
+
+module.exports = ProductController;
+

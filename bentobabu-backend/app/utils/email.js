@@ -1,0 +1,363 @@
+const nodemailer = require('nodemailer');
+const { validateEnv } = require('../config/env');
+
+const env = validateEnv();
+
+let customTransporter = null;
+
+/**
+ * Allows tests to supply a mock transporter
+ */
+const setTransporter = (transporter) => {
+  customTransporter = transporter;
+};
+
+/**
+ * Returns active nodemailer transporter
+ */
+const getTransporter = () => {
+  if (customTransporter) {
+    return customTransporter;
+  }
+
+  if (!env.smtpHost) {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    host: env.smtpHost,
+    port: env.smtpPort,
+    secure: env.smtpSecure,
+    auth:
+      env.smtpUser && env.smtpPassword
+        ? {
+            user: env.smtpUser,
+            pass: env.smtpPassword,
+          }
+        : undefined,
+  });
+};
+
+/**
+ * Formats order items list into an HTML table
+ */
+const renderItemsTable = (items = []) => {
+  if (!items || items.length === 0) return '';
+
+  const rows = items
+    .map(
+      (item) => `
+      <tr>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 14px; color: #333333;">${
+          item.productName || item.name || 'Bento Item'
+        }</td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 14px; text-align: center; color: #555555;">x${
+          item.quantity
+        }</td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 14px; text-align: right; color: #333333; font-weight: 600;">₹${
+          item.subtotal || item.unitPrice * item.quantity
+        }</td>
+      </tr>`
+    )
+    .join('');
+
+  return `
+    <table style="width: 100%; border-collapse: collapse; margin-top: 16px; margin-bottom: 16px; background-color: #fafafa; border-radius: 6px; overflow: hidden;">
+      <thead>
+        <tr style="background-color: #f3f4f6; text-align: left;">
+          <th style="padding: 10px 12px; font-size: 12px; color: #6b7280; text-transform: uppercase;">Item</th>
+          <th style="padding: 10px 12px; font-size: 12px; color: #6b7280; text-transform: uppercase; text-align: center;">Qty</th>
+          <th style="padding: 10px 12px; font-size: 12px; color: #6b7280; text-transform: uppercase; text-align: right;">Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>`;
+};
+
+/**
+ * Base email layout wrapper
+ */
+const buildEmailLayout = ({ title, preheader, content, orderNumber, grandTotal, customerName }) => {
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f6f8; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <div style="display: none; max-height: 0px; overflow: hidden; opacity: 0; color: transparent;">
+    ${preheader}
+  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f6f8; padding: 24px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #166534; padding: 24px; text-align: center;">
+              <h1 style="margin: 0; font-size: 24px; color: #ffffff; letter-spacing: 0.5px; font-weight: 700;">🍱 BentoBabu</h1>
+              <p style="margin: 4px 0 0 0; color: #bbf7d0; font-size: 13px;">Healthy, Fresh & Nutritious Bento Delivery</p>
+            </td>
+          </tr>
+          <!-- Body Content -->
+          <tr>
+            <td style="padding: 32px 28px;">
+              <h2 style="margin: 0 0 12px 0; font-size: 20px; color: #111827; font-weight: 600;">${title}</h2>
+              <p style="margin: 0 0 16px 0; font-size: 15px; color: #374151; line-height: 1.5;">
+                Hello <strong>${customerName || 'Valued Customer'}</strong>,
+              </p>
+              ${content}
+              ${
+                orderNumber
+                  ? `<div style="background-color: #f9fafb; border-left: 4px solid #166534; padding: 12px 16px; margin: 20px 0; border-radius: 0 4px 4px 0;">
+                      <p style="margin: 0; font-size: 13px; color: #6b7280;">Order Reference</p>
+                      <p style="margin: 2px 0 0 0; font-size: 16px; font-weight: 600; color: #111827;">#${orderNumber}</p>
+                      ${
+                        grandTotal !== undefined && grandTotal !== null
+                          ? `<p style="margin: 4px 0 0 0; font-size: 14px; color: #374151;">Total: <strong>₹${grandTotal}</strong></p>`
+                          : ''
+                      }
+                    </div>`
+                  : ''
+              }
+              <p style="margin: 24px 0 0 0; font-size: 14px; color: #4b5563; line-height: 1.5;">
+                Thank you for choosing BentoBabu for your nutritious meals.
+              </p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f9fafb; padding: 20px 24px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0 0 8px 0; font-size: 12px; color: #6b7280;">
+                Have questions or need assistance? We're here to help!
+              </p>
+              <p style="margin: 0 0 8px 0; font-size: 13px; font-weight: 500;">
+                <a href="mailto:bentobabuofficial@gmail.com" style="color: #166534; text-decoration: none;">bentobabuofficial@gmail.com</a>
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #9ca3af;">
+                Barrackpore, Kolkata, West Bengal, India &bull; &copy; ${new Date().getFullYear()} BentoBabu
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+};
+
+/**
+ * Returns structured email template by event type
+ */
+const getEmailTemplate = (eventType, data = {}) => {
+  const {
+    orderNumber = '',
+    grandTotal = null,
+    customerName = 'Customer',
+    items = [],
+    deliveryAddress = null,
+    reason = '',
+  } = data;
+
+  const itemsHtml = renderItemsTable(items);
+
+  let title = 'Order Notification';
+  let preheader = 'Update from BentoBabu';
+  let content = '';
+
+  switch (eventType) {
+    case 'ORDER_PLACED':
+      title = 'Order Received Confirmation';
+      preheader = `We received your BentoBabu order #${orderNumber}.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          We have received your order <strong>#${orderNumber}</strong>. Our kitchen team is reviewing it and we will begin preparing your fresh meals shortly.
+        </p>
+        ${itemsHtml}`;
+      break;
+
+    case 'PAYMENT_SUCCESS':
+      title = 'Payment Received Successfully';
+      preheader = `Payment for order #${orderNumber} has been successfully verified.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          Great news! Your payment of <strong>₹${grandTotal}</strong> for order <strong>#${orderNumber}</strong> has been successfully processed.
+        </p>
+        <p style="font-size: 14px; color: #059669; font-weight: 600; margin: 0 0 12px 0;">
+          Payment Status: PAID
+        </p>
+        ${itemsHtml}`;
+      break;
+
+    case 'PAYMENT_FAILED':
+      title = 'Payment Attempt Unsuccessful';
+      preheader = `Payment failed for order #${orderNumber}.`;
+      content = `
+        <p style="font-size: 15px; color: #dc2626; margin: 0 0 12px 0; font-weight: 500;">
+          We were unable to complete the payment for your order <strong>#${orderNumber}</strong>.
+        </p>
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          Please retry payment from your orders page or select an alternative payment method before your checkout window expires.
+        </p>`;
+      break;
+
+    case 'ORDER_CONFIRMED':
+      title = 'Your BentoBabu Order is Confirmed';
+      preheader = `Order #${orderNumber} is confirmed and queued for the kitchen.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          Your order <strong>#${orderNumber}</strong> has been verified and confirmed! Our chefs are preparing to craft your healthy bento boxes.
+        </p>
+        ${itemsHtml}`;
+      break;
+
+    case 'ORDER_PREPARING':
+      title = 'Kitchen is Preparing Your Bento';
+      preheader = `Chef is preparing order #${orderNumber} with fresh ingredients.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          Our kitchen has started cooking your order <strong>#${orderNumber}</strong> using fresh, healthy, and hygienic ingredients.
+        </p>`;
+      break;
+
+    case 'ORDER_READY':
+      title = 'Your Order is Packed & Ready';
+      preheader = `Order #${orderNumber} is boxed and awaiting pickup by delivery partner.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          Your bento box for order <strong>#${orderNumber}</strong> is freshly packed and waiting for delivery partner pickup.
+        </p>`;
+      break;
+
+    case 'OUT_FOR_DELIVERY':
+      title = 'Your Bento is Out for Delivery! 🛵';
+      preheader = `Rider is on the way with your order #${orderNumber}.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          Your delivery partner has picked up order <strong>#${orderNumber}</strong> and is heading toward your address.
+        </p>
+        ${
+          deliveryAddress
+            ? `<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 12px; margin: 16px 0;">
+                <p style="margin: 0 0 4px 0; font-size: 12px; color: #166534; font-weight: 600; text-transform: uppercase;">Delivery Address</p>
+                <p style="margin: 0; font-size: 14px; color: #1f2937;">${deliveryAddress.addressLine || ''}, ${deliveryAddress.city || 'Barrackpore'} - ${deliveryAddress.pincode || ''}</p>
+              </div>`
+            : ''
+        }
+        <p style="font-size: 13px; color: #6b7280; margin: 0 0 12px 0;">
+          Please share your one-time delivery OTP with the delivery partner upon arrival to complete contactless verification.
+        </p>`;
+      break;
+
+    case 'ORDER_DELIVERED':
+      title = 'Order Delivered — Bon Appétit! 🎉';
+      preheader = `Order #${orderNumber} has been delivered successfully.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          Your order <strong>#${orderNumber}</strong> has been successfully delivered. We hope you enjoy your nutritious meal!
+        </p>
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          We would love to hear your feedback on your bento experience today.
+        </p>`;
+      break;
+
+    case 'ORDER_CANCELLED':
+      title = 'Order Cancellation Notice';
+      preheader = `Order #${orderNumber} has been cancelled.`;
+      content = `
+        <p style="font-size: 15px; color: #dc2626; margin: 0 0 12px 0;">
+          Your order <strong>#${orderNumber}</strong> has been cancelled.
+        </p>
+        ${
+          reason
+            ? `<p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">Reason: <em>${reason}</em></p>`
+            : ''
+        }
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          Any reserved items have been restored. If you have questions or require support, please contact us.
+        </p>`;
+      break;
+
+    case 'ORDER_EXPIRED':
+      title = 'Unpaid Order Expired';
+      preheader = `Payment window for order #${orderNumber} expired.`;
+      content = `
+        <p style="font-size: 15px; color: #4b5563; margin: 0 0 12px 0;">
+          The payment window for order <strong>#${orderNumber}</strong> has timed out without payment confirmation.
+        </p>
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          Your order has been safely cancelled and stock has been released. Feel free to place a new order whenever you're ready!
+        </p>`;
+      break;
+
+    default:
+      title = 'BentoBabu Order Update';
+      content = `<p style="font-size: 15px; color: #374151;">There is an update on your order #${orderNumber}.</p>`;
+      break;
+  }
+
+  const html = buildEmailLayout({
+    title,
+    preheader,
+    content,
+    orderNumber,
+    grandTotal,
+    customerName,
+  });
+
+  const text = `${title}\n\nHello ${customerName},\n\nOrder: #${orderNumber}\n${preheader}\n\nFor support, email bentobabuofficial@gmail.com\nBentoBabu`;
+
+  return {
+    subject: `🍱 BentoBabu: ${title} (#${orderNumber || 'Bento'})`,
+    html,
+    text,
+  };
+};
+
+/**
+ * Dispatches an email notification via SMTP transporter
+ */
+const sendEmail = async ({ to, subject, html, text }) => {
+  const transporter = getTransporter();
+
+  if (!transporter) {
+    return {
+      success: false,
+      skipped: true,
+      error: 'SMTP host is not configured. Email delivery skipped.',
+    };
+  }
+
+  try {
+    const info = await transporter.sendMail({
+      from: env.emailFrom,
+      to,
+      subject,
+      html,
+      text,
+    });
+
+    return {
+      success: true,
+      messageId: info.messageId,
+      response: info.response,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message || 'SMTP delivery failure',
+    };
+  }
+};
+
+module.exports = {
+  setTransporter,
+  getTransporter,
+  getEmailTemplate,
+  sendEmail,
+};

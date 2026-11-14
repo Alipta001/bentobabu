@@ -1,0 +1,41 @@
+{
+  "name": "bentobabu-backend",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "create:admin": "node scripts/createAdmin.js",
+    "seed": "node seed.js",
+    "test": "node test/phase1.test.js && node test/phase2.test.js && node test/phase3.test.js && node test/phase4.test.js && node test/phase5.test.js && node test/phase6.test.js && node test/phase7.test.js && node test/phase8.test.js && node test/cookie_auth_redis.test.js && node test/admin_workflows.test.js",
+    "test:phase1": "node test/phase1.test.js",
+    "test:phase2": "node test/phase2.test.js",
+    "test:phase3": "node test/phase3.test.js",
+    "test:phase4": "node test/phase4.test.js",
+    "test:phase5": "node test/phase5.test.js",
+    "test:phase6": "node test/phase6.test.js",
+    "test:phase7": "node test/phase7.test.js",
+    "test:phase8": "node test/phase8.test.js",
+    "test:cookie-auth": "node test/cookie_auth_redis.test.js",
+    "test:admin-workflows": "node test/admin_workflows.test.js",
+    "test:all": "npm test"
+  },
+  "author": "Alipta Ghosh",
+  "license": "ISC",
+  "description": "Bento Babu Production Food Ordering & Delivery Backend",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.3",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.12.0",
+    "nodemailer": "^10.5.0",
+    "rate-limit-redis": "^6.0.2",
+    "razorpay": "^2.9.8",
+    "redis": "^6.3.1"
+  }
+}

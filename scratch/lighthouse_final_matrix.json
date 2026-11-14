@@ -1,0 +1,1002 @@
+[
+  {
+    "route": "Homepage",
+    "path": "/",
+    "mobile": {
+      "runs": [
+        {
+          "performance": 92,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 915.2168999999999,
+          "lcp": 3039.2169,
+          "tbt": 184.89154999999982,
+          "cls": 0,
+          "si": 915.2168999999999
+        },
+        {
+          "performance": 91,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 926.0331000000001,
+          "lcp": 3336.0331000000006,
+          "tbt": 111.00000000000023,
+          "cls": 0,
+          "si": 926.0331000000001
+        },
+        {
+          "performance": 89,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 911.9919,
+          "lcp": 3451.9919,
+          "tbt": 164,
+          "cls": 0,
+          "si": 911.9919
+        }
+      ],
+      "median": {
+        "performance": 91,
+        "accessibility": 96,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.92,
+        "lcp": 3.34,
+        "tbt": 164,
+        "cls": 0,
+        "si": 0.92
+      }
+    },
+    "desktop": {
+      "runs": [
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 259.713,
+          "lcp": 696.713,
+          "tbt": 3.500000000000057,
+          "cls": 0.0001196912178522642,
+          "si": 286.36342899579404
+        },
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 263.9393,
+          "lcp": 684.9393,
+          "tbt": 5.5,
+          "cls": 0.0001196912178522642,
+          "si": 308.4089536264237
+        },
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 256.7819,
+          "lcp": 669.7819,
+          "tbt": 1.5,
+          "cls": 0.0001196912178522642,
+          "si": 274.3498947985836
+        }
+      ],
+      "median": {
+        "performance": 100,
+        "accessibility": 96,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.26,
+        "lcp": 0.68,
+        "tbt": 4,
+        "cls": 0,
+        "si": 0.29
+      }
+    }
+  },
+  {
+    "route": "Menu",
+    "path": "/menu",
+    "mobile": {
+      "runs": [
+        {
+          "performance": 92,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 909.2393,
+          "lcp": 3242.2392999999997,
+          "tbt": 98,
+          "cls": 0,
+          "si": 909.2393
+        },
+        {
+          "performance": 91,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 914.5328,
+          "lcp": 3310.5328,
+          "tbt": 113,
+          "cls": 0,
+          "si": 914.5328
+        },
+        {
+          "performance": 93,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 919.048,
+          "lcp": 3203.0480000000002,
+          "tbt": 75,
+          "cls": 0,
+          "si": 919.048
+        }
+      ],
+      "median": {
+        "performance": 92,
+        "accessibility": 96,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.91,
+        "lcp": 3.24,
+        "tbt": 98,
+        "cls": 0,
+        "si": 0.91
+      }
+    },
+    "desktop": {
+      "runs": [
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 266.20219999999995,
+          "lcp": 726.7527499999999,
+          "tbt": 2,
+          "cls": 0.0001193297093325007,
+          "si": 309.43238085397917
+        },
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 253.15800000000002,
+          "lcp": 710.4475,
+          "tbt": 2,
+          "cls": 0.0001193297093325007,
+          "si": 260.93034524727466
+        },
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 263.8337,
+          "lcp": 727.792125,
+          "tbt": 4,
+          "cls": 0.0001193297093325007,
+          "si": 286.718461067365
+        }
+      ],
+      "median": {
+        "performance": 100,
+        "accessibility": 96,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.26,
+        "lcp": 0.73,
+        "tbt": 2,
+        "cls": 0,
+        "si": 0.29
+      }
+    }
+  },
+  {
+    "route": "Category (Gym & Fitness)",
+    "path": "/categories/gym-fitness",
+    "mobile": {
+      "runs": [
+        {
+          "performance": 93,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 916.9801,
+          "lcp": 3092.9800999999998,
+          "tbt": 90.5,
+          "cls": 0,
+          "si": 941.3309279580495
+        },
+        {
+          "performance": 93,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 914.1786,
+          "lcp": 3100.1786,
+          "tbt": 111,
+          "cls": 0,
+          "si": 914.1786
+        },
+        {
+          "performance": 93,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 913.7668000000001,
+          "lcp": 3094.7668,
+          "tbt": 94,
+          "cls": 0,
+          "si": 913.7668000000001
+        }
+      ],
+      "median": {
+        "performance": 93,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.91,
+        "lcp": 3.09,
+        "tbt": 94,
+        "cls": 0,
+        "si": 0.91
+      }
+    },
+    "desktop": {
+      "runs": [
+        {
+          "performance": 99,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 274.9249,
+          "lcp": 1019.3270499999998,
+          "tbt": 9,
+          "cls": 0.0001199782981473704,
+          "si": 419.2308793903617
+        },
+        {
+          "performance": 100,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 254.17989999999998,
+          "lcp": 715.2698499999999,
+          "tbt": 4,
+          "cls": 0.0001199782981473704,
+          "si": 304.309626691672
+        },
+        {
+          "performance": 100,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 249.0663,
+          "lcp": 631.0662999999998,
+          "tbt": 0,
+          "cls": 0.0001199782981473704,
+          "si": 249.0663
+        }
+      ],
+      "median": {
+        "performance": 100,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.25,
+        "lcp": 0.72,
+        "tbt": 4,
+        "cls": 0,
+        "si": 0.3
+      }
+    }
+  },
+  {
+    "route": "Product Detail",
+    "path": "/product/grilled-herb-chicken-quinoa-bowl",
+    "mobile": {
+      "runs": [
+        {
+          "performance": 94,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 907.989,
+          "lcp": 3141.9890000000005,
+          "tbt": 42,
+          "cls": 0,
+          "si": 1509.3416360701085
+        },
+        {
+          "performance": 92,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 908.1749,
+          "lcp": 3152.1749,
+          "tbt": 129,
+          "cls": 0,
+          "si": 908.1749
+        },
+        {
+          "performance": 92,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 912.3777,
+          "lcp": 3242.3777,
+          "tbt": 93,
+          "cls": 0,
+          "si": 912.3777
+        }
+      ],
+      "median": {
+        "performance": 92,
+        "accessibility": 96,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.91,
+        "lcp": 3.15,
+        "tbt": 93,
+        "cls": 0,
+        "si": 0.91
+      }
+    },
+    "desktop": {
+      "runs": [
+        {
+          "performance": 99,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 250.6327,
+          "lcp": 844.8091000000002,
+          "tbt": 5,
+          "cls": 0.0001199782981473704,
+          "si": 460.44714314129385
+        },
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 253.1069,
+          "lcp": 670.1069,
+          "tbt": 3.5,
+          "cls": 0.0001199782981473704,
+          "si": 259.54534033445196
+        },
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 251.7855,
+          "lcp": 662.7854999999997,
+          "tbt": 0.5,
+          "cls": 0.0001199782981473704,
+          "si": 251.7855
+        }
+      ],
+      "median": {
+        "performance": 100,
+        "accessibility": 96,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.25,
+        "lcp": 0.67,
+        "tbt": 4,
+        "cls": 0,
+        "si": 0.26
+      }
+    }
+  },
+  {
+    "route": "Cart",
+    "path": "/cart",
+    "mobile": {
+      "runs": [
+        {
+          "performance": 95,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 763.2573,
+          "lcp": 2752.2573,
+          "tbt": 145.5,
+          "cls": 0,
+          "si": 763.2573
+        },
+        {
+          "performance": 96,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 758.5245,
+          "lcp": 2708.5244999999995,
+          "tbt": 100,
+          "cls": 0,
+          "si": 758.5245
+        },
+        {
+          "performance": 94,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 759.0356999999999,
+          "lcp": 2826.0357000000004,
+          "tbt": 157,
+          "cls": 0,
+          "si": 759.0356999999999
+        }
+      ],
+      "median": {
+        "performance": 95,
+        "accessibility": 96,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.76,
+        "lcp": 2.75,
+        "tbt": 146,
+        "cls": 0,
+        "si": 0.76
+      }
+    },
+    "desktop": {
+      "runs": [
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 215.6334,
+          "lcp": 577.6333999999999,
+          "tbt": 0,
+          "cls": 0.0001199782981473704,
+          "si": 215.6334
+        },
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 216.05309999999997,
+          "lcp": 592.0531,
+          "tbt": 6,
+          "cls": 0.0001199782981473704,
+          "si": 216.05309999999997
+        },
+        {
+          "performance": 100,
+          "accessibility": 96,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 210.99599999999998,
+          "lcp": 589.996,
+          "tbt": 9,
+          "cls": 0.0001199782981473704,
+          "si": 210.99599999999998
+        }
+      ],
+      "median": {
+        "performance": 100,
+        "accessibility": 96,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.22,
+        "lcp": 0.59,
+        "tbt": 6,
+        "cls": 0,
+        "si": 0.22
+      }
+    }
+  },
+  {
+    "route": "Checkout",
+    "path": "/checkout",
+    "mobile": {
+      "runs": [
+        {
+          "performance": 89,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 760.8543999999999,
+          "lcp": 2894.8543999999997,
+          "tbt": 301,
+          "cls": 0.006789891310223149,
+          "si": 992.3553714006791
+        },
+        {
+          "performance": 93,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 761.4799,
+          "lcp": 2790.4799,
+          "tbt": 187,
+          "cls": 0.006789891310223149,
+          "si": 955.9231987703681
+        },
+        {
+          "performance": 92,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 768.8399,
+          "lcp": 2797.8399,
+          "tbt": 203,
+          "cls": 0.006789891310223149,
+          "si": 1000.1453231310663
+        }
+      ],
+      "median": {
+        "performance": 92,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 63,
+        "fcp": 0.76,
+        "lcp": 2.8,
+        "tbt": 203,
+        "cls": 0.007,
+        "si": 0.99
+      }
+    },
+    "desktop": {
+      "runs": [
+        {
+          "performance": 100,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 214.20999999999998,
+          "lcp": 593.21,
+          "tbt": 9,
+          "cls": 0.0038230258433225852,
+          "si": 311.3288273361676
+        },
+        {
+          "performance": 100,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 215.59320000000002,
+          "lcp": 596.5932,
+          "tbt": 11,
+          "cls": 0.004285906786469488,
+          "si": 309.9665519936881
+        },
+        {
+          "performance": 100,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 217.1119,
+          "lcp": 600.1119,
+          "tbt": 13,
+          "cls": 0.004285906786469488,
+          "si": 300.3488355505415
+        }
+      ],
+      "median": {
+        "performance": 100,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 63,
+        "fcp": 0.22,
+        "lcp": 0.6,
+        "tbt": 11,
+        "cls": 0.004,
+        "si": 0.31
+      }
+    }
+  },
+  {
+    "route": "Login",
+    "path": "/login",
+    "mobile": {
+      "runs": [
+        {
+          "performance": 77,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 767.2493999999999,
+          "lcp": 2746.2493999999997,
+          "tbt": 154.99999999999977,
+          "cls": 0.3488422908217424,
+          "si": 767.2493999999999
+        },
+        {
+          "performance": 76,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 764.4043999999999,
+          "lcp": 2800.4044000000004,
+          "tbt": 190,
+          "cls": 0.3488422908217424,
+          "si": 764.4043999999999
+        },
+        {
+          "performance": 77,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 767.4054000000001,
+          "lcp": 2783.4054000000006,
+          "tbt": 166,
+          "cls": 0.3488422908217424,
+          "si": 767.4054000000001
+        }
+      ],
+      "median": {
+        "performance": 77,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.77,
+        "lcp": 2.78,
+        "tbt": 166,
+        "cls": 0.349,
+        "si": 0.77
+      }
+    },
+    "desktop": {
+      "runs": [
+        {
+          "performance": 90,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 212.0188,
+          "lcp": 574.0188,
+          "tbt": 0,
+          "cls": 0.20629844125559796,
+          "si": 212.0188
+        },
+        {
+          "performance": 90,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 211.40030000000002,
+          "lcp": 564.4003,
+          "tbt": 0,
+          "cls": 0.20629844125559796,
+          "si": 211.40030000000002
+        },
+        {
+          "performance": 90,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 216.2119,
+          "lcp": 616.2119,
+          "tbt": 30,
+          "cls": 0.20629844125559796,
+          "si": 216.2119
+        }
+      ],
+      "median": {
+        "performance": 90,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.21,
+        "lcp": 0.57,
+        "tbt": 0,
+        "cls": 0.206,
+        "si": 0.21
+      }
+    }
+  },
+  {
+    "route": "Register",
+    "path": "/register",
+    "mobile": {
+      "runs": [
+        {
+          "performance": 68,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 765.1986999999999,
+          "lcp": 2930.1986999999995,
+          "tbt": 282,
+          "cls": 0.5091543400622149,
+          "si": 863.0553940305614
+        },
+        {
+          "performance": 71,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 760.6954000000001,
+          "lcp": 2805.6954,
+          "tbt": 208.99999999999955,
+          "cls": 0.5091543400622149,
+          "si": 760.6954000000001
+        },
+        {
+          "performance": 76,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 784.7014999999999,
+          "lcp": 1534.7015,
+          "tbt": 174,
+          "cls": 0.5091543400622149,
+          "si": 784.7014999999999
+        }
+      ],
+      "median": {
+        "performance": 71,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.77,
+        "lcp": 2.81,
+        "tbt": 209,
+        "cls": 0.509,
+        "si": 0.78
+      }
+    },
+    "desktop": {
+      "runs": [
+        {
+          "performance": 84,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 207.8657,
+          "lcp": 562.8657000000001,
+          "tbt": 0,
+          "cls": 0.31581328878855275,
+          "si": 207.8657
+        },
+        {
+          "performance": 84,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 208.47500000000002,
+          "lcp": 561.475,
+          "tbt": 0,
+          "cls": 0.31581328878855275,
+          "si": 208.47500000000002
+        },
+        {
+          "performance": 84,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 211.68529999999998,
+          "lcp": 589.6853,
+          "tbt": 8,
+          "cls": 0.31581328878855275,
+          "si": 221.18619935588202
+        }
+      ],
+      "median": {
+        "performance": 84,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.21,
+        "lcp": 0.56,
+        "tbt": 0,
+        "cls": 0.316,
+        "si": 0.21
+      }
+    }
+  },
+  {
+    "route": "Account",
+    "path": "/account",
+    "mobile": {
+      "runs": [
+        {
+          "performance": 86,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 760.3933,
+          "lcp": 3753.1275499999997,
+          "tbt": 187,
+          "cls": 0,
+          "si": 884.1385626563283
+        },
+        {
+          "performance": 86,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 759.3686,
+          "lcp": 3886.6293999999994,
+          "tbt": 166,
+          "cls": 0,
+          "si": 863.0079689238806
+        },
+        {
+          "performance": 81,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 758.9456,
+          "lcp": 4012.1344000000004,
+          "tbt": 292,
+          "cls": 0,
+          "si": 918.4252944948505
+        }
+      ],
+      "median": {
+        "performance": 86,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 63,
+        "fcp": 0.76,
+        "lcp": 3.89,
+        "tbt": 187,
+        "cls": 0,
+        "si": 0.88
+      }
+    },
+    "desktop": {
+      "runs": [
+        {
+          "performance": 99,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 215.5467,
+          "lcp": 854.37995,
+          "tbt": 5,
+          "cls": 0.0001185605463619648,
+          "si": 297.41909043224473
+        },
+        {
+          "performance": 99,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 217.0072,
+          "lcp": 864.7327,
+          "tbt": 7,
+          "cls": 0.0001185605463619648,
+          "si": 295.1123563275553
+        },
+        {
+          "performance": 99,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 63,
+          "fcp": 215.33710000000002,
+          "lcp": 822.6688499999999,
+          "tbt": 0,
+          "cls": 0.0001185605463619648,
+          "si": 250.16657695464173
+        }
+      ],
+      "median": {
+        "performance": 99,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 63,
+        "fcp": 0.22,
+        "lcp": 0.85,
+        "tbt": 5,
+        "cls": 0,
+        "si": 0.3
+      }
+    }
+  },
+  {
+    "route": "Orders",
+    "path": "/orders",
+    "mobile": {
+      "runs": [
+        {
+          "performance": 88,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 758.6220000000001,
+          "lcp": 3474.3645000000006,
+          "tbt": 198,
+          "cls": 0,
+          "si": 1478.8323459120274
+        },
+        {
+          "performance": 91,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 761.1754000000001,
+          "lcp": 3465.1381000000006,
+          "tbt": 81,
+          "cls": 0,
+          "si": 1376.2171399356462
+        },
+        {
+          "performance": 89,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 757.9262000000001,
+          "lcp": 3464.3873,
+          "tbt": 168,
+          "cls": 0,
+          "si": 1063.9851767936877
+        }
+      ],
+      "median": {
+        "performance": 89,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.76,
+        "lcp": 3.47,
+        "tbt": 168,
+        "cls": 0,
+        "si": 1.38
+      }
+    },
+    "desktop": {
+      "runs": [
+        {
+          "performance": 100,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 211.9669,
+          "lcp": 819.3886000000001,
+          "tbt": 5.000000000000114,
+          "cls": 0,
+          "si": 324.2578174013697
+        },
+        {
+          "performance": 99,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 217.0655,
+          "lcp": 825.6979999999999,
+          "tbt": 3,
+          "cls": 0,
+          "si": 352.38530089789293
+        },
+        {
+          "performance": 99,
+          "accessibility": 94,
+          "bestPractices": 96,
+          "seo": 100,
+          "fcp": 219.62850000000003,
+          "lcp": 828.867,
+          "tbt": 0,
+          "cls": 0,
+          "si": 385.07379330795357
+        }
+      ],
+      "median": {
+        "performance": 99,
+        "accessibility": 94,
+        "bestPractices": 96,
+        "seo": 100,
+        "fcp": 0.22,
+        "lcp": 0.83,
+        "tbt": 3,
+        "cls": 0,
+        "si": 0.35
+      }
+    }
+  }
+]
