@@ -1,5 +1,16 @@
 import type { NextConfig } from "next";
 
+const isProduction = process.env.NODE_ENV === "production";
+
+const connectSrc = [
+  "'self'",
+  ...(isProduction ? [] : ["http://localhost:*", "http://127.0.0.1:*"]),
+  "https://bentobabu.onrender.com",
+  "https://api.bentobabu.in",
+  "https://lumberjack.razorpay.com",
+  "https://api.razorpay.com",
+].join(" ");
+
 const securityHeaders = [
   {
     key: "X-DNS-Prefetch-Control",
@@ -38,7 +49,7 @@ const securityHeaders = [
       "img-src 'self' data: blob: https://images.unsplash.com https://*.razorpay.com",
       "font-src 'self' data:",
       "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
-      "connect-src 'self' http://localhost:* http://127.0.0.1:* https://api.bentobabu.in https://lumberjack.razorpay.com https://api.razorpay.com",
+      `connect-src ${connectSrc}`,
     ].join("; "),
   },
 ];
