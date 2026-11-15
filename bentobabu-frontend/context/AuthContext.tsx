@@ -101,12 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = useCallback(
     async (data: RegisterData): Promise<RegisterResponse> => {
-      const regData = await authService.register(data);
-      if (regData.user) {
-        setUser(regData.user);
-        setStatus("authenticated");
-      }
-      return regData;
+      // Customer registration dispatches OTP verification; do NOT mark authenticated
+      return authService.register(data);
     },
     []
   );

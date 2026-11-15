@@ -21,8 +21,18 @@ export interface RegisterResponse {
   challengeId?: string;
   channel?: "email" | "sms";
   destination?: string;
+  maskedDestination?: string;
   cooldownSeconds?: number;
+  cooldown?: number;
   user?: User;
+}
+
+export interface StoredOtpChallenge {
+  challengeId: string;
+  channel: "email" | "sms";
+  destination: string;
+  cooldownSeconds?: number;
+  createdAt: number;
 }
 
 export interface VerifyOtpPayload {
@@ -117,6 +127,42 @@ export const authService = {
   },
 
   /**
+   * Safe persistent session storage for OTP challenge information (navigation state without PII in URL)
+   */
+  saveStoredChallenge(challenge: StoredOtpChallenge): void {
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem("bb_otp_challenge", JSON.stringify(challenge));
+      } catch {
+        // Ignore quota/private browsing issues
+      }
+    }
+  },
+
+  getStoredChallenge(): StoredOtpChallenge | null {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = sessionStorage.getItem("bb_otp_challenge");
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  },
+
+  clearStoredChallenge(): void {
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("bb_otp_challenge");
+      } catch {
+        // Ignore
+      }
+    }
+  },
+
+  /**
    * User registration. Creates customer account and dispatches verification OTP.
    */
   async register(data: RegisterData): Promise<RegisterResponse> {
@@ -130,17 +176,51 @@ export const authService = {
     });
 
     const raw = response.data;
-    let registerData: RegisterResponse;
+    const payload =
+      raw && typeof raw === "object" && "data" in raw && (raw as any).data
+        ? (raw as any).data
+        : (raw as any);
 
-    if (raw && "data" in raw && raw.data) {
-      registerData = raw.data;
-    } else {
-      registerData = raw as RegisterResponse;
-    }
+    const challengeId =
+      payload?.challengeId ||
+      payload?.challengeToken ||
+      payload?.id ||
+      payload?._id ||
+      (raw as any)?.challengeId ||
+      (raw as any)?.challengeToken;
 
-    if (registerData.user && typeof window !== "undefined") {
-      localStorage.setItem("bb_user", JSON.stringify(registerData.user));
-    }
+    const channelRaw = payload?.channel || (raw as any)?.channel || "EMAIL";
+    const channel = String(channelRaw).toUpperCase() === "SMS" ? "sms" : "email";
+
+    const destination =
+      payload?.maskedDestination ||
+      payload?.destination ||
+      (raw as any)?.maskedDestination ||
+      (raw as any)?.destination ||
+      "";
+
+    const cooldown =
+      payload?.cooldown ??
+      payload?.cooldownSeconds ??
+      (raw as any)?.cooldown ??
+      (raw as any)?.cooldownSeconds ??
+      60;
+
+    const requiresVerification =
+      payload?.requiresVerification !== false && (!!challengeId || payload?.requiresVerification === true);
+
+    const registerData: RegisterResponse = {
+      challengeId,
+      channel,
+      destination,
+      maskedDestination: destination,
+      cooldown,
+      cooldownSeconds: cooldown,
+      requiresVerification,
+      user: payload?.user,
+    };
+
+    // Customer accounts require OTP verification; do NOT store unverified user in localStorage
     return registerData;
   },
 
@@ -182,10 +262,20 @@ export const authService = {
     >(API_ENDPOINTS.AUTH.RESEND_SIGNUP_OTP, payload);
 
     const raw = response.data;
+    let data: any;
     if (raw && "data" in raw && raw.data) {
-      return raw.data;
+      data = raw.data;
+    } else {
+      data = raw as any;
     }
-    return raw as any;
+
+    if (!data.destination && data.maskedDestination) {
+      data.destination = data.maskedDestination;
+    }
+    if (data.cooldownSeconds === undefined && data.cooldown !== undefined) {
+      data.cooldownSeconds = data.cooldown;
+    }
+    return data;
   },
 
   /**
@@ -197,10 +287,20 @@ export const authService = {
     );
 
     const raw = response.data;
+    let data: OtpStatusResponse;
     if (raw && "data" in raw && raw.data) {
-      return raw.data;
+      data = raw.data;
+    } else {
+      data = raw as any;
     }
-    return raw as any;
+
+    if (!data.destination && (data as any).maskedDestination) {
+      data.destination = (data as any).maskedDestination;
+    }
+    if (data.cooldownRemaining === undefined && (data as any).cooldown !== undefined) {
+      data.cooldownRemaining = (data as any).cooldown;
+    }
+    return data;
   },
 
   /**

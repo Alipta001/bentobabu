@@ -99,7 +99,8 @@ app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'BentoBabu API is running',
-    version: '1.0.0',
+    version: '1.1.0',
+    commit: process.env.RENDER_GIT_COMMIT || 'development',
     health: '/api/v1/health',
   });
 });
@@ -123,6 +124,9 @@ app.get('/api/v1/health', (req, res) => {
   res.status(isHealthy ? 200 : 503).json({
     success: isHealthy,
     status: isHealthy ? (isRedisHealthy || process.env.REDIS_ENABLED === 'false' ? 'healthy' : 'degraded_no_cache') : 'unhealthy',
+    version: '1.1.0',
+    commit: process.env.RENDER_GIT_COMMIT || 'development',
+    uptime: Math.floor(process.uptime()),
     database: dbState,
     redis: redisStatus,
     environment: process.env.NODE_ENV || (env.isProduction ? 'production' : 'development'),

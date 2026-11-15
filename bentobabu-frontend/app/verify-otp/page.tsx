@@ -13,40 +13,87 @@ function VerifyOtpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const challengeId = searchParams.get("challengeId") || "";
-  const channelParam = (searchParams.get("channel") as "email" | "sms") || "email";
-  const destinationParam = searchParams.get("dest") || searchParams.get("destination") || "";
+  const urlChallengeId = searchParams.get("challengeId") || "";
+  const channelParam = (searchParams.get("channel") as "email" | "sms") || null;
+  const destinationParam = searchParams.get("dest") || searchParams.get("destination") || null;
   const rawReturnTo = searchParams.get("returnTo") || searchParams.get("redirect");
   const returnTo = getSafeReturnUrl(rawReturnTo, DEFAULT_POST_LOGIN_PATH);
 
+  const [challengeId, setChallengeId] = useState<string>(urlChallengeId);
+  const [activeChannel, setActiveChannel] = useState<"email" | "sms">("email");
+  const [activeDestination, setActiveDestination] = useState<string>("");
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
-  const [activeChannel, setActiveChannel] = useState<"email" | "sms">(channelParam);
-  const [activeDestination, setActiveDestination] = useState(destinationParam);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [cooldown, setCooldown] = useState(60);
   const [isResending, setIsResending] = useState(false);
+  const [isChallengeLoaded, setIsChallengeLoaded] = useState(false);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // If challengeId is available and destination is not pre-populated, query status
+  // Synchronize challengeId, destination, and channel from URL or sessionStorage
   useEffect(() => {
-    if (challengeId && !activeDestination) {
-      authService
-        .getOtpStatus(challengeId)
-        .then((res) => {
-          if (res.destination) setActiveDestination(res.destination);
-          if (res.channel) setActiveChannel(res.channel);
-          if (res.cooldownRemaining !== undefined) setCooldown(res.cooldownRemaining);
-        })
-        .catch(() => {
-          // Ignore status lookup failure; verification will report any issue
-        });
-    }
-  }, [challengeId, activeDestination]);
+    const stored = authService.getStoredChallenge();
+    const effectiveChallengeId = urlChallengeId || stored?.challengeId || "";
 
-  // 60-second cooldown timer
+    setChallengeId(effectiveChallengeId);
+    if (channelParam) {
+      setActiveChannel(channelParam);
+    } else if (stored?.channel) {
+      setActiveChannel(stored.channel);
+    }
+
+    if (destinationParam) {
+      setActiveDestination(destinationParam);
+    } else if (stored?.destination) {
+      setActiveDestination(stored.destination);
+    }
+
+    if (stored?.cooldownSeconds && stored.cooldownSeconds > 0) {
+      const elapsedSeconds = Math.floor((Date.now() - (stored.createdAt || Date.now())) / 1000);
+      const remaining = Math.max(0, stored.cooldownSeconds - elapsedSeconds);
+      setCooldown(remaining);
+    }
+
+    setIsChallengeLoaded(true);
+  }, [urlChallengeId, channelParam, destinationParam]);
+
+  // Query server status for challenge to ensure validity and update cooldown
+  useEffect(() => {
+    if (!challengeId) return;
+
+    authService
+      .getOtpStatus(challengeId)
+      .then((res) => {
+        const dest = res.destination || (res as any).maskedDestination;
+        if (dest) setActiveDestination(dest);
+        if (res.channel) setActiveChannel(res.channel);
+        if (res.cooldownRemaining !== undefined) setCooldown(res.cooldownRemaining);
+
+        // Update stored challenge session state
+        authService.saveStoredChallenge({
+          challengeId,
+          channel: res.channel || activeChannel,
+          destination: dest || activeDestination,
+          cooldownSeconds: res.cooldownRemaining,
+          createdAt: Date.now(),
+        });
+
+        if (res.isConsumed) {
+          setError("This verification code has already been used. Please log in.");
+        } else if (res.isExpired) {
+          setError("This verification code has expired. Please request a new code below.");
+        }
+      })
+      .catch((err: any) => {
+        if (err?.message?.includes("not found") || err?.response?.status === 404) {
+          setError("Verification challenge not found or has expired. Please register again.");
+        }
+      });
+  }, [challengeId]);
+
+  // Cooldown countdown timer
   useEffect(() => {
     if (cooldown <= 0) return;
     const timer = setInterval(() => {
@@ -57,11 +104,12 @@ function VerifyOtpContent() {
 
   // Focus first input box on load
   useEffect(() => {
-    inputRefs.current[0]?.focus();
-  }, []);
+    if (challengeId) {
+      inputRefs.current[0]?.focus();
+    }
+  }, [challengeId]);
 
   const handleDigitChange = (index: number, value: string) => {
-    // Only accept numeric digits
     const cleaned = value.replace(/\D/g, "");
     if (!cleaned) {
       const newDigits = [...otpDigits];
@@ -70,7 +118,6 @@ function VerifyOtpContent() {
       return;
     }
 
-    // Handle paste or multiple digits typed at once
     if (cleaned.length > 1) {
       const newDigits = [...otpDigits];
       const chars = cleaned.slice(0, 6).split("");
@@ -89,7 +136,6 @@ function VerifyOtpContent() {
     newDigits[index] = cleaned[0];
     setOtpDigits(newDigits);
 
-    // Auto-advance to next input box
     if (index < 5 && cleaned[0]) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -126,13 +172,21 @@ function VerifyOtpContent() {
       return;
     }
 
+    if (!challengeId) {
+      setError("Verification challenge identifier is missing. Please register again.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       await authService.verifySignupOtp({
-        challengeId: challengeId || undefined,
+        challengeId,
         otp: fullOtp,
       });
+
+      // Clear challenge session state on successful verification
+      authService.clearStoredChallenge();
 
       setSuccessMsg("Account verified successfully! Redirecting to sign in...");
       setTimeout(() => {
@@ -147,22 +201,38 @@ function VerifyOtpContent() {
 
   const handleResend = async () => {
     if (cooldown > 0 || isResending) return;
+    if (!challengeId) {
+      setError("Verification challenge not found. Please register again.");
+      return;
+    }
+
     setError("");
     setSuccessMsg("");
     setIsResending(true);
 
     try {
       const res = await authService.resendSignupOtp({
-        challengeId: challengeId || undefined,
+        challengeId,
       });
 
-      if (res.destination) {
-        setActiveDestination(res.destination);
+      const dest = res.destination || (res as any).maskedDestination;
+      if (dest) {
+        setActiveDestination(dest);
       }
       if (res.channel) {
         setActiveChannel(res.channel as "email" | "sms");
       }
-      setCooldown(res.cooldownSeconds || 60);
+      const newCooldown = res.cooldownSeconds ?? (res as any).cooldown ?? 60;
+      setCooldown(newCooldown);
+
+      authService.saveStoredChallenge({
+        challengeId,
+        channel: (res.channel as "email" | "sms") || activeChannel,
+        destination: dest || activeDestination,
+        cooldownSeconds: newCooldown,
+        createdAt: Date.now(),
+      });
+
       setSuccessMsg(`A fresh verification code has been dispatched to your ${res.channel || activeChannel}.`);
       setOtpDigits(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
@@ -172,6 +242,39 @@ function VerifyOtpContent() {
       setIsResending(false);
     }
   };
+
+  // Direct navigation without active challenge
+  if (isChallengeLoaded && !challengeId) {
+    return (
+      <div className="max-w-md w-full mx-auto px-4 sm:px-6">
+        <div className="bg-white rounded-3xl p-8 sm:p-10 border border-[#E5DFC5] shadow-xs space-y-6 text-center">
+          <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mx-auto text-amber-600">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <h1 className="font-serif text-2xl font-bold text-[#222922]">
+            No Verification Challenge
+          </h1>
+          <p className="text-xs text-[#6B776A] leading-relaxed">
+            No active registration verification challenge was found. Please register a new account or sign in to continue.
+          </p>
+          <div className="pt-2 flex flex-col gap-2">
+            <Link
+              href="/register"
+              className="w-full py-3 rounded-full bg-[#354B35] text-[#F7F3EA] text-xs font-bold shadow-md hover:bg-[#253525] transition-all text-center"
+            >
+              Go to Registration
+            </Link>
+            <Link
+              href="/login"
+              className="w-full py-2.5 rounded-full border border-[#E5DFC5] text-xs font-medium text-[#222922] hover:bg-[#F7F3EA] transition-all text-center"
+            >
+              Sign In
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md w-full mx-auto px-4 sm:px-6">

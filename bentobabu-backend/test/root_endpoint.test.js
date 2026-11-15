@@ -62,7 +62,7 @@ const runTests = async () => {
     assert.strictEqual(rootRes.statusCode, 200, 'GET / must return HTTP 200');
     assert.strictEqual(rootRes.body.success, true, 'GET / success must be true');
     assert.strictEqual(rootRes.body.message, 'BentoBabu API is running');
-    assert.strictEqual(rootRes.body.version, '1.0.0');
+    assert.strictEqual(rootRes.body.version, '1.1.0');
     assert.strictEqual(rootRes.body.health, '/api/v1/health');
     assert.strictEqual(rootRes.body.env, undefined, 'Must not leak environment variables');
     assert.strictEqual(rootRes.body.database, undefined, 'Must not leak database details on root');

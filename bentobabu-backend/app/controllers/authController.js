@@ -229,12 +229,14 @@ class AuthController {
       // 7. Return 201 without session cookies and without PII in payload
       return res.status(201).json({
         success: true,
-        message: `Verification code sent to your registered ${channel}. Please verify your account.`,
+        message: 'Registration successful. Please verify your account.',
         data: {
           requiresVerification: true,
           challengeId: challengeToken,
           channel,
           destination: channel === 'email' ? maskEmail(cleanEmail) : maskPhoneNumber(cleanPhone),
+          maskedDestination: channel === 'email' ? maskEmail(cleanEmail) : maskPhoneNumber(cleanPhone),
+          cooldown: activeEnv.otpResendCooldownSeconds,
           cooldownSeconds: activeEnv.otpResendCooldownSeconds,
         },
       });
@@ -275,9 +277,11 @@ class AuthController {
           challengeId: challenge.challengeToken,
           channel: challenge.channel,
           destination: challenge.channel === 'email' ? maskEmail(challenge.identifier) : maskPhoneNumber(challenge.identifier),
+          maskedDestination: challenge.channel === 'email' ? maskEmail(challenge.identifier) : maskPhoneNumber(challenge.identifier),
           isConsumed: challenge.isConsumed,
           isExpired: new Date() > challenge.expiresAt,
           cooldownRemaining,
+          cooldown: cooldownRemaining,
           resendCount: challenge.resendCount,
           maxResends: activeEnv.otpMaxResends,
         },
@@ -555,7 +559,9 @@ class AuthController {
           challengeId: updatedChallenge.challengeToken,
           channel: updatedChallenge.channel,
           destination: updatedChallenge.channel === 'email' ? maskEmail(user.email) : maskPhoneNumber(user.phone),
+          maskedDestination: updatedChallenge.channel === 'email' ? maskEmail(user.email) : maskPhoneNumber(user.phone),
           cooldownSeconds: activeEnv.otpResendCooldownSeconds,
+          cooldown: activeEnv.otpResendCooldownSeconds,
           resendCount: updatedChallenge.resendCount,
           maxResends: activeEnv.otpMaxResends,
         },
@@ -661,6 +667,7 @@ class AuthController {
               requiresVerification: true,
               channel,
               destination,
+              maskedDestination: destination,
             },
           });
         }

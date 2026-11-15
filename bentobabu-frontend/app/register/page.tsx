@@ -7,6 +7,7 @@ import { User as UserIcon, Mail, Phone, Lock, ArrowRight, AlertCircle, Sparkles 
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
+import { authService } from "@/services/authService";
 import { useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS } from "@/hooks/useQueries";
 import {
@@ -73,26 +74,38 @@ function RegisterForm() {
         password,
       });
 
-      if (result.requiresVerification) {
+      const challengeId = result.challengeId;
+      const requiresVerification = result.requiresVerification !== false && !!challengeId;
+
+      if (requiresVerification && challengeId) {
         isRedirectingRef.current = true;
-        const channel = result.channel || "email";
-        const destination = result.destination || "";
-        const challengeId = result.challengeId || "";
-        const verifyUrl = `/verify-otp?challengeId=${encodeURIComponent(challengeId)}${channel ? `&channel=${encodeURIComponent(channel)}` : ""}${destination ? `&dest=${encodeURIComponent(destination)}` : ""}&returnTo=${encodeURIComponent(returnTo)}`;
+        const channel = (result.channel ? String(result.channel).toLowerCase() : "email") as "email" | "sms";
+        const destination = result.maskedDestination || result.destination || "";
+        const cooldownSeconds = result.cooldown ?? result.cooldownSeconds ?? 60;
+
+        // Store challenge details safely in session storage (no customer PII in URL)
+        authService.saveStoredChallenge({
+          challengeId,
+          channel,
+          destination,
+          cooldownSeconds,
+          createdAt: Date.now(),
+        });
+
+        // Pass ONLY the opaque challengeId and returnTo in URL (no PII)
+        const verifyUrl = `/verify-otp?challengeId=${encodeURIComponent(challengeId)}${returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ""}`;
         router.push(verifyUrl);
         return;
       }
 
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER_PROFILE });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ORDERS });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ADDRESSES });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CART });
-
-      isRedirectingRef.current = true;
-      router.replace(returnTo);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to register.");
+      // If challengeId is missing, do not redirect to home or auto-login!
+      isRedirectingRef.current = false;
       setIsLoading(false);
+      setError("Registration completed, but no verification challenge was returned by the server. Please try signing in or contact support.");
+    } catch (err: unknown) {
+      isRedirectingRef.current = false;
+      setIsLoading(false);
+      setError(err instanceof Error ? err.message : "Failed to register.");
     }
   };
 
