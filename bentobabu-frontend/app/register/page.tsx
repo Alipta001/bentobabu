@@ -83,7 +83,7 @@ function RegisterForm() {
         const destination = result.maskedDestination || result.destination || "";
         const cooldownSeconds = result.cooldown ?? result.cooldownSeconds ?? 60;
 
-        // Store challenge details safely in session storage (no customer PII in URL)
+        // Store challenge details safely in session storage (never expose bearer credential in URL)
         authService.saveStoredChallenge({
           challengeId,
           channel,
@@ -92,16 +92,17 @@ function RegisterForm() {
           createdAt: Date.now(),
         });
 
-        // Pass ONLY the opaque challengeId and returnTo in URL (no PII)
-        const verifyUrl = `/verify-otp?challengeId=${encodeURIComponent(challengeId)}${returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ""}`;
+        // Navigate to /verify-otp without exposing challenge token in query parameters
+        const verifyUrl = returnTo && returnTo !== "/" ? `/verify-otp?returnTo=${encodeURIComponent(returnTo)}` : "/verify-otp";
         router.push(verifyUrl);
         return;
       }
 
-      // If challengeId is missing, do not redirect to home or auto-login!
+      // If challengeId is missing, do not display a misleading success message or redirect to home
       isRedirectingRef.current = false;
       setIsLoading(false);
-      setError("Registration completed, but no verification challenge was returned by the server. Please try signing in or contact support.");
+      const apiErrorMsg = (result as any)?.message || (result as any)?.error;
+      setError(apiErrorMsg || "Failed to initiate verification. No verification challenge was provided by the server.");
     } catch (err: unknown) {
       isRedirectingRef.current = false;
       setIsLoading(false);

@@ -115,6 +115,9 @@ class AuthController {
         });
       }
 
+      const correlationId = req.headers['x-request-id'] || req.headers['x-correlation-id'] || `reg_${Date.now().toString(36)}`;
+      console.log(`[Registration][${correlationId}] Registration request received for destination: ${maskEmail(cleanEmail)}`);
+
       if (!password || typeof password !== 'string' || password.length < 8) {
         return res.status(400).json({
           success: false,
@@ -163,6 +166,7 @@ class AuthController {
         await existingUser.save();
         await OtpChallenge.deleteMany({ user: existingUser._id, isConsumed: false });
         user = existingUser;
+        console.log(`[Registration][${correlationId}] Existing unverified customer account reused for destination: ${maskEmail(cleanEmail)}`);
       } else {
         user = await User.create({
           name: name.trim(),
@@ -174,6 +178,7 @@ class AuthController {
           isEmailVerified: false,
           isPhoneVerified: false,
         });
+        console.log(`[Registration][${correlationId}] New unverified customer account created for destination: ${maskEmail(cleanEmail)}`);
       }
 
       // 5. Generate opaque challenge token and hash OTP with separate OTP_HASH_SECRET
@@ -197,10 +202,12 @@ class AuthController {
         lastSentAt: new Date(),
         isConsumed: false,
       });
+      console.log(`[Registration][${correlationId}] OTP challenge created for channel: ${channel}`);
 
       // 6. Deliver OTP via configured channel
       let sendResult;
       if (channel === 'email') {
+        console.log(`[Registration][${correlationId}] Email dispatch started via ${activeEnv.emailProvider || 'SMTP'} to: ${maskEmail(cleanEmail)}`);
         sendResult = await sendSignupOtpEmail({
           to: cleanEmail,
           name: user.name,
@@ -208,6 +215,7 @@ class AuthController {
           expiryMinutes: activeEnv.otpExpiryMinutes,
         });
       } else {
+        console.log(`[Registration][${correlationId}] SMS dispatch started to: ${maskPhoneNumber(cleanPhone)}`);
         sendResult = await sendSms({
           to: cleanPhone,
           message: `Your BentoBabu verification code is ${otp}. Valid for ${activeEnv.otpExpiryMinutes} minutes. Do not share it with anyone.`,
@@ -215,6 +223,7 @@ class AuthController {
       }
 
       if (!sendResult || !sendResult.success) {
+        console.warn(`[Registration][${correlationId}] OTP delivery failed via ${channel}: ${sendResult?.error || 'Unknown error'}`);
         // Rollback challenge creation and unverified new user to prevent orphaned conflict
         await OtpChallenge.deleteOne({ challengeToken });
         if (!existingUser) {
@@ -225,6 +234,8 @@ class AuthController {
           message: `Failed to deliver verification code via ${channel}. Please try again later.`,
         });
       }
+
+      console.log(`[Registration][${correlationId}] OTP delivery succeeded via ${channel}. Returning HTTP 201.`);
 
       // 7. Return 201 without session cookies and without PII in payload
       return res.status(201).json({

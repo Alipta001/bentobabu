@@ -156,7 +156,7 @@ async function runSuite() {
     });
 
     // 2. Successful registration followed by OTP page navigation state
-    await test('2. Successful registration safely constructs OTP URL with NO PII and stores state in sessionStorage', () => {
+    await test('2. Successful registration safely constructs OTP URL with NO PII, NO bearer token, and stores state in sessionStorage', () => {
       // Simulate frontend registration handler logic
       const challengeId = activeChallengeId;
       const channel = 'email';
@@ -173,14 +173,16 @@ async function runSuite() {
         createdAt: Date.now(),
       }));
 
-      // Construct verify URL
-      const verifyUrl = `/verify-otp?challengeId=${encodeURIComponent(challengeId)}&returnTo=${encodeURIComponent(returnTo)}`;
+      // Construct verify URL without bearer challenge token in query parameters
+      const verifyUrl = returnTo && returnTo !== '/' ? `/verify-otp?returnTo=${encodeURIComponent(returnTo)}` : '/verify-otp';
 
-      // Assert that URL contains ONLY opaque challengeId and NO email or phone PII
-      assert.ok(verifyUrl.includes(`challengeId=${encodeURIComponent(challengeId)}`));
+      // Assert that URL does NOT expose challenge token and contains NO PII
+      assert.strictEqual(verifyUrl, '/verify-otp?returnTo=%2Fmenu');
+      assert.ok(!verifyUrl.includes(challengeId));
       assert.ok(!verifyUrl.includes('testEmail'));
       assert.ok(!verifyUrl.includes('@'));
       assert.ok(!verifyUrl.includes(testPhone));
+      assert.ok(!verifyUrl.includes('challengeId='));
       assert.ok(!verifyUrl.includes('dest='));
     });
 
