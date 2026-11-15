@@ -37,9 +37,9 @@ async function getHomeData(): Promise<{ categories: Category[]; bestsellers: Pro
     let categories: Category[] = INITIAL_CATEGORIES;
     if (categoriesRes.status === "fulfilled" && categoriesRes.value) {
       const d = categoriesRes.value.data;
-      if (Array.isArray(d?.categories)) {
+      if (Array.isArray(d?.categories) && d.categories.length > 0) {
         categories = d.categories;
-      } else if (Array.isArray(d)) {
+      } else if (Array.isArray(d) && d.length > 0) {
         categories = d;
       }
     }
@@ -47,9 +47,9 @@ async function getHomeData(): Promise<{ categories: Category[]; bestsellers: Pro
     let bestsellers: Product[] = INITIAL_PRODUCTS.slice(0, 4);
     if (bestsellersRes.status === "fulfilled" && bestsellersRes.value) {
       const d = bestsellersRes.value.data;
-      if (Array.isArray(d?.products)) {
+      if (Array.isArray(d?.products) && d.products.length > 0) {
         bestsellers = d.products.map(normalizeProduct);
-      } else if (Array.isArray(d)) {
+      } else if (Array.isArray(d) && d.length > 0) {
         bestsellers = d.map(normalizeProduct).slice(0, 4);
       }
     }

@@ -662,11 +662,15 @@ async function seedDatabase() {
     ];
 
     for (const userData of usersData) {
-      await User.findOneAndUpdate(
-        { email: userData.email },
-        { $set: userData },
-        { upsert: true }
-      );
+      try {
+        await User.findOneAndUpdate(
+          { email: userData.email },
+          { $set: userData },
+          { upsert: true }
+        );
+      } catch (userErr) {
+        console.warn(`[Seeder] Skipped upserting user ${userData.email}: ${userErr.message}`);
+      }
     }
 
     console.log('[Seeder] ✅ Database seeded successfully!');
