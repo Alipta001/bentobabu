@@ -14,7 +14,9 @@ import { deliveryService } from "@/services/deliveryService";
 import { reviewService } from "@/services/reviewService";
 import { settingsService } from "@/services/settingsService";
 import { notificationService } from "@/services/notificationService";
-import { OrderStatus, Product, Category, Coupon, BusinessSettings } from "@/types";
+import { mediaService, VideoUploadProgressCallback } from "@/services/mediaService";
+import { videoService, CreateVideoPayload } from "@/services/videoService";
+import { OrderStatus, Product, Category, Coupon, BusinessSettings, ProductVideo, VideoContent } from "@/types";
 
 // ==========================================
 // DASHBOARD & ANALYTICS
@@ -481,6 +483,167 @@ export function useRetryNotification() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "notifications"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "notificationStats"] });
+    },
+  });
+}
+
+// ==========================================
+// MEDIA STORAGE & MANAGEMENT
+// ==========================================
+
+export function useMediaUsage() {
+  return useQuery({
+    queryKey: ["admin", "mediaUsage"],
+    queryFn: () => mediaService.getUsage(),
+    refetchInterval: 30000,
+  });
+}
+
+export function useMediaList(params?: {
+  provider?: string;
+  mediaType?: string;
+  productId?: string;
+  categoryId?: string;
+  page?: number;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: ["admin", "mediaList", params],
+    queryFn: () => mediaService.listMedia(params),
+  });
+}
+
+export function useUploadImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      file,
+      folder,
+      productId,
+      categoryId,
+    }: {
+      file: File;
+      folder?: string;
+      productId?: string;
+      categoryId?: string;
+    }) => mediaService.uploadImage(file, folder, productId, categoryId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "mediaList"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "mediaUsage"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+    },
+  });
+}
+
+export function useDeleteImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => mediaService.deleteImage(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "mediaList"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "mediaUsage"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+    },
+  });
+}
+
+export function useUploadVideo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (params: {
+      file: File;
+      productId?: string;
+      posterUrl?: string;
+      durationSeconds?: number;
+      onProgress?: VideoUploadProgressCallback;
+    }) => mediaService.uploadVideoWithProgress(params),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "mediaList"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "mediaUsage"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+}
+
+export function useDeleteVideo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => mediaService.deleteVideo(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "mediaList"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "mediaUsage"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+}
+
+// ==========================================
+// VIDEO CONTENT MANAGEMENT
+// ==========================================
+
+export function useAdminVideos(params?: {
+  status?: string;
+  category?: string;
+  contentType?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: ["admin", "videos", params],
+    queryFn: () => videoService.getAll(params),
+  });
+}
+
+export function useAdminVideo(id: string) {
+  return useQuery({
+    queryKey: ["admin", "videos", id],
+    queryFn: () => videoService.getById(id),
+    enabled: !!id,
+  });
+}
+
+export function useCreateVideo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateVideoPayload) => videoService.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "videos"] });
+    },
+  });
+}
+
+export function useUpdateVideo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CreateVideoPayload> }) =>
+      videoService.update(id, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "videos"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "videos", variables.id] });
+    },
+  });
+}
+
+export function useDeleteVideoContent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => videoService.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "videos"] });
+    },
+  });
+}
+
+export function useUpdateVideoStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "DRAFT" | "PUBLISHED" | "ARCHIVED" }) =>
+      videoService.updateStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "videos"] });
     },
   });
 }

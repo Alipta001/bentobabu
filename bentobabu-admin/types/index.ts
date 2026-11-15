@@ -27,6 +27,7 @@ export interface Category {
   description: string;
   tagline?: string;
   image: string;
+  imageData?: ProductMediaImage;
   isActive: boolean;
   itemCount?: number;
 }
@@ -44,6 +45,8 @@ export interface Product {
   dietary: DietaryType;
   imageUrl: string;
   galleryImages?: string[];
+  imagesData?: ProductMediaImage[];
+  video?: ProductVideo;
   isAvailable: boolean;
   isBestseller?: boolean;
   isDailyMenu?: boolean;
@@ -183,5 +186,87 @@ export interface BusinessSettings {
   gstRatePercentage: number;
   freeDeliveryThreshold: number;
   isOrderingEnabled: boolean;
+}
+
+export interface ProductMediaImage {
+  publicId: string;
+  secureUrl: string;
+  format?: string;
+  sizeBytes?: number;
+  width?: number;
+  height?: number;
+}
+
+export interface ProductVideo {
+  secureUrl: string;
+  objectKey: string;
+  mimeType: string;
+  sizeBytes?: number;
+  durationSeconds?: number;
+  posterUrl?: string | null;
+  mediaId?: string;
+}
+
+export interface MediaAsset {
+  _id: string;
+  id?: string;
+  provider: "CLOUDINARY" | "R2";
+  mediaType: "IMAGE" | "VIDEO";
+  publicId?: string;
+  objectKey?: string;
+  secureUrl: string;
+  format?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
+  status: "PENDING" | "UPLOADED" | "ACTIVE" | "FAILED" | "DELETED";
+  createdAt: string;
+}
+
+export interface MediaUsageStats {
+  cloudinary?: {
+    storage?: { usage: number; limit?: number };
+    bandwidth?: { usage: number; limit?: number };
+    transformations?: { usage: number; limit?: number };
+  };
+  r2?: {
+    objectCount: number;
+    totalSizeBytes: number;
+    estimatedGB: number;
+    freeTierLimitGB: number;
+    usagePercent: number;
+    alertLevel: "NORMAL" | "INFO" | "HIGH" | "CRITICAL";
+  };
+  thresholds?: {
+    info: number;
+    high: number;
+    critical: number;
+  };
+}
+
+export interface VideoContent {
+  _id: string;
+  id?: string;
+  title: string;
+  slug: string;
+  description?: string;
+  youtubeUrl: string;
+  youtubeVideoId: string;
+  thumbnailUrl?: string;
+  category: string;
+  contentType: "Recipes" | "Food Preparation" | "Nutrition Tips" | "Meal Ideas" | string;
+  preparationMethods?: string[];
+  dietaryTags?: string[];
+  mealType?: string[];
+  relatedProduct?: string | { _id: string; id?: string; name: string; slug: string; price: number; images?: string[] };
+  isFeatured: boolean;
+  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  publishedAt?: string | null;
+  createdBy?: string | { _id: string; name: string; email: string };
+  embedUrl?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 

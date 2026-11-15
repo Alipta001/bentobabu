@@ -13,12 +13,15 @@ import {
   Sparkles,
   ArrowLeft,
   Share2,
+  Video as VideoIcon,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Product } from "@/types";
 import { DietaryBadge } from "@/components/ui/DietaryBadge";
 import { ProductCard } from "@/components/product/ProductCard";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useToast } from "@/context/ToastContext";
+import { getOptimizedImageUrl } from "@/utils/mediaUrl";
 
 interface ProductDetailViewProps {
   product: Product;
@@ -34,6 +37,7 @@ export function ProductDetailView({
   const [activeImage, setActiveImage] = useState(
     product.imageUrl || product.galleryImages?.[0] || ""
   );
+  const [viewMode, setViewMode] = useState<"photo" | "video">("photo");
   const [quantity, setQuantity] = useState(1);
   const [addedSuccess, setAddedSuccess] = useState(false);
 
@@ -87,43 +91,99 @@ export function ProductDetailView({
 
       {/* Main Product Showcase Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 bg-white rounded-3xl p-6 sm:p-10 border border-[#E5DFC5] shadow-xs">
-        {/* Left Column: Image Gallery */}
+        {/* Left Column: Image Gallery & Video Showcase */}
         <div className="lg:col-span-6 space-y-4">
-          <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-[#EDE8DE] border border-[#E5DFC5]">
-            <Image
-              src={activeImage}
-              alt={product.name}
-              fill
-              priority
-              fetchPriority="high"
-              loading="eager"
-              sizes="(max-width: 1024px) 100vw, 50vw"
-              className="object-cover transition-all duration-300"
-            />
-            <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
-              <DietaryBadge type={product.dietary} />
-              {product.isBestseller && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#B99A60] text-white shadow-sm">
-                  <Flame className="w-3.5 h-3.5" />
-                  Bestseller
-                </span>
-              )}
+          {/* Mode Selector Tabs (if video available) */}
+          {product.video?.secureUrl && (
+            <div className="flex items-center gap-2 p-1 bg-[#F7F3EA] rounded-full border border-[#E5DFC5] w-fit">
+              <button
+                type="button"
+                onClick={() => setViewMode("photo")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  viewMode === "photo"
+                    ? "bg-[#354B35] text-white shadow-xs"
+                    : "text-[#626F62] hover:text-[#354B35]"
+                }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Photos</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("video")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                  viewMode === "video"
+                    ? "bg-[#354B35] text-white shadow-xs"
+                    : "text-[#626F62] hover:text-[#354B35]"
+                }`}
+              >
+                <VideoIcon className="w-3.5 h-3.5 text-[#B99A60]" />
+                <span>Chef Showcase</span>
+              </button>
             </div>
-          </div>
+          )}
 
-          {/* Thumbnails */}
+          {viewMode === "video" && product.video?.secureUrl ? (
+            <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-black/95 border border-[#E5DFC5] flex items-center justify-center">
+              <video
+                src={product.video.secureUrl}
+                poster={product.video.posterUrl || product.imageUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="w-full h-full object-contain"
+              >
+                Your browser does not support HTML5 video playback.
+              </video>
+            </div>
+          ) : (
+            <div className="relative aspect-4/3 w-full rounded-2xl overflow-hidden bg-[#EDE8DE] border border-[#E5DFC5]">
+              <Image
+                src={getOptimizedImageUrl(activeImage, "detail")}
+                alt={product.name}
+                fill
+                priority
+                fetchPriority="high"
+                loading="eager"
+                sizes="(max-width: 1024px) 100vw, 50vw"
+                className="object-cover transition-all duration-300"
+              />
+              <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+                <DietaryBadge type={product.dietary} />
+                {product.isBestseller && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#B99A60] text-white shadow-sm">
+                    <Flame className="w-3.5 h-3.5" />
+                    Bestseller
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Thumbnails (for Photos) */}
           {images.length > 1 && (
             <div className="flex items-center gap-3 overflow-x-auto pb-2">
               {images.map((img, idx) => (
                 <button
                   key={idx}
-                  onClick={() => setActiveImage(img)}
+                  onClick={() => {
+                    setActiveImage(img);
+                    setViewMode("photo");
+                  }}
                   aria-label={`View photo ${idx + 1} of ${product.name}`}
                   className={`relative w-20 h-20 rounded-xl overflow-hidden shrink-0 border-2 transition-all cursor-pointer ${
-                    activeImage === img ? "border-[#354B35] scale-102" : "border-[#E5DFC5] opacity-70"
+                    activeImage === img && viewMode === "photo"
+                      ? "border-[#354B35] scale-102"
+                      : "border-[#E5DFC5] opacity-70"
                   }`}
                 >
-                  <Image src={img} alt="" fill sizes="80px" className="object-cover" />
+                  <Image
+                    src={getOptimizedImageUrl(img, "thumbnail")}
+                    alt=""
+                    fill
+                    sizes="80px"
+                    className="object-cover"
+                  />
                 </button>
               ))}
             </div>

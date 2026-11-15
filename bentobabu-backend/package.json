@@ -20,13 +20,18 @@
     "test:cookie-auth": "node test/cookie_auth_redis.test.js",
     "test:admin-workflows": "node test/admin_workflows.test.js",
     "test:otp": "node test/otp_signup_verification.test.js",
+    "test:media": "node test/media_management.test.js",
+    "test:video": "node test/video_content.test.js",
     "test:all": "npm test"
   },
   "author": "Alipta Ghosh",
   "license": "ISC",
   "description": "Bento Babu Production Food Ordering & Delivery Backend",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1169.0",
+    "@aws-sdk/s3-request-presigner": "^3.1169.0",
     "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^18.0.9",
@@ -35,10 +40,12 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.12.0",
+    "multer": "^2.5.0",
     "nodemailer": "^10.5.0",
     "rate-limit-redis": "^6.0.2",
     "razorpay": "^2.9.8",
     "redis": "^6.3.1",
-    "resend": "^6.38.1"
+    "resend": "^6.38.1",
+    "sharp": "^0.35.5"
   }
 }

@@ -9,8 +9,9 @@ import {
   useToggleCategoryStatus,
 } from "@/hooks/useAdminQueries";
 import { categoryService } from "@/services/categoryService";
-import { Category } from "@/types";
+import { Category, ProductMediaImage } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
+import { MediaImageUpload } from "@/components/media/MediaImageUpload";
 
 export default function AdminCategoriesPage() {
   const queryClient = useQueryClient();
@@ -27,6 +28,7 @@ export default function AdminCategoriesPage() {
   const [image, setImage] = useState(
     "https://images.unsplash.com/photo-1543339308-43e59d6b73a6?auto=format&fit=crop&w=800&q=80"
   );
+  const [imageData, setImageData] = useState<ProductMediaImage | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleOpenCreate = () => {
@@ -36,6 +38,7 @@ export default function AdminCategoriesPage() {
     setTagline("");
     setDescription("");
     setImage("https://images.unsplash.com/photo-1543339308-43e59d6b73a6?auto=format&fit=crop&w=800&q=80");
+    setImageData(undefined);
     setModalOpen(true);
   };
 
@@ -46,6 +49,7 @@ export default function AdminCategoriesPage() {
     setTagline(cat.tagline || "");
     setDescription(cat.description || "");
     setImage(cat.image || "");
+    setImageData(cat.imageData);
     setModalOpen(true);
   };
 
@@ -61,6 +65,7 @@ export default function AdminCategoriesPage() {
           slug: slug || name.toLowerCase().replace(/\s+/g, "-"),
           description,
           image,
+          imageData,
         });
         queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
       } else {
@@ -70,6 +75,7 @@ export default function AdminCategoriesPage() {
           tagline,
           description,
           image,
+          imageData,
           isActive: true,
         });
       }
@@ -252,13 +258,17 @@ export default function AdminCategoriesPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-[#1F271F]">Banner Image URL</label>
-                <input
-                  type="url"
-                  required
-                  value={image}
-                  onChange={(e) => setImage(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5]"
+                <MediaImageUpload
+                  label="Category Banner Image (Cloudinary)"
+                  folder="bentobabu/categories"
+                  categoryId={editingCategory?.id}
+                  initialImages={imageData ? [imageData] : []}
+                  initialImageUrl={image}
+                  maxFiles={1}
+                  onChange={(imgs, primaryUrl) => {
+                    setImage(primaryUrl);
+                    setImageData(imgs[0]);
+                  }}
                 />
               </div>
 

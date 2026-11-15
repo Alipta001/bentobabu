@@ -41,7 +41,19 @@ const errorHandler = (err, req, res, next) => {
     message = `Invalid format for resource identifier`;
   }
 
-  // 5. Ensure CORS error is cleanly returned as 403
+  // 5. Handle Multer Errors (e.g. LIMIT_FILE_SIZE)
+  if (err.name === 'MulterError') {
+    statusCode = 400;
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      message = 'File size exceeds maximum allowed limit (8 MB).';
+    } else if (err.code === 'LIMIT_FILE_COUNT') {
+      message = 'Too many files uploaded at once (maximum 4).';
+    } else {
+      message = err.message;
+    }
+  }
+
+  // 6. Ensure CORS error is cleanly returned as 403
   if (message.includes('Not allowed by CORS')) {
     statusCode = 403;
   }

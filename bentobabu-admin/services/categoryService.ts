@@ -1,6 +1,6 @@
 import adminApiClient from "@/api/axios/axios";
 import { ADMIN_API_ENDPOINTS } from "@/api/endPoints/endPoints";
-import { Category } from "@/types";
+import { Category, ProductMediaImage } from "@/types";
 
 export interface BackendCategory {
   id?: string;
@@ -9,6 +9,7 @@ export interface BackendCategory {
   slug: string;
   description?: string;
   image?: string;
+  imageData?: ProductMediaImage;
   displayOrder?: number;
   isActive: boolean;
   itemCount?: number;
@@ -21,6 +22,7 @@ const mapCategory = (c: BackendCategory): Category => ({
   description: c.description || "",
   tagline: "",
   image: c.image || "/images/placeholder.png",
+  imageData: c.imageData,
   isActive: c.isActive ?? true,
   itemCount: c.itemCount ?? 0,
 });
@@ -46,6 +48,7 @@ export const categoryService = {
     slug?: string;
     description?: string;
     image?: string;
+    imageData?: ProductMediaImage;
     displayOrder?: number;
     isActive?: boolean;
   }): Promise<Category> {

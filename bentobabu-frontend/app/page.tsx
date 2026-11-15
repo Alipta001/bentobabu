@@ -14,22 +14,30 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { ProductCard } from "@/components/product/ProductCard";
 import { CategoryCard } from "@/components/category/CategoryCard";
+import { VideoCard } from "@/components/video/VideoCard";
 import { FaqAccordion } from "@/components/home/FaqAccordion";
 import { NewsletterForm } from "@/components/home/NewsletterForm";
 import { brandConfig } from "@/config/brand";
 import { INITIAL_CATEGORIES } from "@/lib/data/categories";
 import { INITIAL_PRODUCTS } from "@/lib/data/products";
-import { Category, Product } from "@/types";
+import { Category, Product, VideoContent } from "@/types";
 import { normalizeProduct } from "@/services/productService";
 
-async function getHomeData(): Promise<{ categories: Category[]; bestsellers: Product[] }> {
+async function getHomeData(): Promise<{
+  categories: Category[];
+  bestsellers: Product[];
+  featuredVideos: VideoContent[];
+}> {
   try {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
-    const [categoriesRes, bestsellersRes] = await Promise.allSettled([
+    const [categoriesRes, bestsellersRes, videosRes] = await Promise.allSettled([
       fetch(`${apiUrl}/categories`, { next: { revalidate: 60 } }).then((r) =>
         r.ok ? r.json() : null
       ),
       fetch(`${apiUrl}/products?limit=4`, { next: { revalidate: 60 } }).then((r) =>
+        r.ok ? r.json() : null
+      ),
+      fetch(`${apiUrl}/videos/featured?limit=3`, { next: { revalidate: 60 } }).then((r) =>
         r.ok ? r.json() : null
       ),
     ]);
@@ -54,11 +62,22 @@ async function getHomeData(): Promise<{ categories: Category[]; bestsellers: Pro
       }
     }
 
-    return { categories, bestsellers };
+    let featuredVideos: VideoContent[] = [];
+    if (videosRes.status === "fulfilled" && videosRes.value) {
+      const d = videosRes.value.data;
+      if (Array.isArray(d?.videos)) {
+        featuredVideos = d.videos;
+      } else if (Array.isArray(d)) {
+        featuredVideos = d;
+      }
+    }
+
+    return { categories, bestsellers, featuredVideos };
   } catch {
     return {
       categories: INITIAL_CATEGORIES,
       bestsellers: INITIAL_PRODUCTS.slice(0, 4),
+      featuredVideos: [],
     };
   }
 }
@@ -87,7 +106,7 @@ const faqs = [
 ];
 
 export default async function HomePage() {
-  const { categories, bestsellers } = await getHomeData();
+  const { categories, bestsellers, featuredVideos } = await getHomeData();
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F3EA]">
@@ -271,6 +290,41 @@ export default async function HomePage() {
             </div>
           </div>
         </section>
+
+        {/* 3.5 Featured Kitchen & Recipe Videos Section */}
+        {featuredVideos.length > 0 && (
+          <section className="py-20 bg-[#EDE8DE]/50 border-t border-[#E5DFC5]">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-1.5 text-xs uppercase font-bold tracking-widest text-[#755C2B]">
+                    <Sparkles className="w-3.5 h-3.5 text-[#8C713B]" />
+                    <span>Watch & Learn</span>
+                  </div>
+                  <h2 className="font-serif text-3xl sm:text-4xl font-bold text-[#243324]">
+                    Kitchen Stories & Healthy Recipes
+                  </h2>
+                  <p className="text-sm text-[#4A584A] max-w-xl">
+                    Discover how our chefs craft mindful nutrition, step-by-step recipes, and culinary tips for balanced everyday dining.
+                  </p>
+                </div>
+                <Link
+                  href="/videos"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#354B35] hover:text-[#755C2B] transition-colors"
+                >
+                  <span>Explore All Videos</span>
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {featuredVideos.slice(0, 3).map((video) => (
+                  <VideoCard key={video._id || video.slug} video={video} />
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* 4. Why Choose Us Section */}
         <section id="why-choose-us" className="py-20 bg-[#354B35] text-[#F7F3EA]">

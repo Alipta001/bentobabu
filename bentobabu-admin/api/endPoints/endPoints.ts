@@ -85,4 +85,23 @@ export const ADMIN_API_ENDPOINTS = {
     DETAIL: (id: string) => `/admin/notifications/${id}`,
     RETRY: (id: string) => `/admin/notifications/${id}/retry`,
   },
+  MEDIA: {
+    UPLOAD_IMAGE: "/admin/media/images/upload",
+    UPLOAD_IMAGES_BULK: "/admin/media/images/bulk",
+    DELETE_IMAGE: (id: string) => `/admin/media/images/${id}`,
+    INITIALIZE_VIDEO: "/admin/media/videos/initialize",
+    CONFIRM_VIDEO: "/admin/media/videos/confirm",
+    DELETE_VIDEO: (id: string) => `/admin/media/videos/${id}`,
+    LIST: "/admin/media",
+    USAGE: "/admin/media/usage",
+    CLEANUP_ABANDONED: "/admin/media/cleanup-abandoned",
+  },
+  VIDEOS: {
+    LIST: "/admin/videos",
+    CREATE: "/admin/videos",
+    DETAIL: (id: string) => `/admin/videos/${id}`,
+    UPDATE: (id: string) => `/admin/videos/${id}`,
+    DELETE: (id: string) => `/admin/videos/${id}`,
+    TOGGLE_STATUS: (id: string) => `/admin/videos/${id}/status`,
+  },
 } as const;

@@ -7,6 +7,9 @@ const connectSrc = [
   ...(isProduction ? [] : ["http://localhost:*", "http://127.0.0.1:*"]),
   "https://api.bentobabu.com",
   "https://bentobabu.onrender.com",
+  "https://res.cloudinary.com",
+  "https://media.bentobabu.com",
+  "https://*.r2.cloudflarestorage.com",
 ].join(" ");
 
 const securityHeaders = [
@@ -44,9 +47,10 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://images.unsplash.com",
+      "img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://media.bentobabu.com https://*.r2.cloudflarestorage.com https://i.ytimg.com https://*.ytimg.com",
+      "media-src 'self' blob: https://media.bentobabu.com https://*.r2.cloudflarestorage.com",
       "font-src 'self' data:",
-      "frame-src 'self'",
+      "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com",
       `connect-src ${connectSrc}`,
     ].join("; "),
   },
@@ -58,6 +62,22 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
+      {
+        protocol: "https",
+        hostname: "media.bentobabu.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.r2.cloudflarestorage.com",
+      },
+      {
+        protocol: "https",
+        hostname: "i.ytimg.com",
       },
     ],
   },

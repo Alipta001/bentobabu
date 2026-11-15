@@ -1,6 +1,6 @@
 import adminApiClient from "@/api/axios/axios";
 import { ADMIN_API_ENDPOINTS } from "@/api/endPoints/endPoints";
-import { Product, DietaryType } from "@/types";
+import { Product, DietaryType, ProductMediaImage, ProductVideo } from "@/types";
 import { categoryService } from "./categoryService";
 
 export interface BackendProduct {
@@ -11,6 +11,8 @@ export interface BackendProduct {
   description: string;
   category: string | { _id: string; id?: string; name: string; slug: string };
   images?: string[];
+  imagesData?: ProductMediaImage[];
+  video?: ProductVideo;
   price: number;
   compareAtPrice?: number;
   ingredients?: string[];
@@ -59,6 +61,8 @@ export const mapBackendProduct = (p: BackendProduct): Product => {
     dietary,
     imageUrl: p.images?.[0] || "/images/placeholder.png",
     galleryImages: p.images || [],
+    imagesData: p.imagesData || [],
+    video: p.video || undefined,
     isAvailable: p.isAvailable ?? true,
     isBestseller: p.isFeatured ?? false,
     isDailyMenu: p.mealTypes?.includes("DAILY_MENU") ?? false,
@@ -139,6 +143,8 @@ export const productService = {
       price: data.price,
       compareAtPrice: data.originalPrice || undefined,
       images: data.imageUrl ? [data.imageUrl, ...(data.galleryImages || [])] : data.galleryImages || [],
+      imagesData: data.imagesData,
+      video: data.video,
       portionSize: data.servingSize || "1 Bento",
       dietaryTags: data.dietary === "non-vegetarian" ? ["NON_VEG"] : [data.dietary?.toUpperCase() || "VEG"],
       mealTypes: data.isDailyMenu ? ["DAILY_MENU", "LUNCH", "DINNER"] : ["LUNCH", "DINNER"],
@@ -186,6 +192,12 @@ export const productService = {
     }
     if (data.imageUrl || data.galleryImages) {
       payload.images = data.imageUrl ? [data.imageUrl, ...(data.galleryImages || [])] : data.galleryImages;
+    }
+    if (data.imagesData !== undefined) {
+      payload.imagesData = data.imagesData;
+    }
+    if (data.video !== undefined) {
+      payload.video = data.video;
     }
     if (data.servingSize !== undefined) payload.portionSize = data.servingSize;
     if (data.isBestseller !== undefined) payload.isFeatured = data.isBestseller;

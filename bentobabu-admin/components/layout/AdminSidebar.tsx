@@ -20,6 +20,7 @@ import {
   Settings,
   Bell,
   UserCheck,
+  Video,
   X,
 } from "lucide-react";
 import { useKPISummary } from "@/hooks/useAdminQueries";
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { label: "Orders", href: "/orders", icon: ShoppingBag, badgeKey: "pendingOrders" },
   { label: "Products", href: "/products", icon: UtensilsCrossed },
   { label: "Categories", href: "/categories", icon: Tags },
+  { label: "Video Library", href: "/videos", icon: Video },
   { label: "Inventory", href: "/inventory", icon: Boxes, badgeKey: "lowStockCount" },
   { label: "Daily Menu", href: "/menu", icon: CalendarCheck2 },
   { label: "Customers", href: "/customers", icon: Users },

@@ -66,4 +66,9 @@ export const API_ENDPOINTS = {
     MARK_ALL_READ: "/notifications/read-all",
     PREFERENCES: "/notifications/preferences",
   },
+  VIDEOS: {
+    LIST: "/videos",
+    FEATURED: "/videos/featured",
+    DETAIL: (slug: string) => `/videos/${slug}`,
+  },
 } as const;

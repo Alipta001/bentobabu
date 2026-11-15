@@ -3,12 +3,13 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Plus, Minus, Check, Clock, Flame } from "lucide-react";
+import { Plus, Minus, Check, Clock, Flame, Video } from "lucide-react";
 import { Product } from "@/types";
 import { DietaryBadge } from "@/components/ui/DietaryBadge";
 import { useAppSelector } from "@/store/hooks";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useToast } from "@/context/ToastContext";
+import { getOptimizedImageUrl } from "@/utils/mediaUrl";
 
 interface ProductCardProps {
   product: Product;
@@ -62,7 +63,7 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
       {/* Product Image & Badges */}
       <Link href={`/product/${product.slug}`} className="relative aspect-4/3 w-full overflow-hidden bg-[#EDE8DE] block">
         <Image
-          src={product.imageUrl}
+          src={getOptimizedImageUrl(product.imageUrl, "card")}
           alt={product.name}
           fill
           priority={priority}
@@ -82,6 +83,14 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
             </span>
           )}
         </div>
+
+        {/* Video Badge Top Right */}
+        {product.video?.secureUrl && (
+          <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 z-10">
+            <Video className="w-3 h-3 text-[#B99A60]" />
+            <span>Video</span>
+          </div>
+        )}
 
         {/* Prep Time Tag Bottom Right */}
         {product.preparationTimeMinutes && (

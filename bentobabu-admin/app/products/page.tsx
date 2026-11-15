@@ -20,6 +20,9 @@ import {
   useToggleProductAvailability,
 } from "@/hooks/useAdminQueries";
 import { Product, DietaryType } from "@/types";
+import { MediaImageUpload } from "@/components/media/MediaImageUpload";
+import { MediaVideoUpload } from "@/components/media/MediaVideoUpload";
+import { StorageUsageCard } from "@/components/media/StorageUsageCard";
 
 function ProductsContent() {
   const searchParams = useSearchParams();
@@ -43,6 +46,8 @@ function ProductsContent() {
     dietary: "vegetarian",
     imageUrl:
       "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80",
+    imagesData: [],
+    video: undefined,
     isAvailable: true,
     isBestseller: false,
     isDailyMenu: true,
@@ -81,6 +86,8 @@ function ProductsContent() {
       dietary: "vegetarian",
       imageUrl:
         "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80",
+      imagesData: [],
+      video: undefined,
       isAvailable: true,
       isBestseller: false,
       isDailyMenu: true,
@@ -109,6 +116,8 @@ function ProductsContent() {
       categoryIds: p.categoryIds,
       dietary: p.dietary,
       imageUrl: p.imageUrl,
+      imagesData: p.imagesData || [],
+      video: p.video || undefined,
       isAvailable: p.isAvailable,
       isBestseller: p.isBestseller || false,
       isDailyMenu: p.isDailyMenu ?? true,
@@ -155,6 +164,9 @@ function ProductsContent() {
       title="Product Catalogue Management"
       subtitle="Create, edit, price and manage nutritional dishes across all 7 targeted collections"
     >
+      {/* Storage & Quota Monitoring */}
+      <StorageUsageCard />
+
       {/* Controls Bar */}
       <div className="bg-white p-6 rounded-3xl border border-[#E5DFC5] shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         <div className="flex flex-1 items-center gap-3 max-w-md">
@@ -494,16 +506,34 @@ function ProductsContent() {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-[#1F271F]">Image URL (Cloudinary / CDN)</label>
-                <input
-                  type="url"
-                  required
-                  value={formData.imageUrl}
-                  onChange={(e) =>
-                    setFormData({ ...formData, imageUrl: e.target.value })
-                  }
-                  className="w-full p-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5]"
+              {/* Media Management (Cloudinary WebP Images & Cloudflare R2 Videos) */}
+              <div className="space-y-4 p-4 bg-[#F7F3EA] rounded-2xl border border-[#E5DFC5]">
+                <MediaImageUpload
+                  folder="bentobabu/products"
+                  productId={editingProduct?.id}
+                  initialImages={formData.imagesData}
+                  initialImageUrl={formData.imageUrl}
+                  maxFiles={4}
+                  onChange={(imgs, primaryUrl) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      imagesData: imgs,
+                      imageUrl: primaryUrl || prev.imageUrl,
+                      galleryImages: imgs.map((i) => i.secureUrl),
+                    }));
+                  }}
+                />
+
+                <MediaVideoUpload
+                  productId={editingProduct?.id}
+                  initialVideo={formData.video}
+                  posterUrl={formData.imageUrl}
+                  onChange={(vid) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      video: vid || undefined,
+                    }));
+                  }}
                 />
               </div>
 

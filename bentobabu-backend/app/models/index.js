@@ -15,6 +15,8 @@ const InventoryLog = require('./InventoryLog');
 const Notification = require('./Notification');
 const RefreshSession = require('./RefreshSession');
 const OtpChallenge = require('./OtpChallenge');
+const Media = require('./Media');
+const VideoContent = require('./VideoContent');
 
 module.exports = {
   User,
@@ -34,5 +36,7 @@ module.exports = {
   Notification,
   RefreshSession,
   OtpChallenge,
+  Media,
+  VideoContent,
 };
 

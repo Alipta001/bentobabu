@@ -62,6 +62,27 @@ const productSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    imagesData: [
+      {
+        publicId: { type: String, trim: true },
+        secureUrl: { type: String, trim: true },
+        format: { type: String, trim: true },
+        width: Number,
+        height: Number,
+        bytes: Number,
+        version: Number,
+        _id: false,
+      },
+    ],
+    video: {
+      secureUrl: { type: String, trim: true, default: '' },
+      objectKey: { type: String, trim: true, default: '' },
+      mimeType: { type: String, default: 'video/mp4' },
+      sizeBytes: { type: Number, default: 0 },
+      durationSeconds: { type: Number, default: null },
+      posterUrl: { type: String, trim: true, default: '' },
+      mediaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Media', default: null },
+    },
     price: {
       type: Number,
       required: [true, 'Price is required'],

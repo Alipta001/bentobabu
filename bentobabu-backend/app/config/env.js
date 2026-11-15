@@ -103,6 +103,18 @@ const validateEnv = () => {
     otpMaxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS, 10) || 5,
     otpResendCooldownSeconds: parseInt(process.env.OTP_RESEND_COOLDOWN_SECONDS, 10) || 60,
     otpMaxResends: parseInt(process.env.OTP_MAX_RESENDS, 10) || 3,
+    // Cloudinary Media Configuration
+    cloudinaryCloudName: (process.env.CLOUDINARY_CLOUD_NAME || '').trim(),
+    cloudinaryApiKey: (process.env.CLOUDINARY_API_KEY || '').trim(),
+    cloudinaryApiSecret: (process.env.CLOUDINARY_API_SECRET || '').trim(),
+    // Cloudflare R2 Media Configuration
+    r2AccountId: (process.env.R2_ACCOUNT_ID || '').trim(),
+    r2AccessKeyId: (process.env.R2_ACCESS_KEY_ID || '').trim(),
+    r2SecretAccessKey: (process.env.R2_SECRET_ACCESS_KEY || '').trim(),
+    r2BucketName: (process.env.R2_BUCKET_NAME || 'bentobabu-media').trim(),
+    r2PublicBaseUrl: (process.env.R2_PUBLIC_BASE_URL || 'https://media.bentobabu.com').trim(),
+    r2Region: (process.env.R2_REGION || 'auto').trim(),
+    r2UploadUrlExpirySeconds: parseInt(process.env.R2_UPLOAD_URL_EXPIRY_SECONDS, 10) || 600,
     smsProvider: process.env.SMS_PROVIDER || 'mock',
     smsApiKey: process.env.SMS_API_KEY || '',
     smsApiSecret: process.env.SMS_API_SECRET || '',

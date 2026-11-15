@@ -161,9 +161,27 @@ const otpRateLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+/**
+ * Rate limiter for media upload and initialization operations
+ */
+const mediaUploadRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: isDevOrTest ? 1000 : 60, // 60 uploads per 15 min in prod
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new ResilientStore('rl:media:'),
+  passOnStoreError: false,
+  message: {
+    success: false,
+    message: 'Too many media upload attempts. Please wait 15 minutes.',
+  },
+  validate: { trustProxy: false },
+});
+
 module.exports = {
   globalRateLimiter,
   authRateLimiter,
   refreshRateLimiter,
   otpRateLimiter,
+  mediaUploadRateLimiter,
 };

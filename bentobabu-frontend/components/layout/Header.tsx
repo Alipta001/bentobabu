@@ -20,6 +20,7 @@ import {
   BookOpen,
   HelpCircle,
   MessageCircle,
+  Video,
 } from "lucide-react";
 import { brandConfig } from "@/config/brand";
 import { useAppSelector } from "@/store/hooks";
@@ -156,6 +157,17 @@ export function Header() {
             >
               <span>Explore Menu</span>
               <span className="w-1.5 h-1.5 rounded-full bg-[#B99A60]" />
+            </Link>
+
+            <Link
+              href="/videos"
+              className={`px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all ${
+                pathname.startsWith("/videos")
+                  ? "bg-[#354B35] text-[#F7F3EA] shadow-xs"
+                  : "text-[#354B35] hover:bg-[#354B35]/8 hover:text-[#222922]"
+              }`}
+            >
+              Videos
             </Link>
 
             {/* Collections Dropdown */}
@@ -399,6 +411,18 @@ export function Header() {
               <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-[#B99A60] text-white">
                 Fresh
               </span>
+            </Link>
+            <Link
+              href="/videos"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                pathname.startsWith("/videos")
+                  ? "bg-[#354B35] text-[#F7F3EA]"
+                  : "text-[#354B35] hover:bg-[#354B35]/8"
+              }`}
+            >
+              <Video className="w-4 h-4" />
+              <span>Video Library & Recipes</span>
             </Link>
             <Link
               href="/#why-choose-us"

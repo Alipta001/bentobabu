@@ -1,7 +1,9 @@
 const mongoose = require('mongoose');
-const { Product, Category } = require('../models');
+const { Product, Category, Media } = require('../models');
 const { slugify } = require('../utils/slugify');
 const { redisGet, redisSet, redisDelPattern } = require('../config/redis');
+const { deleteAsset } = require('../config/cloudinary');
+const { deleteObject } = require('../config/r2');
 
 class ProductController {
   /**
@@ -223,6 +225,8 @@ class ProductController {
         description,
         category,
         images,
+        imagesData,
+        video,
         price,
         compareAtPrice,
         ingredients,
@@ -285,12 +289,21 @@ class ProductController {
       const initialStock = Number.isInteger(stockQuantity) && stockQuantity >= 0 ? stockQuantity : 0;
       const initialAvailability = initialStock === 0 ? false : (isAvailable !== undefined ? Boolean(isAvailable) : true);
 
+      // Determine images array and imagesData
+      let resolvedImages = Array.isArray(images) ? images : [];
+      let resolvedImagesData = Array.isArray(imagesData) ? imagesData : [];
+      if (resolvedImages.length === 0 && resolvedImagesData.length > 0) {
+        resolvedImages = resolvedImagesData.map((img) => img.secureUrl).filter(Boolean);
+      }
+
       const product = await Product.create({
         name: name.trim(),
         slug: generatedSlug,
         description: typeof description === 'string' ? description.trim() : '',
         category: categoryDoc._id,
-        images: Array.isArray(images) ? images : [],
+        images: resolvedImages,
+        imagesData: resolvedImagesData,
+        video: video && typeof video === 'object' && video.secureUrl ? video : undefined,
         price,
         compareAtPrice: typeof compareAtPrice === 'number' && compareAtPrice >= 0 ? compareAtPrice : null,
         ingredients: Array.isArray(ingredients) ? ingredients : [],
@@ -304,6 +317,20 @@ class ProductController {
         isFeatured: Boolean(isFeatured),
         isActive: isActive !== undefined ? Boolean(isActive) : true,
       });
+
+      // Link any uploaded Media assets to this product
+      if (resolvedImagesData.length > 0) {
+        const publicIds = resolvedImagesData.map((img) => img.publicId).filter(Boolean);
+        if (publicIds.length > 0) {
+          await Media.updateMany({ publicId: { $in: publicIds } }, { product: product._id });
+        }
+      }
+      if (video && (video.mediaId || video.objectKey)) {
+        await Media.updateMany(
+          { $or: [{ _id: video.mediaId }, { objectKey: video.objectKey }] },
+          { product: product._id }
+        );
+      }
 
       await redisDelPattern('cache:products:*');
       await redisDelPattern('cache:admin:dashboard:*');
@@ -347,6 +374,8 @@ class ProductController {
         description,
         category,
         images,
+        imagesData,
+        video,
         price,
         compareAtPrice,
         ingredients,
@@ -400,7 +429,64 @@ class ProductController {
       }
 
       if (description !== undefined) product.description = typeof description === 'string' ? description.trim() : '';
-      if (images !== undefined && Array.isArray(images)) product.images = images;
+
+      // Handle imagesData replacement and Cloudinary cleanup
+      if (imagesData !== undefined && Array.isArray(imagesData)) {
+        const newPublicIds = new Set(imagesData.map((img) => img.publicId).filter(Boolean));
+        const oldImages = product.imagesData || [];
+
+        // Clean up removed image assets
+        for (const oldImg of oldImages) {
+          if (oldImg.publicId && !newPublicIds.has(oldImg.publicId)) {
+            try {
+              await deleteAsset(oldImg.publicId);
+              await Media.updateOne({ publicId: oldImg.publicId }, { status: 'DELETED' });
+            } catch (delErr) {
+              console.error('[ProductController] Error deleting old image asset:', delErr);
+            }
+          }
+        }
+
+        product.imagesData = imagesData;
+        product.images = imagesData.map((img) => img.secureUrl).filter(Boolean);
+
+        // Link new media items to product
+        if (newPublicIds.size > 0) {
+          await Media.updateMany({ publicId: { $in: Array.from(newPublicIds) } }, { product: product._id });
+        }
+      } else if (images !== undefined && Array.isArray(images)) {
+        product.images = images;
+      }
+
+      // Handle video replacement and R2 cleanup
+      if (video !== undefined) {
+        if (!video || !video.secureUrl) {
+          if (product.video && product.video.objectKey) {
+            try {
+              await deleteObject(product.video.objectKey);
+              await Media.updateOne({ objectKey: product.video.objectKey }, { status: 'DELETED' });
+            } catch (vidErr) {
+              console.error('[ProductController] Error deleting product video:', vidErr);
+            }
+          }
+          product.video = undefined;
+        } else if (video && video.secureUrl) {
+          if (product.video && product.video.objectKey && product.video.objectKey !== video.objectKey) {
+            try {
+              await deleteObject(product.video.objectKey);
+              await Media.updateOne({ objectKey: product.video.objectKey }, { status: 'DELETED' });
+            } catch (vidErr) {
+              console.error('[ProductController] Error replacing product video:', vidErr);
+            }
+          }
+          product.video = video;
+          await Media.updateMany(
+            { $or: [{ _id: video.mediaId }, { objectKey: video.objectKey }] },
+            { product: product._id }
+          );
+        }
+      }
+
       if (ingredients !== undefined && Array.isArray(ingredients)) product.ingredients = ingredients;
       if (portionSize !== undefined) product.portionSize = typeof portionSize === 'string' ? portionSize.trim() : '';
       if (dietaryTags !== undefined && Array.isArray(dietaryTags)) product.dietaryTags = dietaryTags;
@@ -589,6 +675,41 @@ class ProductController {
         return res.status(404).json({
           success: false,
           message: 'Product not found',
+        });
+      }
+
+      // Permanent deletion if explicitly requested
+      if (req.query.permanent === 'true') {
+        // Delete all associated Cloudinary images
+        for (const img of product.imagesData || []) {
+          if (img.publicId) {
+            try {
+              await deleteAsset(img.publicId);
+              await Media.updateOne({ publicId: img.publicId }, { status: 'DELETED' });
+            } catch (imgErr) {
+              console.error('[ProductController] Error deleting image on permanent product delete:', imgErr);
+            }
+          }
+        }
+
+        // Delete associated R2 video
+        if (product.video && product.video.objectKey) {
+          try {
+            await deleteObject(product.video.objectKey);
+            await Media.updateOne({ objectKey: product.video.objectKey }, { status: 'DELETED' });
+          } catch (vidErr) {
+            console.error('[ProductController] Error deleting video on permanent product delete:', vidErr);
+          }
+        }
+
+        await Product.findByIdAndDelete(id);
+
+        await redisDelPattern('cache:products:*');
+        await redisDelPattern('cache:admin:dashboard:*');
+
+        return res.status(200).json({
+          success: true,
+          message: 'Product permanently deleted with associated media',
         });
       }
 

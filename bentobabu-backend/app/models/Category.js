@@ -27,6 +27,15 @@ const categorySchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    imageData: {
+      publicId: { type: String, trim: true },
+      secureUrl: { type: String, trim: true },
+      format: { type: String, trim: true },
+      width: Number,
+      height: Number,
+      bytes: Number,
+      version: Number,
+    },
     isActive: {
       type: Boolean,
       default: true,

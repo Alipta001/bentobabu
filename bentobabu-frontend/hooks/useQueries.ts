@@ -7,7 +7,8 @@ import { addressService } from "@/services/addressService";
 import { authService } from "@/services/authService";
 import { deliveryService } from "@/services/deliveryService";
 import { notificationService } from "@/services/notificationService";
-import { CartItem, ProductFilterOptions, Address } from "@/types";
+import { videoService } from "@/services/videoService";
+import { CartItem, ProductFilterOptions, Address, VideoFilterOptions } from "@/types";
 import { INITIAL_CATEGORIES } from "@/lib/data/categories";
 import { INITIAL_PRODUCTS } from "@/lib/data/products";
 
@@ -28,6 +29,9 @@ export const QUERY_KEYS = {
   NOTIFICATIONS: (isRead?: boolean) => ["notifications", isRead],
   UNREAD_NOTIFICATIONS_COUNT: ["notifications", "unread-count"],
   NOTIFICATION_PREFERENCES: ["notifications", "preferences"],
+  VIDEOS: (filters?: VideoFilterOptions) => ["videos", filters],
+  FEATURED_VIDEOS: (limit?: number) => ["videos", "featured", limit],
+  VIDEO: (slug: string) => ["video", slug],
 };
 
 export function useCategories() {
@@ -272,3 +276,29 @@ export function useCancelOrder() {
     },
   });
 }
+
+export function useVideos(filters?: VideoFilterOptions) {
+  return useQuery({
+    queryKey: QUERY_KEYS.VIDEOS(filters),
+    queryFn: ({ signal }) => videoService.getAll(filters, signal),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useFeaturedVideos(limit = 6) {
+  return useQuery({
+    queryKey: QUERY_KEYS.FEATURED_VIDEOS(limit),
+    queryFn: () => videoService.getFeatured(limit),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useVideo(slug: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.VIDEO(slug),
+    queryFn: () => videoService.getBySlug(slug),
+    enabled: !!slug,
+    staleTime: 60 * 1000,
+  });
+}
+

@@ -28,6 +28,25 @@ export interface Category {
   itemCount?: number;
 }
 
+export interface ProductMediaImage {
+  publicId: string;
+  secureUrl: string;
+  format?: string;
+  sizeBytes?: number;
+  width?: number;
+  height?: number;
+}
+
+export interface ProductVideo {
+  secureUrl: string;
+  objectKey: string;
+  mimeType: string;
+  sizeBytes?: number;
+  durationSeconds?: number;
+  posterUrl?: string | null;
+  mediaId?: string;
+}
+
 export interface Product {
   id: string;
   _id?: string;
@@ -46,6 +65,8 @@ export interface Product {
   imageUrl: string;
   images?: string[];
   galleryImages?: string[];
+  imagesData?: ProductMediaImage[];
+  video?: ProductVideo;
   isAvailable: boolean;
   isBestseller?: boolean;
   isFeatured?: boolean;
@@ -278,4 +299,39 @@ export interface CheckoutFormData {
   deliveryNotes?: string;
   paymentMethod: "razorpay" | "cod" | "RAZORPAY" | "COD";
   couponCode?: string;
+}
+
+export interface VideoContent {
+  _id: string;
+  id?: string;
+  title: string;
+  slug: string;
+  description?: string;
+  youtubeUrl: string;
+  youtubeVideoId: string;
+  thumbnailUrl?: string;
+  category: string;
+  contentType: "Recipes" | "Food Preparation" | "Nutrition Tips" | "Meal Ideas" | string;
+  preparationMethods?: string[];
+  dietaryTags?: string[];
+  mealType?: string[];
+  relatedProduct?: string | Product;
+  isFeatured: boolean;
+  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  publishedAt?: string | null;
+  createdBy?: string | { _id: string; name: string; email: string };
+  embedUrl?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface VideoFilterOptions {
+  category?: string;
+  contentType?: string;
+  preparationMethod?: string;
+  dietaryTag?: string;
+  search?: string;
+  isFeatured?: boolean | string;
+  page?: number;
+  limit?: number;
 }

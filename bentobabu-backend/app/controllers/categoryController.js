@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
-const { Category } = require('../models');
+const { Category, Media } = require('../models');
 const { slugify } = require('../utils/slugify');
 const { redisGet, redisSet, redisDel, redisDelPattern } = require('../config/redis');
+const { deleteAsset } = require('../config/cloudinary');
 
 class CategoryController {
   /**
@@ -76,7 +77,7 @@ class CategoryController {
    */
   static async createCategory(req, res, next) {
     try {
-      const { name, slug, description, image, displayOrder, isActive } = req.body;
+      const { name, slug, description, image, imageData, displayOrder, isActive } = req.body;
 
       if (!name || typeof name !== 'string' || !name.trim()) {
         return res.status(400).json({
@@ -105,10 +106,15 @@ class CategoryController {
         name: name.trim(),
         slug: generatedSlug,
         description: typeof description === 'string' ? description.trim() : '',
-        image: typeof image === 'string' ? image.trim() : '',
+        image: (imageData && imageData.secureUrl) ? imageData.secureUrl : (typeof image === 'string' ? image.trim() : ''),
+        imageData: imageData && typeof imageData === 'object' ? imageData : undefined,
         displayOrder: Number.isInteger(Number(displayOrder)) ? Number(displayOrder) : 0,
         isActive: isActive !== undefined ? Boolean(isActive) : true,
       });
+
+      if (imageData && imageData.publicId) {
+        await Media.updateOne({ publicId: imageData.publicId }, { category: category._id });
+      }
 
       await redisDel('cache:categories:all');
       await redisDelPattern('cache:products:*');
@@ -147,7 +153,7 @@ class CategoryController {
         });
       }
 
-      const { name, slug, description, image, displayOrder } = req.body;
+      const { name, slug, description, image, imageData, displayOrder } = req.body;
 
       if (name !== undefined) {
         if (typeof name !== 'string' || !name.trim()) {
@@ -181,7 +187,27 @@ class CategoryController {
         category.description = typeof description === 'string' ? description.trim() : '';
       }
 
-      if (image !== undefined) {
+      // Handle imageData replacement and Cloudinary cleanup
+      if (imageData !== undefined) {
+        if (category.imageData?.publicId && category.imageData.publicId !== imageData?.publicId) {
+          try {
+            await deleteAsset(category.imageData.publicId);
+            await Media.updateOne({ publicId: category.imageData.publicId }, { status: 'DELETED' });
+          } catch (delErr) {
+            console.error('[CategoryController] Error deleting old category image:', delErr);
+          }
+        }
+
+        category.imageData = imageData && typeof imageData === 'object' ? imageData : undefined;
+        if (imageData?.secureUrl) {
+          category.image = imageData.secureUrl;
+          if (imageData.publicId) {
+            await Media.updateOne({ publicId: imageData.publicId }, { category: category._id });
+          }
+        } else if (imageData === null) {
+          category.image = '';
+        }
+      } else if (image !== undefined) {
         category.image = typeof image === 'string' ? image.trim() : '';
       }
 
