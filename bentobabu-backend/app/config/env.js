@@ -2,6 +2,17 @@
  * Environment Variable Validation & Configuration
  */
 
+const path = require('path');
+const fs = require('fs');
+
+// Ensure .env is loaded regardless of process.cwd()
+const backendEnvPath = path.resolve(__dirname, '../../.env');
+if (fs.existsSync(backendEnvPath)) {
+  require('dotenv').config({ path: backendEnvPath });
+} else {
+  require('dotenv').config();
+}
+
 const requiredInProduction = [
   'MONGODB_URI',
   'JWT_ACCESS_SECRET',
