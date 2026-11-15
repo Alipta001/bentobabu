@@ -33,6 +33,7 @@ process.env.EMAIL_FROM = process.env.EMAIL_FROM || 'BentoBabu <verify@bentobabu.
 const { startServer } = require(path.join(backendRoot, 'server'));
 const { User, OtpChallenge } = require(path.join(backendRoot, 'app/models'));
 const { setTransporter } = require(path.join(backendRoot, 'app/utils/email'));
+const { hashChallengeToken } = require(path.join(backendRoot, 'app/utils/sms'));
 const { disconnectRedis } = require(path.join(backendRoot, 'app/config/redis'));
 const mongoose = require(path.join(backendRoot, 'node_modules/mongoose'));
 
@@ -362,7 +363,7 @@ async function runSuite() {
 
       // Fast-forward lastSentAt past cooldown
       await OtpChallenge.updateOne(
-        { challengeToken: activeChallengeId },
+        { challengeTokenHash: hashChallengeToken(activeChallengeId) },
         { $set: { lastSentAt: new Date(Date.now() - 65 * 1000) } }
       );
 
@@ -412,7 +413,7 @@ async function runSuite() {
       assert.strictEqual(dbUser.isEmailVerified, true);
 
       // Verify challenge is marked consumed
-      const dbChallenge = await OtpChallenge.findOne({ challengeToken: activeChallengeId });
+      const dbChallenge = await OtpChallenge.findOne({ challengeTokenHash: hashChallengeToken(activeChallengeId) });
       assert.strictEqual(dbChallenge.isConsumed, true);
 
       // Simulate frontend clearing sessionStorage

@@ -227,6 +227,8 @@ const startServer = async (port = env.port, host = env.host) => {
     console.log('[Server] Connecting to MongoDB and Redis...');
     await connectDB(env.mongoUri);
     await initRedis();
+    const { OtpChallenge } = require('./app/models');
+    await OtpChallenge.migrateSchema().catch(() => {});
 
     return new Promise((resolve, reject) => {
       server = app.listen(port, host, (err) => {

@@ -36,7 +36,7 @@ const { User, OtpChallenge } = require('../app/models');
 const { validateEnv } = require('../app/config/env');
 const { disconnectRedis } = require('../app/config/redis');
 const { setTransporter } = require('../app/utils/email');
-const { setSmsSender, verifyOtpHash } = require('../app/utils/sms');
+const { setSmsSender, verifyOtpHash, hashChallengeToken } = require('../app/utils/sms');
 
 let sentEmails = [];
 let sentSmsMessages = [];
@@ -286,9 +286,16 @@ const runTests = async () => {
       assert.strictEqual(dbUser.isEmailVerified, false);
       assert.strictEqual(dbUser.isPhoneVerified, false);
 
-      // Verify OTP Challenge created with challengeToken and hashed with OTP_HASH_SECRET
-      const challenge = await OtpChallenge.findOne({ challengeToken: registeredChallengeId }).select('+otpHash');
-      assert.ok(challenge);
+      // Verify raw challenge token is NEVER stored in MongoDB
+      const rawInDb = await OtpChallenge.findOne({ challengeToken: registeredChallengeId });
+      assert.strictEqual(rawInDb, null, 'Raw challengeToken must NEVER be persisted in MongoDB');
+
+      // Verify OTP Challenge created with SHA-256 challengeTokenHash and hashed with OTP_HASH_SECRET
+      const crypto = require('crypto');
+      const expectedTokenHash = crypto.createHash('sha256').update(registeredChallengeId).digest('hex');
+      const challenge = await OtpChallenge.findOne({ challengeTokenHash: expectedTokenHash }).select('+otpHash');
+      assert.ok(challenge, 'OtpChallenge must be retrievable by challengeTokenHash');
+      assert.strictEqual(challenge.challengeToken, undefined, 'challengeToken property must not exist on document');
       assert.strictEqual(challenge.channel, 'email');
       assert.ok(challenge.otpHash);
       assert.notStrictEqual(challenge.otpHash.length, 6, 'otpHash must not be 6 characters plaintext');
@@ -411,7 +418,7 @@ const runTests = async () => {
     await test('8. Resend limit persists across updates and strictly rejects 4th resend (max=3)', async () => {
       // Resend 1: simulate cooldown elapsed
       await OtpChallenge.updateOne(
-        { challengeToken: registeredChallengeId },
+        { challengeTokenHash: hashChallengeToken(registeredChallengeId) },
         { $set: { lastSentAt: new Date(Date.now() - 65 * 1000) } }
       );
       sentEmails = [];
@@ -434,7 +441,7 @@ const runTests = async () => {
 
       // Resend 2: simulate cooldown elapsed
       await OtpChallenge.updateOne(
-        { challengeToken: registeredChallengeId },
+        { challengeTokenHash: hashChallengeToken(registeredChallengeId) },
         { $set: { lastSentAt: new Date(Date.now() - 65 * 1000) } }
       );
       const res2 = await makeRequest(
@@ -456,7 +463,7 @@ const runTests = async () => {
 
       // Resend 3: simulate cooldown elapsed
       await OtpChallenge.updateOne(
-        { challengeToken: registeredChallengeId },
+        { challengeTokenHash: hashChallengeToken(registeredChallengeId) },
         { $set: { lastSentAt: new Date(Date.now() - 65 * 1000) } }
       );
       const res3 = await makeRequest(
@@ -478,7 +485,7 @@ const runTests = async () => {
 
       // Resend 4: simulate cooldown elapsed, MUST be rejected (max=3 reached)
       await OtpChallenge.updateOne(
-        { challengeToken: registeredChallengeId },
+        { challengeTokenHash: hashChallengeToken(registeredChallengeId) },
         { $set: { lastSentAt: new Date(Date.now() - 65 * 1000) } }
       );
       const res4 = await makeRequest(
@@ -528,7 +535,7 @@ const runTests = async () => {
 
       // Simulate cooldown elapsed
       await OtpChallenge.updateOne(
-        { challengeToken: concChallengeId },
+        { challengeTokenHash: hashChallengeToken(concChallengeId) },
         { $set: { lastSentAt: new Date(Date.now() - 65 * 1000) } }
       );
 
@@ -975,7 +982,7 @@ const runTests = async () => {
 
       // Fast-forward lastSentAt past cooldown
       await OtpChallenge.updateOne(
-        { challengeToken: challengeId },
+        { challengeTokenHash: hashChallengeToken(challengeId) },
         { $set: { lastSentAt: new Date(Date.now() - 65 * 1000) } }
       );
 
@@ -1018,6 +1025,116 @@ const runTests = async () => {
           };
         },
       });
+    });
+
+    // 20. Token Storage Security: Raw challenge token is never persisted; wrong token is rejected
+    await test('20. Challenge tokens are hashed with SHA-256; raw token is never persisted and wrong token is rejected', async () => {
+      const secEmail = `token_security_${Date.now()}@bentobabu.in`;
+      const secPhone = '94' + Math.floor(10000000 + Math.random() * 90000000).toString();
+
+      const regRes = await makeRequest(
+        {
+          hostname: host,
+          port,
+          path: '/api/v1/auth/register',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+            Cookie: csrfCookie,
+          },
+        },
+        {
+          name: 'Security Test User',
+          email: secEmail,
+          phone: secPhone,
+          password: 'Password123!',
+        }
+      );
+      assert.strictEqual(regRes.statusCode, 201);
+      const rawToken = regRes.body.data.challengeId;
+      assert.ok(rawToken, 'Registration must return raw challengeId');
+
+      // 1. Verify raw token is NOT in database
+      const rawDoc = await OtpChallenge.findOne({ challengeToken: rawToken });
+      assert.strictEqual(rawDoc, null, 'Raw challengeToken must NOT be found in MongoDB');
+
+      // 2. Verify SHA-256 hash IS in database
+      const expectedHash = hashChallengeToken(rawToken);
+      const hashedDoc = await OtpChallenge.findOne({ challengeTokenHash: expectedHash });
+      assert.ok(hashedDoc, 'OtpChallenge must be retrievable by challengeTokenHash');
+      assert.strictEqual(hashedDoc.challengeToken, undefined, 'challengeToken property must be undefined');
+
+      // 3. Status check with wrong token must return 404
+      const wrongStatus = await makeRequest({
+        hostname: host,
+        port,
+        path: '/api/v1/auth/otp-status?challengeId=wrong_token_1234567890abcdef',
+        method: 'GET',
+      });
+      assert.strictEqual(wrongStatus.statusCode, 404);
+
+      // 4. Verification with wrong token must return 404
+      const wrongVerify = await makeRequest(
+        {
+          hostname: host,
+          port,
+          path: '/api/v1/auth/verify-signup-otp',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+            Cookie: csrfCookie,
+          },
+        },
+        {
+          challengeId: 'wrong_token_1234567890abcdef',
+          otp: '123456',
+        }
+      );
+      assert.strictEqual(wrongVerify.statusCode, 404);
+    });
+
+    // 21. Migration safely invalidates legacy unhashed challenges without affecting verified users
+    await test('21. Migration safely invalidates legacy challenges without touching verified user accounts', async () => {
+      // Create a verified user
+      const verifiedUser = await User.create({
+        name: 'Verified User Kept',
+        email: `verified_kept_${Date.now()}@bentobabu.in`,
+        phone: '93' + Math.floor(10000000 + Math.random() * 90000000).toString(),
+        password: 'Password123!',
+        role: 'CUSTOMER',
+        isActive: true,
+        isEmailVerified: true,
+        isPhoneVerified: true,
+      });
+
+      // Insert a legacy challenge without challengeTokenHash directly into MongoDB collection
+      await OtpChallenge.collection.insertOne({
+        challengeToken: 'legacy_unhashed_token_to_purge',
+        user: verifiedUser._id,
+        identifier: verifiedUser.email,
+        channel: 'email',
+        otpHash: 'dummy_hash',
+        expiresAt: new Date(Date.now() + 300000),
+        attempts: 0,
+        maxAttempts: 5,
+        resendCount: 0,
+        lastSentAt: new Date(),
+        isConsumed: false,
+      });
+
+      // Run schema migration
+      await OtpChallenge.migrateSchema();
+
+      // Verify legacy challenge was removed
+      const legacyCheck = await OtpChallenge.collection.findOne({ challengeToken: 'legacy_unhashed_token_to_purge' });
+      assert.strictEqual(legacyCheck, null, 'Legacy challenge must be purged');
+
+      // Verify verified user was NOT touched
+      const userCheck = await User.findById(verifiedUser._id);
+      assert.ok(userCheck, 'Verified user must still exist');
+      assert.strictEqual(userCheck.isEmailVerified, true, 'User must remain verified');
     });
 
     console.log('\n================================================================');

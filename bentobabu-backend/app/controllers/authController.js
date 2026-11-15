@@ -21,6 +21,7 @@ const {
   maskPhoneNumber,
   generateNumericOtp,
   generateChallengeToken,
+  hashChallengeToken,
   hashOtp,
   verifyOtpHash,
   sendSms,
@@ -58,11 +59,12 @@ const resolveUserFromIdentifier = async ({ identifier, email, phone }) => {
 };
 
 /**
- * Helper to resolve challenge and associated user by challengeId or fallback credentials
+ * Helper to resolve challenge and associated user by challengeId (SHA-256 hashed lookup) or fallback credentials
  */
 const resolveChallenge = async ({ challengeId, identifier, email, phone }) => {
   if (challengeId && typeof challengeId === 'string' && challengeId.trim()) {
-    const challenge = await OtpChallenge.findOne({ challengeToken: challengeId.trim() }).select('+otpHash');
+    const challengeTokenHash = hashChallengeToken(challengeId.trim());
+    const challenge = await OtpChallenge.findOne({ challengeTokenHash }).select('+otpHash');
     if (challenge) {
       const user = await User.findById(challenge.user);
       return { challenge, user };
@@ -185,12 +187,13 @@ class AuthController {
       const channel = activeEnv.otpEmailEnabled ? 'email' : 'sms';
       const identifier = channel === 'email' ? cleanEmail : cleanPhone;
       const challengeToken = generateChallengeToken();
+      const challengeTokenHash = hashChallengeToken(challengeToken);
       const otp = generateNumericOtp(activeEnv.otpLength);
       const otpHash = hashOtp(otp, activeEnv.otpHashSecret);
       const expiresAt = new Date(Date.now() + activeEnv.otpExpiryMinutes * 60 * 1000);
 
       await OtpChallenge.create({
-        challengeToken,
+        challengeTokenHash,
         user: user._id,
         identifier,
         channel,
@@ -225,7 +228,7 @@ class AuthController {
       if (!sendResult || !sendResult.success) {
         console.warn(`[Registration][${correlationId}] OTP delivery failed via ${channel}: ${sendResult?.error || 'Unknown error'}`);
         // Rollback challenge creation and unverified new user to prevent orphaned conflict
-        await OtpChallenge.deleteOne({ challengeToken });
+        await OtpChallenge.deleteOne({ challengeTokenHash });
         if (!existingUser) {
           await User.deleteOne({ _id: user._id });
         }
@@ -270,7 +273,8 @@ class AuthController {
         });
       }
 
-      const challenge = await OtpChallenge.findOne({ challengeToken: challengeId.trim() });
+      const challengeTokenHash = hashChallengeToken(challengeId.trim());
+      const challenge = await OtpChallenge.findOne({ challengeTokenHash });
       if (!challenge) {
         return res.status(404).json({
           success: false,
@@ -285,7 +289,7 @@ class AuthController {
       return res.status(200).json({
         success: true,
         data: {
-          challengeId: challenge.challengeToken,
+          challengeId: challengeId.trim(),
           channel: challenge.channel,
           destination: challenge.channel === 'email' ? maskEmail(challenge.identifier) : maskPhoneNumber(challenge.identifier),
           maskedDestination: challenge.channel === 'email' ? maskEmail(challenge.identifier) : maskPhoneNumber(challenge.identifier),
@@ -567,7 +571,7 @@ class AuthController {
         success: true,
         message: `A fresh verification code has been sent to your registered ${updatedChallenge.channel}.`,
         data: {
-          challengeId: updatedChallenge.challengeToken,
+          challengeId: (challengeId && typeof challengeId === 'string') ? challengeId.trim() : undefined,
           channel: updatedChallenge.channel,
           destination: updatedChallenge.channel === 'email' ? maskEmail(user.email) : maskPhoneNumber(user.phone),
           maskedDestination: updatedChallenge.channel === 'email' ? maskEmail(user.email) : maskPhoneNumber(user.phone),

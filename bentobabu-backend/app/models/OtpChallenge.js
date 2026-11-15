@@ -2,9 +2,9 @@ const mongoose = require('mongoose');
 
 const otpChallengeSchema = new mongoose.Schema(
   {
-    challengeToken: {
+    challengeTokenHash: {
       type: String,
-      required: [true, 'Challenge token is required'],
+      required: [true, 'Challenge token hash is required'],
       unique: true,
       index: true,
     },
@@ -73,6 +73,8 @@ const otpChallengeSchema = new mongoose.Schema(
         delete ret._id;
         delete ret.__v;
         delete ret.otpHash;
+        delete ret.challengeTokenHash;
+        delete ret.challengeToken;
         return ret;
       },
     },
@@ -82,6 +84,33 @@ const otpChallengeSchema = new mongoose.Schema(
 // Compound index for active challenges query
 otpChallengeSchema.index({ user: 1, isConsumed: 1, expiresAt: 1 });
 otpChallengeSchema.index({ identifier: 1, isConsumed: 1 });
+
+/**
+ * Migration helper: Safely invalidates legacy challenges using old raw-token storage format
+ * Drops legacy challengeToken_1 index and syncs unique index on challengeTokenHash
+ * Verified user accounts in User collection are NEVER touched or invalidated
+ */
+otpChallengeSchema.statics.migrateSchema = async function () {
+  try {
+    // 1. Delete legacy challenges that do not have challengeTokenHash
+    const result = await this.deleteMany({ challengeTokenHash: { $exists: false } });
+    if (result && result.deletedCount > 0) {
+      console.log(`[Security] Cleaned up ${result.deletedCount} legacy unhashed OTP challenges.`);
+    }
+
+    // 2. Drop old challengeToken_1 index if it exists in MongoDB
+    const indexes = await this.collection.indexes().catch(() => []);
+    const hasOldIndex = indexes.some((idx) => idx.name === 'challengeToken_1');
+    if (hasOldIndex) {
+      await this.collection.dropIndex('challengeToken_1').catch(() => {});
+    }
+
+    // 3. Ensure unique index on challengeTokenHash
+    await this.syncIndexes().catch(() => {});
+  } catch (err) {
+    // Ignore if collection does not exist yet or mock setup
+  }
+};
 
 const OtpChallenge = mongoose.model('OtpChallenge', otpChallengeSchema);
 

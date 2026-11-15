@@ -66,6 +66,15 @@ const generateChallengeToken = () => {
 };
 
 /**
+ * Computes SHA-256 hash of opaque challenge token for secure at-rest storage
+ * Raw challenge tokens are never stored in MongoDB
+ */
+const hashChallengeToken = (token) => {
+  if (!token || typeof token !== 'string') return '';
+  return crypto.createHash('sha256').update(token.trim()).digest('hex');
+};
+
+/**
  * Hashes OTP using HMAC-SHA256 with application secret
  */
 const hashOtp = (otp, secret) => {
@@ -206,6 +215,7 @@ module.exports = {
   maskPhoneNumber,
   generateNumericOtp,
   generateChallengeToken,
+  hashChallengeToken,
   hashOtp,
   verifyOtpHash,
   sendSms,
