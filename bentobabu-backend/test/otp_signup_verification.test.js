@@ -35,22 +35,28 @@ const { app, startServer } = require('../server');
 const { User, OtpChallenge } = require('../app/models');
 const { validateEnv } = require('../app/config/env');
 const { disconnectRedis } = require('../app/config/redis');
-const { setTransporter } = require('../app/utils/email');
+const { setResendClient } = require('../app/utils/email');
 const { setSmsSender, verifyOtpHash, hashChallengeToken } = require('../app/utils/sms');
 
 let sentEmails = [];
 let sentSmsMessages = [];
 
-// Configure mock email transporter
-setTransporter({
-  sendMail: async (mailOptions) => {
-    sentEmails.push(mailOptions);
-    return {
-      messageId: `mock-email-${Date.now()}`,
-      response: '250 OK mock email delivered',
-    };
-  },
-});
+// Configure mock Resend client
+const setWorkingResendClient = () => {
+  setResendClient({
+    emails: {
+      send: async (mailOptions) => {
+        sentEmails.push(mailOptions);
+        return {
+          data: { id: `mock-resend-${Date.now()}` },
+          error: null,
+        };
+      },
+    },
+  });
+};
+
+setWorkingResendClient();
 
 // Configure mock SMS sender
 setSmsSender(async ({ to, message }) => {
@@ -165,46 +171,41 @@ const runTests = async () => {
     assert.strictEqual(env.otpHashSecret, process.env.OTP_HASH_SECRET);
   });
 
-  // 2b. Startup validation: SMTP configuration required when OTP_EMAIL_ENABLED=true
-  await test('2b. Startup fails when required SMTP variables are missing while OTP_EMAIL_ENABLED=true', () => {
-    const savedHost = process.env.SMTP_HOST;
-    const savedPass = process.env.SMTP_PASSWORD;
+  // 2b. Startup validation: RESEND_API_KEY required when OTP_EMAIL_ENABLED=true
+  await test('2b. Startup fails when required RESEND_API_KEY is missing while OTP_EMAIL_ENABLED=true', () => {
+    const savedKey = process.env.RESEND_API_KEY;
 
-    delete process.env.SMTP_HOST;
+    delete process.env.RESEND_API_KEY;
     assert.throws(
       () => validateEnv(),
-      /Missing required SMTP environment variables when email OTP is enabled/
+      /Missing required RESEND_API_KEY environment variable when email OTP is enabled/
     );
 
-    process.env.SMTP_HOST = savedHost || 'smtp.resend.com';
-    delete process.env.SMTP_PASSWORD;
+    process.env.RESEND_API_KEY = '   ';
     assert.throws(
       () => validateEnv(),
-      /Missing required SMTP environment variables when email OTP is enabled/
+      /Missing required RESEND_API_KEY environment variable when email OTP is enabled/
     );
 
-    process.env.SMTP_PASSWORD = savedPass || 're_test_key';
+    process.env.RESEND_API_KEY = savedKey || 're_test_key_sample';
   });
 
-  // 2c. Startup validation: SMTP configuration NOT required when OTP_SMS_ENABLED=true
-  await test('2c. Startup succeeds without SMTP credentials when OTP_SMS_ENABLED=true', () => {
+  // 2c. Startup validation: RESEND_API_KEY NOT required when OTP_SMS_ENABLED=true
+  await test('2c. Startup succeeds without RESEND_API_KEY when OTP_SMS_ENABLED=true', () => {
     const savedEmailEnabled = process.env.OTP_EMAIL_ENABLED;
     const savedSmsEnabled = process.env.OTP_SMS_ENABLED;
-    const savedHost = process.env.SMTP_HOST;
-    const savedPass = process.env.SMTP_PASSWORD;
+    const savedKey = process.env.RESEND_API_KEY;
 
     process.env.OTP_EMAIL_ENABLED = 'false';
     process.env.OTP_SMS_ENABLED = 'true';
-    delete process.env.SMTP_HOST;
-    delete process.env.SMTP_PASSWORD;
+    delete process.env.RESEND_API_KEY;
 
     assert.doesNotThrow(() => validateEnv());
 
     // Restore
     process.env.OTP_EMAIL_ENABLED = savedEmailEnabled;
     process.env.OTP_SMS_ENABLED = savedSmsEnabled;
-    process.env.SMTP_HOST = savedHost;
-    process.env.SMTP_PASSWORD = savedPass;
+    process.env.RESEND_API_KEY = savedKey;
   });
 
   let serverInstance = null;
@@ -897,10 +898,19 @@ const runTests = async () => {
 
     // 18. Registration handles email delivery failure gracefully (HTTP 502, rolls back challenge and user)
     await test('18. Email delivery failure during registration returns HTTP 502 and rolls back challenge/user', async () => {
-      // Temporarily mock failing transporter
-      setTransporter({
-        sendMail: async () => {
-          throw new Error('SMTP connection timed out to smtp.resend.com');
+      // Temporarily mock failing Resend API response
+      setResendClient({
+        emails: {
+          send: async () => {
+            return {
+              data: null,
+              error: {
+                message: 'API key not found',
+                name: 'invalid_api_key',
+                statusCode: 401,
+              },
+            };
+          },
         },
       });
 
@@ -930,8 +940,7 @@ const runTests = async () => {
       assert.strictEqual(failRes.statusCode, 502);
       assert.strictEqual(failRes.body.success, false);
       assert.match(failRes.body.message, /Failed to deliver verification code via email/);
-      // Ensure no credentials or internal SMTP details leak in response
-      assert.doesNotMatch(failRes.rawBody, /smtp\.resend\.com/);
+      // Ensure no credentials or API keys leak in response
       assert.doesNotMatch(failRes.rawBody, /re_/);
 
       // Verify user and challenge were rolled back
@@ -940,21 +949,13 @@ const runTests = async () => {
       const orphanedChallenge = await OtpChallenge.findOne({ identifier: failEmail });
       assert.strictEqual(orphanedChallenge, null);
 
-      // Restore working mock transporter
-      setTransporter({
-        sendMail: async (mailOptions) => {
-          sentEmails.push(mailOptions);
-          return {
-            messageId: `mock-email-${Date.now()}`,
-            response: '250 OK mock email delivered',
-          };
-        },
-      });
+      // Restore working mock Resend client
+      setWorkingResendClient();
     });
 
     // 19. Resend OTP handles email delivery failure gracefully (HTTP 502)
     await test('19. Email delivery failure during OTP resend returns HTTP 502', async () => {
-      // First register a valid user with working transporter
+      // First register a valid user with working client
       const resendFailEmail = `resend_fail_${Date.now()}@bentobabu.in`;
       const resendFailPhone = '98' + Math.floor(10000000 + Math.random() * 90000000).toString();
 
@@ -986,10 +987,19 @@ const runTests = async () => {
         { $set: { lastSentAt: new Date(Date.now() - 65 * 1000) } }
       );
 
-      // Set failing transporter
-      setTransporter({
-        sendMail: async () => {
-          throw new Error('550 Domain unverified or quota exceeded');
+      // Set failing Resend client
+      setResendClient({
+        emails: {
+          send: async () => {
+            return {
+              data: null,
+              error: {
+                message: 'Rate limit exceeded',
+                name: 'rate_limit_exceeded',
+                statusCode: 429,
+              },
+            };
+          },
         },
       });
 
@@ -1015,16 +1025,91 @@ const runTests = async () => {
       assert.strictEqual(resendRes.body.success, false);
       assert.match(resendRes.body.message, /Failed to deliver verification code via email/);
 
-      // Restore working mock transporter
-      setTransporter({
-        sendMail: async (mailOptions) => {
-          sentEmails.push(mailOptions);
-          return {
-            messageId: `mock-email-${Date.now()}`,
-            response: '250 OK mock email delivered',
-          };
+      // Restore working mock Resend client
+      setWorkingResendClient();
+    });
+
+    // 19b. Resend network connection failure returns HTTP 502 and rolls back
+    await test('19b. Resend network connection failure returns HTTP 502 and rolls back', async () => {
+      setResendClient({
+        emails: {
+          send: async () => {
+            const netErr = new Error('getaddrinfo ENOTFOUND api.resend.com');
+            netErr.code = 'ENOTFOUND';
+            throw netErr;
+          },
         },
       });
+
+      const netFailEmail = `net_fail_${Date.now()}@bentobabu.in`;
+      const netRes = await makeRequest(
+        {
+          hostname: host,
+          port,
+          path: '/api/v1/auth/register',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+            Cookie: csrfCookie,
+          },
+        },
+        {
+          name: 'Network Failure Test',
+          email: netFailEmail,
+          phone: '98' + Math.floor(10000000 + Math.random() * 90000000).toString(),
+          password: 'Password123!',
+        }
+      );
+
+      assert.strictEqual(netRes.statusCode, 502);
+      assert.strictEqual(netRes.body.success, false);
+      const orphanedUser = await User.findOne({ email: netFailEmail });
+      assert.strictEqual(orphanedUser, null);
+
+      setWorkingResendClient();
+    });
+
+    // 19c. Resend API request timeout returns HTTP 502 and rolls back
+    await test('19c. Resend API request timeout returns HTTP 502 and rolls back', async () => {
+      setResendClient({
+        emails: {
+          send: async () => {
+            const timeoutErr = new Error('Resend API request timed out after 12000ms');
+            timeoutErr.name = 'TimeoutError';
+            timeoutErr.code = 'ETIMEDOUT';
+            throw timeoutErr;
+          },
+        },
+      });
+
+      const timeFailEmail = `timeout_fail_${Date.now()}@bentobabu.in`;
+      const timeRes = await makeRequest(
+        {
+          hostname: host,
+          port,
+          path: '/api/v1/auth/register',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+            Cookie: csrfCookie,
+          },
+        },
+        {
+          name: 'Timeout Failure Test',
+          email: timeFailEmail,
+          phone: '98' + Math.floor(10000000 + Math.random() * 90000000).toString(),
+          password: 'Password123!',
+        }
+      );
+
+      assert.strictEqual(timeRes.statusCode, 502);
+      assert.strictEqual(timeRes.body.success, false);
+      const orphanedUser = await User.findOne({ email: timeFailEmail });
+      assert.strictEqual(orphanedUser, null);
+
+      setWorkingResendClient();
     });
 
     // 20. Token Storage Security: Raw challenge token is never persisted; wrong token is rejected

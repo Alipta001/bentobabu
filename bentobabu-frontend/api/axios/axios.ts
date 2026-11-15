@@ -58,7 +58,7 @@ export const clearCsrfToken = () => {
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: 25000,
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -214,6 +214,10 @@ apiClient.interceptors.response.use(
         ? "Access forbidden: you do not have permission to access this resource."
         : error.response?.status === 401
         ? "Session expired. Please log in again."
+        : error.response?.status === 502
+        ? "Service temporarily unavailable. Email delivery failed, please try again."
+        : error.code === "ECONNABORTED"
+        ? "The server took too long to respond. Please check your connection and try again."
         : error.code === "ERR_NETWORK"
         ? "Unable to reach the server. Please check your internet connection."
         : error.message || "An unexpected error occurred.");

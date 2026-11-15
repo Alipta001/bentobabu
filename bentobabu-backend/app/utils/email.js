@@ -1,43 +1,61 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const { validateEnv } = require('../config/env');
 
-const env = validateEnv();
-
-let customTransporter = undefined;
+let customResendClient = undefined;
 
 /**
- * Allows tests to supply a mock transporter
+ * Allows tests to supply a mock Resend client
  */
-const setTransporter = (transporter) => {
-  customTransporter = transporter;
+const setResendClient = (client) => {
+  customResendClient = client;
 };
 
 /**
- * Returns active nodemailer transporter
+ * Backward compatibility: Allows tests or legacy callers supplying a mock transporter
  */
-const getTransporter = () => {
-  if (customTransporter !== undefined) {
-    return customTransporter;
+const setTransporter = (transporter) => {
+  if (!transporter) {
+    customResendClient = undefined;
+    return;
+  }
+  if (typeof transporter.sendMail === 'function') {
+    customResendClient = {
+      emails: {
+        send: async ({ from, to, subject, html, text }) => {
+          try {
+            const info = await transporter.sendMail({ from, to, subject, html, text });
+            return { data: { id: info?.messageId || 'mock_msg_id' }, error: null };
+          } catch (err) {
+            return { data: null, error: { message: err.message, name: err.name || 'Error' } };
+          }
+        },
+      },
+    };
+  } else {
+    customResendClient = transporter;
+  }
+};
+
+/**
+ * Returns active Resend client
+ */
+const getResendClient = () => {
+  if (customResendClient !== undefined) {
+    return customResendClient;
   }
 
   const activeEnv = validateEnv();
-  if (!activeEnv.smtpHost) {
+  if (!activeEnv.resendApiKey) {
     return null;
   }
 
-  return nodemailer.createTransport({
-    host: activeEnv.smtpHost,
-    port: activeEnv.smtpPort,
-    secure: activeEnv.smtpSecure,
-    auth:
-      activeEnv.smtpUser && activeEnv.smtpPassword
-        ? {
-            user: activeEnv.smtpUser,
-            pass: activeEnv.smtpPassword,
-          }
-        : undefined,
-  });
+  return new Resend(activeEnv.resendApiKey);
 };
+
+/**
+ * Backward compatibility alias for getResendClient
+ */
+const getTransporter = () => getResendClient();
 
 /**
  * Formats order items list into an HTML table
@@ -321,23 +339,53 @@ const getEmailTemplate = (eventType, data = {}) => {
 };
 
 /**
- * Dispatches an email notification via SMTP transporter
+ * Safely masks an email address for diagnostic logging
+ */
+const maskEmailAddress = (email) => {
+  if (!email || typeof email !== 'string') return '***';
+  const parts = email.trim().split('@');
+  if (parts.length !== 2) return '***';
+  const [local, domain] = parts;
+  const maskedLocal = local.length > 2 ? `${local[0]}***${local.slice(-1)}` : `${local[0]}***`;
+  return `${maskedLocal}@${domain}`;
+};
+
+/**
+ * Dispatches an email notification via Resend HTTPS API
  */
 const sendEmail = async ({ to, subject, html, text }) => {
-  const transporter = getTransporter();
+  const client = getResendClient();
+  const activeEnv = validateEnv();
 
-  if (!transporter) {
+  if (!client) {
+    console.warn('[Email][resend-api] RESEND_API_KEY is not configured. Email delivery skipped.');
     return {
       success: false,
       skipped: true,
-      error: 'SMTP host is not configured. Email delivery skipped.',
+      error: 'Resend API key is not configured. Email delivery skipped.',
     };
   }
 
-  const activeEnv = validateEnv();
+  const startTime = Date.now();
+  const recipient = Array.isArray(to) ? to[0] : to;
+  const maskedDestination = maskEmailAddress(recipient);
+
+  console.log(`[Email][resend-api] Request started to: ${maskedDestination}`);
 
   try {
-    const info = await transporter.sendMail({
+    const timeoutMs = parseInt(process.env.RESEND_TIMEOUT_MS, 10) || 12000;
+
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const timeoutErr = new Error(`Resend API request timed out after ${timeoutMs}ms`);
+        timeoutErr.name = 'TimeoutError';
+        timeoutErr.code = 'ETIMEDOUT';
+        reject(timeoutErr);
+      }, timeoutMs);
+    });
+
+    const sendPromise = client.emails.send({
       from: activeEnv.emailFrom,
       to,
       subject,
@@ -345,15 +393,68 @@ const sendEmail = async ({ to, subject, html, text }) => {
       text,
     });
 
-    return {
-      success: true,
-      messageId: info.messageId,
-      response: info.response,
-    };
-  } catch (error) {
+    const result = await Promise.race([sendPromise, timeoutPromise]);
+    clearTimeout(timeoutId);
+
+    const duration = Date.now() - startTime;
+
+    // Resend SDK returns { data, error }
+    if (result && result.error) {
+      const err = result.error;
+      const status = err.statusCode || err.status || 400;
+      const errCode = err.name || 'ResendApiError';
+      console.error(
+        `[Email][resend-api] Request failed in ${duration}ms. Status: ${status}, Code: ${errCode}: ${err.message}`
+      );
+      return {
+        success: false,
+        error: err.message || 'Resend API rejected email delivery',
+        status,
+        code: errCode,
+        duration,
+      };
+    }
+
+    if (result && result.data && result.data.id) {
+      console.log(
+        `[Email][resend-api] Request succeeded in ${duration}ms. Message ID: ${result.data.id}`
+      );
+      return {
+        success: true,
+        messageId: result.data.id,
+        duration,
+      };
+    }
+
+    console.warn(`[Email][resend-api] Request failed in ${duration}ms. Missing message ID in response.`);
     return {
       success: false,
-      error: error.message || 'SMTP delivery failure',
+      error: 'No message ID returned from Resend API',
+      duration,
+    };
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const isTimeout = error.code === 'ETIMEDOUT' || error.name === 'TimeoutError';
+    const isNetwork =
+      error.code === 'ENOTFOUND' ||
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ECONNRESET' ||
+      error.code === 'EAI_AGAIN';
+    const errCode = isTimeout ? 'TIMEOUT' : isNetwork ? 'NETWORK_ERROR' : (error.name || 'UNKNOWN_ERROR');
+
+    console.error(
+      `[Email][resend-api] Request failed in ${duration}ms. Code: ${errCode}: ${error.message}`
+    );
+
+    return {
+      success: false,
+      error: isTimeout
+        ? 'Resend API request timed out'
+        : isNetwork
+        ? 'Network failure connecting to Resend API'
+        : (error.message || 'Resend API communication error'),
+      code: errCode,
+      duration,
     };
   }
 };
@@ -403,7 +504,9 @@ const sendSignupOtpEmail = async ({ to, name, otp, expiryMinutes = 5 }) => {
 };
 
 module.exports = {
+  setResendClient,
   setTransporter,
+  getResendClient,
   getTransporter,
   getEmailTemplate,
   sendEmail,

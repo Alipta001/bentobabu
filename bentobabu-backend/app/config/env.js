@@ -51,18 +51,11 @@ const validateEnv = () => {
     );
   }
 
-  // Validate required SMTP variables when email OTP is enabled
+  // Validate required Resend API key when email OTP is enabled
   if (otpEmailEnabled) {
-    const missingSmtp = [];
-    if (!process.env.SMTP_HOST || !process.env.SMTP_HOST.trim()) missingSmtp.push('SMTP_HOST');
-    if (!process.env.SMTP_PORT || !process.env.SMTP_PORT.toString().trim()) missingSmtp.push('SMTP_PORT');
-    if (!process.env.SMTP_USER || !process.env.SMTP_USER.trim()) missingSmtp.push('SMTP_USER');
-    if (!process.env.SMTP_PASSWORD || !process.env.SMTP_PASSWORD.trim()) missingSmtp.push('SMTP_PASSWORD');
-    if (!process.env.EMAIL_FROM || !process.env.EMAIL_FROM.trim()) missingSmtp.push('EMAIL_FROM');
-
-    if (missingSmtp.length > 0) {
+    if (!process.env.RESEND_API_KEY || !process.env.RESEND_API_KEY.trim()) {
       throw new Error(
-        `Invalid email configuration: Missing required SMTP environment variables when email OTP is enabled: ${missingSmtp.join(', ')}`
+        'Invalid email configuration: Missing required RESEND_API_KEY environment variable when email OTP is enabled.'
       );
     }
   }
@@ -90,6 +83,7 @@ const validateEnv = () => {
     razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || '',
     razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
     emailProvider: process.env.EMAIL_PROVIDER || 'resend',
+    resendApiKey: (process.env.RESEND_API_KEY || '').trim(),
     smtpHost: process.env.SMTP_HOST || '',
     smtpPort: parseInt(process.env.SMTP_PORT, 10) || 465,
     smtpSecure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : parseInt(process.env.SMTP_PORT, 10) === 465,

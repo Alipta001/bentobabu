@@ -32,20 +32,22 @@ process.env.SMTP_PASSWORD = process.env.SMTP_PASSWORD || 're_mock_key';
 process.env.EMAIL_FROM = process.env.EMAIL_FROM || 'BentoBabu <verify@bentobabu.com>';
 const { startServer } = require(path.join(backendRoot, 'server'));
 const { User, OtpChallenge } = require(path.join(backendRoot, 'app/models'));
-const { setTransporter } = require(path.join(backendRoot, 'app/utils/email'));
+const { setResendClient } = require(path.join(backendRoot, 'app/utils/email'));
 const { hashChallengeToken } = require(path.join(backendRoot, 'app/utils/sms'));
 const { disconnectRedis } = require(path.join(backendRoot, 'app/config/redis'));
 const mongoose = require(path.join(backendRoot, 'node_modules/mongoose'));
 
 let sentEmails = [];
 
-setTransporter({
-  sendMail: async (mailOptions) => {
-    sentEmails.push(mailOptions);
-    return {
-      messageId: `mock-msg-${Date.now()}`,
-      response: '250 OK mock delivered',
-    };
+setResendClient({
+  emails: {
+    send: async (mailOptions) => {
+      sentEmails.push(mailOptions);
+      return {
+        data: { id: `resend_mock_${Date.now()}` },
+        error: null,
+      };
+    },
   },
 });
 
@@ -189,10 +191,19 @@ async function runSuite() {
 
     // 3. Email delivery failure (HTTP 502)
     await test('3. Email delivery failure returns HTTP 502, purges challenge/user and prevents navigation', async () => {
-      // Temporarily mock failing transporter
-      setTransporter({
-        sendMail: async () => {
-          throw new Error('SMTP connection timed out');
+      // Temporarily mock failing Resend client
+      setResendClient({
+        emails: {
+          send: async () => {
+            return {
+              data: null,
+              error: {
+                message: 'Resend API rejected: Domain not verified',
+                name: 'validation_error',
+                statusCode: 403,
+              },
+            };
+          },
         },
       });
 
@@ -225,11 +236,13 @@ async function runSuite() {
       const challenge = await OtpChallenge.findOne({ identifier: failEmail });
       assert.strictEqual(challenge, null);
 
-      // Restore working transporter
-      setTransporter({
-        sendMail: async (mailOptions) => {
-          sentEmails.push(mailOptions);
-          return { messageId: 'mock-id', response: '250 OK' };
+      // Restore working Resend client
+      setResendClient({
+        emails: {
+          send: async (mailOptions) => {
+            sentEmails.push(mailOptions);
+            return { data: { id: `resend_mock_${Date.now()}` }, error: null };
+          },
         },
       });
     });

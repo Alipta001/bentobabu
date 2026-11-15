@@ -210,7 +210,8 @@ class AuthController {
       // 6. Deliver OTP via configured channel
       let sendResult;
       if (channel === 'email') {
-        console.log(`[Registration][${correlationId}] Email dispatch started via ${activeEnv.emailProvider || 'SMTP'} to: ${maskEmail(cleanEmail)}`);
+        const providerName = activeEnv.emailProvider === 'resend' ? 'resend-api' : (activeEnv.emailProvider || 'resend-api');
+        console.log(`[Registration][${correlationId}] Email dispatch started via ${providerName} to: ${maskEmail(cleanEmail)}`);
         sendResult = await sendSignupOtpEmail({
           to: cleanEmail,
           name: user.name,
@@ -238,7 +239,7 @@ class AuthController {
         });
       }
 
-      console.log(`[Registration][${correlationId}] OTP delivery succeeded via ${channel}. Returning HTTP 201.`);
+      console.log(`[Registration][${correlationId}] OTP delivery succeeded via ${channel}${sendResult?.messageId ? ` (ID: ${sendResult.messageId})` : ''}. Returning HTTP 201.`);
 
       // 7. Return 201 without session cookies and without PII in payload
       return res.status(201).json({
@@ -547,6 +548,8 @@ class AuthController {
       // Dispatch new OTP via configured channel
       let sendResult;
       if (updatedChallenge.channel === 'email') {
+        const providerName = activeEnv.emailProvider === 'resend' ? 'resend-api' : (activeEnv.emailProvider || 'resend-api');
+        console.log(`[OTP-Resend] Email dispatch started via ${providerName} to: ${maskEmail(user.email)}`);
         sendResult = await sendSignupOtpEmail({
           to: user.email,
           name: user.name,
@@ -554,6 +557,7 @@ class AuthController {
           expiryMinutes: activeEnv.otpExpiryMinutes,
         });
       } else {
+        console.log(`[OTP-Resend] SMS dispatch started to: ${maskPhoneNumber(user.phone)}`);
         sendResult = await sendSms({
           to: user.phone,
           message: `Your BentoBabu verification code is ${otp}. Valid for ${activeEnv.otpExpiryMinutes} minutes. Do not share it with anyone.`,
@@ -561,11 +565,14 @@ class AuthController {
       }
 
       if (!sendResult || !sendResult.success) {
+        console.warn(`[OTP-Resend] OTP delivery failed via ${updatedChallenge.channel}: ${sendResult?.error || 'Unknown error'}`);
         return res.status(502).json({
           success: false,
           message: `Failed to deliver verification code via ${updatedChallenge.channel}. Please try again later.`,
         });
       }
+
+      console.log(`[OTP-Resend] OTP delivery succeeded via ${updatedChallenge.channel}${sendResult?.messageId ? ` (ID: ${sendResult.messageId})` : ''}. Returning HTTP 200.`);
 
       return res.status(200).json({
         success: true,
