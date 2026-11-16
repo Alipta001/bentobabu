@@ -69,14 +69,18 @@ const makeRequest = (options, postData = null) => {
 const extractCookie = (res, cookieName) => {
   const setCookie = res.headers['set-cookie'];
   if (!setCookie) return null;
+  let matched = null;
   for (const cookie of setCookie) {
     const [nameVal] = cookie.split(';');
     const [name, val] = nameVal.split('=');
     if (name.trim() === cookieName) {
-      return val.trim();
+      const trimmedVal = val ? val.trim() : '';
+      if (trimmedVal) {
+        matched = trimmedVal;
+      }
     }
   }
-  return null;
+  return matched;
 };
 
 const extractCookieAttributes = (res, cookieName) => {
@@ -234,9 +238,10 @@ const runSuite = async () => {
       assert.ok(session.rotatedAt, 'Session rotatedAt must be recorded');
     });
 
-    // 4. Old refresh token reuse detection
+    // 4. Old refresh token reuse detection & concurrency grace handling
     await test('4. Reuse of old refresh token triggers reuse detection, revokes session, and returns 401', async () => {
-      const res = await makeRequest({
+      // 4a. Within grace window: rejected with 401 without revoking active session
+      const resGrace = await makeRequest({
         hostname: host,
         port,
         path: '/api/v1/auth/refresh',
@@ -247,14 +252,34 @@ const runSuite = async () => {
         },
       });
 
-      assert.strictEqual(res.statusCode, 401);
-      assert.strictEqual(res.body.success, false);
-      assert.ok(res.body.message.includes('already been used and rotated'));
+      assert.strictEqual(resGrace.statusCode, 401);
+      assert.strictEqual(resGrace.body.success, false);
+      assert.ok(resGrace.body.message.includes('already been used and rotated'));
 
-      // Verify session is now revoked in MongoDB
       const oldHash = hashToken(refreshCookie);
-      const session = await RefreshSession.findOne({ user: testUser._id, previousTokenHash: oldHash });
-      assert.ok(session.revokedAt, 'Session must be revoked upon reuse detection');
+      const sessionActive = await RefreshSession.findOne({ user: testUser._id, previousTokenHash: oldHash });
+      assert.strictEqual(sessionActive.revokedAt, null, 'Active session must not be revoked during concurrency grace window');
+
+      // 4b. Outside grace window: artificially age rotatedAt and verify strict revocation
+      sessionActive.rotatedAt = new Date(Date.now() - 15000);
+      await sessionActive.save();
+
+      const resExpiredGrace = await makeRequest({
+        hostname: host,
+        port,
+        path: '/api/v1/auth/refresh',
+        method: 'POST',
+        headers: {
+          Cookie: `bb_refresh_token=${refreshCookie}`, // Old token
+          'X-CSRF-Token': csrfToken,
+        },
+      });
+
+      assert.strictEqual(resExpiredGrace.statusCode, 401);
+      assert.strictEqual(resExpiredGrace.body.success, false);
+
+      const sessionRevoked = await RefreshSession.findOne({ user: testUser._id, previousTokenHash: oldHash });
+      assert.ok(sessionRevoked.revokedAt, 'Session must be revoked upon reuse detection outside grace window');
     });
 
     // 5. Revoked session rejection
@@ -473,22 +498,108 @@ const runSuite = async () => {
       );
       const ref = extractCookie(l, 'bb_refresh_token');
 
-      // Deactivate user
-      await User.findByIdAndUpdate(testUser._id, { isActive: false });
+      try {
+        // Deactivate user
+        await User.findByIdAndUpdate(testUser._id, { isActive: false });
 
-      const refreshRes = await makeRequest({
+        const refreshRes = await makeRequest({
+          hostname: host,
+          port,
+          path: '/api/v1/auth/refresh',
+          method: 'POST',
+          headers: { Cookie: `bb_refresh_token=${ref}`, 'X-CSRF-Token': csrfToken },
+        });
+
+        assert.strictEqual(refreshRes.statusCode, 401);
+        assert.ok(refreshRes.body.message.includes('inactive'));
+      } finally {
+        // Always reactivate user
+        await User.findByIdAndUpdate(testUser._id, { isActive: true });
+      }
+    });
+
+    // 12. Safe fresh-login transition for legacy stateless tokens
+    await test('12. Legacy stateless refresh token without sessionId is upgraded to a tracked MongoDB session', async () => {
+      // Forge a valid legacy refresh JWT (without sessionId claim) signed with JWT_REFRESH_SECRET
+      const legacyToken = jwt.sign(
+        {
+          userId: testUser._id.toString(),
+          id: testUser._id.toString(),
+          type: 'refresh',
+          jti: 'legacy_jti_without_session',
+        },
+        env.jwtRefreshSecret,
+        { expiresIn: '7d' }
+      );
+
+      // Verify no DB session exists for this legacy token yet
+      const legacyHash = hashToken(legacyToken);
+      const preSession = await RefreshSession.findOne({ user: testUser._id, tokenHash: legacyHash });
+      assert.strictEqual(preSession, null, 'No session must exist before legacy upgrade');
+
+      const res = await makeRequest({
         hostname: host,
         port,
         path: '/api/v1/auth/refresh',
         method: 'POST',
-        headers: { Cookie: `bb_refresh_token=${ref}`, 'X-CSRF-Token': csrfToken },
+        headers: {
+          Cookie: `bb_refresh_token=${legacyToken}`,
+          'X-CSRF-Token': csrfToken,
+        },
       });
 
-      assert.strictEqual(refreshRes.statusCode, 401);
-      assert.ok(refreshRes.body.message.includes('inactive'));
+      assert.strictEqual(res.statusCode, 200);
+      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.message, 'Token refreshed successfully');
 
-      // Reactivate user
-      await User.findByIdAndUpdate(testUser._id, { isActive: true });
+      const newAccess = extractCookie(res, 'bb_access_token');
+      const newRefresh = extractCookie(res, 'bb_refresh_token');
+      assert.ok(newAccess, 'New access cookie issued');
+      assert.ok(newRefresh, 'New refresh cookie issued');
+
+      // Verify a new MongoDB RefreshSession was created and linked to the legacy hash
+      const upgradedSession = await RefreshSession.findOne({ user: testUser._id, previousTokenHash: legacyHash });
+      assert.ok(upgradedSession, 'MongoDB RefreshSession must be bootstrapped for legacy user');
+      assert.strictEqual(upgradedSession.tokenHash, hashToken(newRefresh));
+      assert.strictEqual(upgradedSession.revokedAt, null);
+    });
+
+    // 13. Multi-path duplicate cookie collision handling
+    await test('13. Multi-path duplicate cookie header handles legacy and active tokens correctly', async () => {
+      // Create a fresh login to get a tracked active session
+      const loginRes = await makeRequest(
+        {
+          hostname: host,
+          port,
+          path: '/api/v1/auth/login',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        },
+        { identifier: testEmail, password: testPassword }
+      );
+      const activeRefresh = extractCookie(loginRes, 'bb_refresh_token');
+      assert.ok(activeRefresh);
+
+      // Simulate a browser holding an old stale cookie (/api/v1/auth/refresh) and new active cookie (/api/v1/auth)
+      const staleToken = 'stale_legacy_untracked_token_value_abc';
+      const duplicateCookieHeader = `bb_refresh_token=${staleToken}; bb_refresh_token=${activeRefresh}`;
+
+      const res = await makeRequest({
+        hostname: host,
+        port,
+        path: '/api/v1/auth/refresh',
+        method: 'POST',
+        headers: {
+          Cookie: duplicateCookieHeader,
+          'X-CSRF-Token': csrfToken,
+        },
+      });
+
+      assert.strictEqual(res.statusCode, 200, 'Refresh must succeed by resolving to the active session');
+      assert.strictEqual(res.body.success, true);
+      const rotated = extractCookie(res, 'bb_refresh_token');
+      assert.ok(rotated);
+      assert.notStrictEqual(rotated, activeRefresh);
     });
   } finally {
     // Cleanup

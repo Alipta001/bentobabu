@@ -742,9 +742,13 @@ class AuthController {
         expiresAt,
       });
 
+      // Clear any legacy cookie lingering at /api/v1/auth/refresh to prevent multi-path collisions
+      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
+      res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
+
       // 8. Set HttpOnly cookies (No raw JWTs in response body)
       res.cookie(activeEnv.accessTokenCookieName, accessToken, getAccessTokenCookieOptions());
-      res.cookie(activeEnv.refreshTokenCookieName, refreshToken, getRefreshCookieOptions());
+      res.cookie(activeEnv.refreshTokenCookieName, refreshToken, getRefreshCookieOptions('/api/v1/auth'));
 
       return res.status(200).json({
         success: true,
@@ -759,6 +763,49 @@ class AuthController {
   }
 
   /**
+   * Helper: Extracts all candidate refresh tokens from cookies, headers, and body
+   * Resolves duplicate cookie collisions across paths (/api/v1/auth/refresh vs /api/v1/auth)
+   */
+  static extractCandidateRefreshTokens(req, cookieName) {
+    const tokens = [];
+
+    // 1. From request body
+    if (req.body?.refreshToken && typeof req.body.refreshToken === 'string') {
+      tokens.push(req.body.refreshToken.trim());
+    }
+
+    // 2. From parsed cookies (cookie-parser)
+    if (req.cookies) {
+      const namesToCheck = [cookieName, 'bb_refresh_token', 'refreshToken'];
+      for (const name of namesToCheck) {
+        if (req.cookies[name] && typeof req.cookies[name] === 'string') {
+          tokens.push(req.cookies[name].trim());
+        }
+      }
+    }
+
+    // 3. Raw header parsing to catch multi-path cookies with duplicate names
+    const rawCookieHeader = req.headers?.cookie;
+    if (rawCookieHeader && typeof rawCookieHeader === 'string') {
+      const parts = rawCookieHeader.split(';');
+      for (const part of parts) {
+        const equalIndex = part.indexOf('=');
+        if (equalIndex > 0) {
+          const key = part.slice(0, equalIndex).trim();
+          const val = part.slice(equalIndex + 1).trim();
+          if (key === cookieName || key === 'bb_refresh_token' || key === 'refreshToken') {
+            if (val && !tokens.includes(val)) {
+              tokens.push(val);
+            }
+          }
+        }
+      }
+    }
+
+    return Array.from(new Set(tokens.filter(Boolean)));
+  }
+
+  /**
    * POST /api/v1/auth/refresh
    * Validates refresh JWT, detects reuse, rotates token & session, issues fresh access cookie
    */
@@ -766,131 +813,290 @@ class AuthController {
     try {
       const activeEnv = validateEnv();
       const env = activeEnv;
+      const dbName = mongoose.connection?.name || 'unknown';
+      const collectionName = RefreshSession.collection?.name || 'refreshsessions';
 
-      const rawRefreshToken =
-        req.cookies?.[activeEnv.refreshTokenCookieName] ||
-        req.cookies?.refreshToken ||
-        req.cookies?.['bb_refresh_token'] ||
-        req.body?.refreshToken;
+      const candidateTokens = AuthController.extractCandidateRefreshTokens(req, activeEnv.refreshTokenCookieName);
 
-      if (!rawRefreshToken || typeof rawRefreshToken !== 'string') {
-        console.warn(`[AuthController.refresh] Refresh token is missing from cookies and body`);
+      // Diagnostic Logging: Entry
+      console.log('[RefreshDiagnostics][entry]', {
+        refreshCookieExists: candidateTokens.length > 0,
+        candidateCount: candidateTokens.length,
+        dbName,
+        collectionName,
+      });
+
+      if (candidateTokens.length === 0) {
+        console.warn('[RefreshDiagnostics][failure]', {
+          failureReason: 'Refresh token is missing from cookies and body',
+          dbName,
+          collectionName,
+        });
         return res.status(401).json({
           success: false,
           message: 'Refresh token is missing. Please log in again.',
         });
       }
 
-      let decoded;
-      try {
-        decoded = verifyRefreshToken(rawRefreshToken);
-      } catch (tokenErr) {
-        console.warn(`[AuthController.refresh] Refresh token verification failed: ${tokenErr?.message}`);
+      // Evaluate candidate tokens: prioritize tokens with active tracked sessions
+      let selectedCandidate = null;
+      let selectedDecoded = null;
+      let selectedUser = null;
+      let selectedSession = null;
+      let selectedHash = null;
+      let legacyCandidate = null;
+      let legacyDecoded = null;
+      let legacyUser = null;
+      let lastJwtError = null;
+      let inactiveUserFound = false;
+
+      for (const tokenStr of candidateTokens) {
+        let decoded;
+        try {
+          decoded = verifyRefreshToken(tokenStr);
+        } catch (err) {
+          lastJwtError = err;
+          continue;
+        }
+
+        const userId = decoded.userId || decoded.id;
+        if (!userId) continue;
+
+        const user = await User.findById(userId);
+        if (!user) continue;
+        if (!user.isActive) {
+          inactiveUserFound = true;
+          continue;
+        }
+
+        const tokenHashVal = hashToken(tokenStr);
+
+        // Search for existing session by sessionId claim or tokenHash/previousTokenHash
+        let session = null;
+        if (decoded.sessionId && mongoose.Types.ObjectId.isValid(decoded.sessionId)) {
+          session = await RefreshSession.findOne({ _id: decoded.sessionId, user: user._id });
+        }
+        if (!session) {
+          session = await RefreshSession.findOne({
+            user: user._id,
+            $or: [
+              { tokenHash: tokenHashVal },
+              { previousTokenHash: tokenHashVal },
+            ],
+          });
+        }
+
+        if (session) {
+          // Found matching session in DB!
+          selectedCandidate = tokenStr;
+          selectedDecoded = decoded;
+          selectedUser = user;
+          selectedSession = session;
+          selectedHash = tokenHashVal;
+          break; // Prioritize active session
+        } else if (!decoded.sessionId && !legacyCandidate) {
+          // Valid legacy token from before session migration
+          legacyCandidate = tokenStr;
+          legacyDecoded = decoded;
+          legacyUser = user;
+        }
+      }
+
+      // If no session-backed token matched, but a valid legacy token exists, use legacy candidate
+      if (!selectedCandidate && legacyCandidate) {
+        selectedCandidate = legacyCandidate;
+        selectedDecoded = legacyDecoded;
+        selectedUser = legacyUser;
+        selectedHash = hashToken(legacyCandidate);
+      }
+
+      // Diagnostic Logging: Evaluation stage
+      const hasVerifiedJwt = Boolean(selectedCandidate);
+      console.log('[RefreshDiagnostics][evaluation]', {
+        jwtVerificationSuccess: hasVerifiedJwt,
+        decodedHasSessionId: Boolean(selectedDecoded?.sessionId),
+        matchingSessionExists: Boolean(selectedSession),
+        isSessionRevoked: Boolean(selectedSession?.revokedAt),
+        isSessionExpired: Boolean(selectedSession?.expiresAt && new Date() > selectedSession.expiresAt),
+        hashMatch: selectedSession
+          ? (selectedSession.tokenHash === selectedHash ? 'current' : (selectedSession.previousTokenHash === selectedHash ? 'previous' : 'none'))
+          : 'no_session',
+        dbName,
+        collectionName,
+      });
+
+      if (!selectedCandidate) {
+        if (inactiveUserFound) {
+          console.warn('[RefreshDiagnostics][failure]', {
+            failureReason: 'Account is inactive or no longer exists',
+            dbName,
+            collectionName,
+          });
+          return res.status(401).json({
+            success: false,
+            message: 'Account is inactive or no longer exists.',
+          });
+        }
+
+        console.warn('[RefreshDiagnostics][failure]', {
+          failureReason: lastJwtError ? `JWT verification failed: ${lastJwtError.message}` : 'No valid candidate token found',
+          dbName,
+          collectionName,
+        });
         return res.status(401).json({
           success: false,
           message: 'Invalid or expired refresh token. Please log in again.',
         });
       }
 
-      const userId = decoded.userId || decoded.id;
-      if (!userId) {
-        console.warn(`[AuthController.refresh] Malformed refresh token missing userId claim`);
-        return res.status(401).json({
-          success: false,
-          message: 'Malformed refresh token.',
-        });
-      }
-
-      const user = await User.findById(userId);
-
-      if (!user || !user.isActive) {
-        console.warn(`[AuthController.refresh] User not found or inactive for ID: ${userId}`);
-        return res.status(401).json({
-          success: false,
-          message: 'Account is inactive or no longer exists.',
-        });
-      }
-
-      const incomingHash = hashToken(rawRefreshToken);
-
-      // Locate RefreshSession: by sessionId claim first, or fallback to hash match
-      let session = null;
-      if (decoded.sessionId && mongoose.Types.ObjectId.isValid(decoded.sessionId)) {
-        session = await RefreshSession.findOne({ _id: decoded.sessionId, user: user._id });
-      }
-      if (!session) {
-        session = await RefreshSession.findOne({
-          user: user._id,
-          $or: [
-            { tokenHash: incomingHash },
-            { previousTokenHash: incomingHash },
-          ],
-        });
-      }
-
-      if (!session) {
-        console.warn(`[AuthController.refresh] No active refresh session found for user ID: ${userId}`);
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid or expired refresh session. Please log in again.',
-        });
-      }
-
-      if (session.revokedAt) {
-        console.warn(`[AuthController.refresh] Attempted use of revoked refresh session for user ID: ${userId}`);
-        return res.status(401).json({
-          success: false,
-          message: 'Session has been revoked. Please log in again.',
-        });
-      }
-
-      if (session.expiresAt && new Date() > session.expiresAt) {
-        console.warn(`[AuthController.refresh] Refresh session expired for user ID: ${userId}`);
-        return res.status(401).json({
-          success: false,
-          message: 'Refresh token has expired. Please log in again.',
-        });
-      }
-
-      // Reuse detection check
-      if (session.tokenHash !== incomingHash) {
-        if (session.previousTokenHash === incomingHash) {
-          console.warn(`[AuthController.refresh] Token reuse detected! Revoking session for user ID: ${userId}`);
-          session.revokedAt = new Date();
-          await session.save();
+      // Case 1: Session found in database
+      if (selectedSession) {
+        if (selectedSession.revokedAt) {
+          console.warn('[RefreshDiagnostics][failure]', {
+            failureReason: 'Session has been revoked',
+            dbName,
+            collectionName,
+          });
           return res.status(401).json({
             success: false,
-            message: 'Refresh token has already been used and rotated. Session revoked for security.',
+            message: 'Session has been revoked. Please log in again.',
           });
         }
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid refresh token.',
+
+        if (selectedSession.expiresAt && new Date() > selectedSession.expiresAt) {
+          console.warn('[RefreshDiagnostics][failure]', {
+            failureReason: 'Refresh session expired in DB',
+            dbName,
+            collectionName,
+          });
+          return res.status(401).json({
+            success: false,
+            message: 'Refresh token has expired. Please log in again.',
+          });
+        }
+
+        // Token reuse check with concurrency grace window (10 seconds)
+        if (selectedSession.tokenHash !== selectedHash) {
+          if (selectedSession.previousTokenHash === selectedHash) {
+            const CONCURRENCY_GRACE_WINDOW_MS = 10000;
+            const isWithinGraceWindow =
+              selectedSession.rotatedAt &&
+              (Date.now() - new Date(selectedSession.rotatedAt).getTime() <= CONCURRENCY_GRACE_WINDOW_MS);
+
+            if (isWithinGraceWindow) {
+              console.warn('[RefreshDiagnostics][concurrency_in_flight]', {
+                message: 'In-flight concurrent refresh presented previous token within grace window. Rejecting token without revoking active session.',
+                dbName,
+                collectionName,
+              });
+              // Return 401 without destroying active session, so parallel requests with rotated token succeed
+              return res.status(401).json({
+                success: false,
+                message: 'Refresh token has already been used and rotated. Please use your active session.',
+              });
+            }
+
+            console.warn('[RefreshDiagnostics][failure]', {
+              failureReason: 'Token reuse detected outside grace window. Revoking session.',
+              dbName,
+              collectionName,
+            });
+            selectedSession.revokedAt = new Date();
+            await selectedSession.save();
+            return res.status(401).json({
+              success: false,
+              message: 'Refresh token has already been used and rotated. Session revoked for security.',
+            });
+          }
+
+          console.warn('[RefreshDiagnostics][failure]', {
+            failureReason: 'Invalid refresh token hash mismatch',
+            dbName,
+            collectionName,
+          });
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid refresh token.',
+          });
+        }
+
+        // Standard rotation: generate new tokens and update session document
+        const newRefreshToken = generateRefreshToken(selectedUser, { sessionId: selectedSession._id.toString() });
+        const newAccessToken = generateAccessToken(selectedUser);
+        const newHash = hashToken(newRefreshToken);
+        const refreshExpiryMs = parseDurationToMs(activeEnv.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000);
+
+        selectedSession.previousTokenHash = selectedHash;
+        selectedSession.tokenHash = newHash;
+        selectedSession.rotatedAt = new Date();
+        selectedSession.expiresAt = new Date(Date.now() + refreshExpiryMs);
+        await selectedSession.save();
+
+        // Clear any old duplicate cookie at /api/v1/auth/refresh to resolve path collision
+        res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
+        res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
+
+        // Set rotated cookies
+        res.cookie(activeEnv.accessTokenCookieName, newAccessToken, getAccessTokenCookieOptions());
+        res.cookie(activeEnv.refreshTokenCookieName, newRefreshToken, getRefreshCookieOptions('/api/v1/auth'));
+
+        return res.status(200).json({
+          success: true,
+          message: 'Token refreshed successfully',
+          data: {
+            user: selectedUser.toJSON(),
+          },
         });
       }
 
-      // Perform rotation: generate new refresh token linked to the session and update hash
-      const newRefreshToken = generateRefreshToken(user, { sessionId: session._id.toString() });
-      const newAccessToken = generateAccessToken(user);
-      const newHash = hashToken(newRefreshToken);
-      const refreshExpiryMs = parseDurationToMs(activeEnv.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000);
+      // Case 2: No session found, but candidate is a valid legacy stateless token (without sessionId)
+      if (!selectedDecoded.sessionId) {
+        console.log('[RefreshDiagnostics][legacy_transition]', {
+          message: 'Bootstrapping new RefreshSession for valid legacy stateless token',
+          dbName,
+          collectionName,
+        });
 
-      session.previousTokenHash = incomingHash;
-      session.tokenHash = newHash;
-      session.rotatedAt = new Date();
-      session.expiresAt = new Date(Date.now() + refreshExpiryMs);
-      await session.save();
+        const newSessionId = new mongoose.Types.ObjectId();
+        const newRefreshToken = generateRefreshToken(selectedUser, { sessionId: newSessionId.toString() });
+        const newAccessToken = generateAccessToken(selectedUser);
+        const newHash = hashToken(newRefreshToken);
+        const refreshExpiryMs = parseDurationToMs(activeEnv.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000);
 
-      // Set rotated HttpOnly cookies
-      res.cookie(activeEnv.accessTokenCookieName, newAccessToken, getAccessTokenCookieOptions());
-      res.cookie(activeEnv.refreshTokenCookieName, newRefreshToken, getRefreshCookieOptions());
+        await RefreshSession.create({
+          _id: newSessionId,
+          user: selectedUser._id,
+          tokenHash: newHash,
+          previousTokenHash: selectedHash,
+          rotatedAt: new Date(),
+          expiresAt: new Date(Date.now() + refreshExpiryMs),
+        });
 
-      return res.status(200).json({
-        success: true,
-        message: 'Token refreshed successfully',
-        data: {
-          user: user.toJSON(),
-        },
+        // Clear legacy path cookie and set new session-tracked cookie
+        res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
+        res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
+
+        res.cookie(activeEnv.accessTokenCookieName, newAccessToken, getAccessTokenCookieOptions());
+        res.cookie(activeEnv.refreshTokenCookieName, newRefreshToken, getRefreshCookieOptions('/api/v1/auth'));
+
+        return res.status(200).json({
+          success: true,
+          message: 'Token refreshed successfully',
+          data: {
+            user: selectedUser.toJSON(),
+          },
+        });
+      }
+
+      // Case 3: Token claimed a sessionId, but no session document exists in DB
+      console.warn('[RefreshDiagnostics][failure]', {
+        failureReason: 'Token contained sessionId but session document not found in DB',
+        dbName,
+        collectionName,
+      });
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired refresh session. Please log in again.',
       });
     } catch (err) {
       next(err);
