@@ -1,5 +1,32 @@
 export type UserRole = "CUSTOMER" | "ADMIN" | "KITCHEN" | "DELIVERY";
 
+export type AccountStatus = "ACTIVE" | "SUSPENDED" | "DEACTIVATED";
+export type AvailabilityStatus = "ONLINE" | "OFFLINE" | "BUSY";
+export type ConnectionStatus = "CONNECTED" | "DISCONNECTED";
+export type LocationFreshness = "LIVE" | "LAST_KNOWN" | "NONE";
+
+export interface DeliveryPartnerPresence {
+  id?: string;
+  user: string;
+  application?: string | null;
+  accountStatus: AccountStatus;
+  availabilityStatus: AvailabilityStatus;
+  intendedAvailability: "ONLINE" | "OFFLINE";
+  currentOrderId?: string | null;
+  lastHeartbeat?: string | null;
+  connectionStatus?: ConnectionStatus;
+  locationFreshness?: LocationFreshness;
+  lastLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number | null;
+    heading?: number | null;
+    speed?: number | null;
+    batteryLevel?: number | null;
+    updatedAt?: string | null;
+  } | null;
+}
+
 export interface User {
   id: string;
   _id?: string;

@@ -112,4 +112,10 @@ export const ADMIN_API_ENDPOINTS = {
     REQUEST_CORRECTIONS: (id: string) => `/admin/delivery-applications/${id}/request-corrections`,
     SUSPEND: (id: string) => `/admin/delivery-applications/${id}/suspend`,
   },
+  DELIVERY_OPERATIONS: {
+    OVERVIEW: "/admin/delivery-operations/overview",
+    PARTNERS: "/admin/delivery-operations/partners",
+    PARTNER_DETAIL: (id: string) => `/admin/delivery-operations/partners/${id}`,
+    UPDATE_STATUS: (id: string) => `/admin/delivery-operations/partners/${id}/status`,
+  },
 } as const;

@@ -87,4 +87,79 @@ export const deliveryApi = {
 
     return response.data.data;
   },
+
+  /**
+   * GET /api/v1/delivery/presence/me
+   * Fetches current rider presence, active order and timeout configurations
+   */
+  async getMyPresence() {
+    const response = await apiClient.get<{
+      success: boolean;
+      data: {
+        presence: import("@/types").DeliveryPartnerPresence;
+        activeOrder: Order | null;
+        config: {
+          heartbeatIntervalMs: number;
+          connectionTimeoutMs: number;
+          locationFreshMs: number;
+        };
+      };
+    }>("/delivery/presence/me");
+    return response.data.data;
+  },
+
+  /**
+   * PATCH /api/v1/delivery/presence/availability
+   * Explicitly sets availability to ONLINE or OFFLINE
+   */
+  async updateAvailability(availability: "ONLINE" | "OFFLINE") {
+    const response = await apiClient.patch<{
+      success: boolean;
+      message: string;
+      data: {
+        presence: import("@/types").DeliveryPartnerPresence;
+        hasActiveOrder: boolean;
+      };
+    }>("/delivery/presence/availability", { availability });
+    return response.data.data;
+  },
+
+  /**
+   * POST /api/v1/delivery/presence/heartbeat
+   * Periodic connection ping sent while delivery partner app is in foreground
+   */
+  async sendHeartbeat() {
+    const response = await apiClient.post<{
+      success: boolean;
+      timestamp: number;
+      availabilityStatus: import("@/types").AvailabilityStatus;
+      accountStatus: import("@/types").AccountStatus;
+      connectionStatus: string;
+    }>("/delivery/presence/heartbeat", {});
+    return response.data;
+  },
+
+  /**
+   * POST /api/v1/delivery/presence/location
+   * Sends device GPS coordinates, accuracy, battery, and speed
+   */
+  async sendLocation(payload: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number | null;
+    heading?: number | null;
+    speed?: number | null;
+    batteryLevel?: number | null;
+  }) {
+    const response = await apiClient.post<{
+      success: boolean;
+      message: string;
+      data: {
+        lastLocation: import("@/types").DeliveryPartnerPresence["lastLocation"];
+        lastHeartbeat: string;
+        locationFreshness: string;
+      };
+    }>("/delivery/presence/location", payload);
+    return response.data.data;
+  },
 };

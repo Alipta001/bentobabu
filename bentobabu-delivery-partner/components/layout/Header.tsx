@@ -2,23 +2,28 @@
 
 import React from "react";
 import Link from "next/link";
-import { Bell, Power, ShieldCheck, User } from "lucide-react";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { toggleOnlineStatus } from "@/store/slices/deliverySlice";
+import { Bell, Power, Navigation, User, AlertCircle, RefreshCw } from "lucide-react";
+import { useAppSelector } from "@/store/hooks";
 import { useUnreadNotificationsCount } from "@/hooks/useDeliveryQueries";
+import { useDeliveryPresence } from "@/hooks/useDeliveryPresence";
 
 export function Header() {
-  const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
-  const isOnline = useAppSelector((state) => state.delivery.isOnline);
+  const {
+    isOnline,
+    availabilityStatus,
+    accountStatus,
+    connectionStatus,
+    isChangingAvailability,
+    toggleAvailability,
+  } = useDeliveryPresence();
   const { data: unreadCount = 0 } = useUnreadNotificationsCount();
-
-  const handleToggleOnline = () => {
-    dispatch(toggleOnlineStatus());
-  };
 
   const agentId = user?.id || user?._id || "AGT-001";
   const displayId = agentId.slice(-6).toUpperCase();
+
+  const isBusy = availabilityStatus === "BUSY";
+  const isSuspended = accountStatus === "SUSPENDED" || accountStatus === "DEACTIVATED";
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-[#EFECE6] shadow-xs">
@@ -35,6 +40,17 @@ export function Header() {
                 <span className="px-1.5 py-0.2 rounded-md bg-[#C86D51]/10 text-[#C86D51] text-[10px] font-extrabold uppercase">
                   Rider
                 </span>
+                {/* Connection Status dot */}
+                <span
+                  title={
+                    connectionStatus === "CONNECTED"
+                      ? "Server Connected (Heartbeat active)"
+                      : "Server Disconnected"
+                  }
+                  className={`w-2 h-2 rounded-full ${
+                    connectionStatus === "CONNECTED" ? "bg-emerald-500" : "bg-gray-300"
+                  }`}
+                />
               </div>
               <div className="text-[11px] text-gray-500 font-medium">
                 ID: #{displayId} • {user?.name || "Delivery Partner"}
@@ -43,35 +59,55 @@ export function Header() {
           </Link>
         </div>
 
-        {/* Right Controls: Online/Offline Toggle & Notifications */}
+        {/* Right Controls: Availability Toggle & Notifications */}
         <div className="flex items-center gap-2.5 sm:gap-4">
           {/* Prominent Availability Toggle Button */}
-          <button
-            type="button"
-            onClick={handleToggleOnline}
-            aria-label={isOnline ? "Go Offline" : "Go Online"}
-            className={`flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs font-bold transition-all shadow-xs cursor-pointer ${
-              isOnline
-                ? "bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100"
-                : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200"
-            }`}
-          >
-            <span className="relative flex h-2.5 w-2.5">
-              {isOnline && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+          {isSuspended ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>Suspended</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={toggleAvailability}
+              disabled={isChangingAvailability}
+              aria-label={isOnline ? "Go Offline" : "Go Online"}
+              className={`flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-60 ${
+                isBusy
+                  ? "bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100"
+                  : isOnline
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100"
+                  : "bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200"
+              }`}
+            >
+              {isChangingAvailability ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <span className="relative flex h-2.5 w-2.5">
+                  {(isOnline || isBusy) && (
+                    <span
+                      className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                        isBusy ? "bg-amber-400" : "bg-emerald-400"
+                      }`}
+                    />
+                  )}
+                  <span
+                    className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                      isBusy ? "bg-amber-500" : isOnline ? "bg-emerald-500" : "bg-gray-400"
+                    }`}
+                  />
+                </span>
               )}
-              <span
-                className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                  isOnline ? "bg-emerald-500" : "bg-gray-400"
-                }`}
-              />
-            </span>
-            <span className="hidden sm:inline">
-              {isOnline ? "Online & Ready" : "Offline"}
-            </span>
-            <span className="sm:hidden">{isOnline ? "Online" : "Offline"}</span>
-            <Power className="w-3.5 h-3.5 ml-0.5" />
-          </button>
+              <span className="hidden sm:inline">
+                {isBusy ? "Busy (Delivering)" : isOnline ? "Online & Ready" : "Offline"}
+              </span>
+              <span className="sm:hidden">
+                {isBusy ? "Busy" : isOnline ? "Online" : "Offline"}
+              </span>
+              <Power className="w-3.5 h-3.5 ml-0.5" />
+            </button>
+          )}
 
           {/* Notifications Bell */}
           <Link

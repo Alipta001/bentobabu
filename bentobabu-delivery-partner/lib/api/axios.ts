@@ -11,9 +11,8 @@ let csrfTokenPromise: Promise<string | null> | null = null;
  */
 export const getCsrfToken = async (): Promise<string | null> => {
   if (typeof document !== "undefined") {
-    const match = document.cookie
-      .split("; ")
-      .find((row) => row.startsWith("bb_csrf_token="));
+    const cookies = document.cookie.split(";").map((c) => c.trim());
+    const match = cookies.find((row) => row.startsWith("bb_csrf_token="));
     if (match) {
       const val = match.split("=")[1];
       if (val) {
@@ -133,27 +132,48 @@ apiClient.interceptors.response.use(
         if (typeof window !== "undefined") {
           localStorage.removeItem("bb_delivery_user");
         }
-        return Promise.reject(error);
+        const msg = error.response?.data?.message || "Delivery partner credentials invalid or session expired.";
+        return Promise.reject(new Error(msg));
       }
 
       originalRequest._retry = true;
 
       try {
         await refreshTokens();
+
+        const method = originalRequest.method?.toLowerCase();
+        if (["post", "put", "patch", "delete"].includes(method || "")) {
+          const freshCsrf = await getCsrfToken();
+          if (freshCsrf && originalRequest.headers) {
+            originalRequest.headers["X-CSRF-Token"] = freshCsrf;
+          }
+        }
+
         return apiClient(originalRequest);
-      } catch (refreshErr) {
+      } catch {
         clearCsrfToken();
         if (typeof window !== "undefined") {
           localStorage.removeItem("bb_delivery_user");
-          if (!window.location.pathname.startsWith("/login")) {
-            window.location.href = "/login";
+          const currentPath = window.location.pathname;
+          if (!currentPath.startsWith("/login") && !currentPath.startsWith("/register")) {
+            window.location.replace("/login");
           }
         }
-        return Promise.reject(refreshErr);
+        return Promise.reject(new Error("Delivery partner session expired. Please sign in again."));
       }
     }
 
-    return Promise.reject(error);
+    const errorMessage =
+      error.response?.data?.message ||
+      (error.response?.status === 404
+        ? "Resource not found on server."
+        : error.response?.status === 403
+        ? "Delivery partner permission denied."
+        : error.response?.status === 401
+        ? "Delivery partner session expired. Please sign in again."
+        : error.message || "An unexpected network error occurred.");
+
+    return Promise.reject(new Error(errorMessage));
   }
 );
 

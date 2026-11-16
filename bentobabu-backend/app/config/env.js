@@ -134,6 +134,10 @@ const validateEnv = () => {
     smsApiKey: process.env.SMS_API_KEY || '',
     smsApiSecret: process.env.SMS_API_SECRET || '',
     smsSenderId: process.env.SMS_SENDER_ID || 'BENTOB',
+    // Delivery Fleet Presence & Live Tracking Configuration
+    deliveryHeartbeatIntervalMs: parseInt(process.env.DELIVERY_HEARTBEAT_INTERVAL_MS, 10) || 25000,
+    deliveryConnectionTimeoutMs: parseInt(process.env.DELIVERY_CONNECTION_TIMEOUT_MS, 10) || 60000,
+    deliveryLocationFreshMs: parseInt(process.env.DELIVERY_LOCATION_FRESH_MS, 10) || 120000,
   };
 };
 

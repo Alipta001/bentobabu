@@ -16,6 +16,11 @@ import { settingsService } from "@/services/settingsService";
 import { notificationService } from "@/services/notificationService";
 import { mediaService, VideoUploadProgressCallback } from "@/services/mediaService";
 import { videoService, CreateVideoPayload } from "@/services/videoService";
+import {
+  deliveryOperationsService,
+  GetPartnersParams,
+  AccountStatus,
+} from "@/services/deliveryOperationsService";
 import { OrderStatus, Product, Category, Coupon, BusinessSettings, ProductVideo, VideoContent } from "@/types";
 
 // ==========================================
@@ -644,6 +649,56 @@ export function useUpdateVideoStatus() {
       videoService.updateStatus(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "videos"] });
+    },
+  });
+}
+
+// ==========================================
+// DELIVERY OPERATIONS & LIVE LOCATION MONITORING
+// ==========================================
+
+export function useDeliveryOperationsOverview() {
+  return useQuery({
+    queryKey: ["admin", "deliveryOperations", "overview"],
+    queryFn: () => deliveryOperationsService.getOverview(),
+    refetchInterval: 8000,
+  });
+}
+
+export function useMonitoredPartners(params?: GetPartnersParams) {
+  return useQuery({
+    queryKey: ["admin", "deliveryOperations", "partners", params],
+    queryFn: () => deliveryOperationsService.getPartners(params),
+    refetchInterval: 8000,
+  });
+}
+
+export function useMonitoredPartnerDetail(id: string | null) {
+  return useQuery({
+    queryKey: ["admin", "deliveryOperations", "partnerDetail", id],
+    queryFn: () => (id ? deliveryOperationsService.getPartnerDetail(id) : null),
+    enabled: !!id,
+    refetchInterval: 10000,
+  });
+}
+
+export function useUpdatePartnerStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      accountStatus,
+      reason,
+    }: {
+      id: string;
+      accountStatus: "ACTIVE" | "SUSPENDED";
+      reason?: string;
+    }) => deliveryOperationsService.updatePartnerStatus(id, accountStatus, reason),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliveryOperations"] });
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "deliveryOperations", "partnerDetail", variables.id],
+      });
     },
   });
 }

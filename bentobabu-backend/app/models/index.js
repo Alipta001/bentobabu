@@ -18,6 +18,7 @@ const OtpChallenge = require('./OtpChallenge');
 const Media = require('./Media');
 const VideoContent = require('./VideoContent');
 const DeliveryApplication = require('./DeliveryApplication');
+const DeliveryPartnerPresence = require('./DeliveryPartnerPresence');
 
 module.exports = {
   User,
@@ -40,5 +41,6 @@ module.exports = {
   Media,
   VideoContent,
   DeliveryApplication,
+  DeliveryPartnerPresence,
 };
 

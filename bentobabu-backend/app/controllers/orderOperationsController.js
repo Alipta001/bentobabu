@@ -188,12 +188,24 @@ class OrderOperationsController {
         query.orderStatus = { $in: ['READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'] };
       }
 
-      // If DELIVERY role: show orders assigned to them or ready for pickup
+      // If DELIVERY role: show orders assigned to them or ready for pickup if online
       if (req.user.role === 'DELIVERY') {
-        query.$or = [
-          { assignedDeliveryPartner: req.user.id },
-          { orderStatus: 'READY_FOR_PICKUP', assignedDeliveryPartner: null },
-        ];
+        const { DeliveryPartnerPresence } = require('../models');
+        const presence = await DeliveryPartnerPresence.findOne({ user: req.user.id }).lean();
+        const isPartnerOnlineAndActive =
+          presence &&
+          presence.accountStatus === 'ACTIVE' &&
+          presence.availabilityStatus === 'ONLINE';
+
+        if (isPartnerOnlineAndActive) {
+          query.$or = [
+            { assignedDeliveryPartner: req.user.id },
+            { orderStatus: 'READY_FOR_PICKUP', assignedDeliveryPartner: null },
+          ];
+        } else {
+          // If offline or suspended, partner is not offered new unassigned assignments
+          query.assignedDeliveryPartner = req.user.id;
+        }
       }
 
       const [orders, total] = await Promise.all([
@@ -288,6 +300,18 @@ class OrderOperationsController {
           });
         }
 
+        // Delivery partner role constraints & suspension check
+        if (req.user.role === 'DELIVERY') {
+          const { DeliveryPartnerPresence } = require('../models');
+          const presence = await DeliveryPartnerPresence.findOne({ user: req.user.id });
+          if (presence && presence.accountStatus !== 'ACTIVE') {
+            return res.status(403).json({
+              success: false,
+              message: 'Suspended delivery partners cannot accept delivery assignments.',
+            });
+          }
+        }
+
         // Assign delivery partner
         order.assignedDeliveryPartner = req.user.id;
 
@@ -308,6 +332,37 @@ class OrderOperationsController {
 
         await order.save();
         await redisDelPattern('cache:admin:dashboard:*');
+
+        // Recalculate partner availability according to explicit preference
+        if (req.user.role === 'DELIVERY') {
+          const { DeliveryPartnerPresence } = require('../models');
+          const presence = await DeliveryPartnerPresence.findOne({ user: req.user.id });
+          if (presence) {
+            presence.currentOrderId = null;
+            presence.availabilityStatus =
+              presence.intendedAvailability === 'ONLINE' && presence.accountStatus === 'ACTIVE'
+                ? 'ONLINE'
+                : 'OFFLINE';
+            presence.lastHeartbeat = new Date();
+            await presence.save().catch((e) => console.warn('[Presence] Update DELIVERED error:', e.message));
+          }
+        }
+
+        // Update partner presence to BUSY with active order
+        if (req.user.role === 'DELIVERY') {
+          const { DeliveryPartnerPresence } = require('../models');
+          await DeliveryPartnerPresence.findOneAndUpdate(
+            { user: req.user.id },
+            {
+              $set: {
+                availabilityStatus: 'BUSY',
+                currentOrderId: order._id,
+                lastHeartbeat: new Date(),
+              },
+            },
+            { upsert: true }
+          ).catch((e) => console.warn('[Presence] Update BUSY error:', e.message));
+        }
 
         NotificationDispatcher.dispatch({
           userId: order.user,
@@ -391,6 +446,21 @@ class OrderOperationsController {
 
         await order.save();
         await redisDelPattern('cache:admin:dashboard:*');
+
+        // Recalculate partner availability according to explicit preference
+        if (req.user.role === 'DELIVERY') {
+          const { DeliveryPartnerPresence } = require('../models');
+          const presence = await DeliveryPartnerPresence.findOne({ user: req.user.id });
+          if (presence) {
+            presence.currentOrderId = null;
+            presence.availabilityStatus =
+              presence.intendedAvailability === 'ONLINE' && presence.accountStatus === 'ACTIVE'
+                ? 'ONLINE'
+                : 'OFFLINE';
+            presence.lastHeartbeat = new Date();
+            await presence.save().catch((e) => console.warn('[Presence] Update DELIVERED error:', e.message));
+          }
+        }
 
         NotificationDispatcher.dispatch({
           userId: order.user,

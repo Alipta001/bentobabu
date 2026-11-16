@@ -22,6 +22,7 @@ import {
   UserCheck,
   Video,
   Bike,
+  Navigation,
   X,
 } from "lucide-react";
 import { useKPISummary } from "@/hooks/useAdminQueries";
@@ -45,6 +46,7 @@ const NAV_ITEMS = [
   { label: "Payments", href: "/payments", icon: CreditCard },
   { label: "Coupons", href: "/coupons", icon: TicketPercent },
   { label: "Delivery Zones", href: "/delivery", icon: Truck },
+  { label: "Delivery Operations", href: "/delivery-operations", icon: Navigation },
   { label: "Delivery Partners", href: "/delivery-applications", icon: Bike },
   { label: "Notifications", href: "/notifications", icon: Bell },
   { label: "Reviews", href: "/reviews", icon: Star },
