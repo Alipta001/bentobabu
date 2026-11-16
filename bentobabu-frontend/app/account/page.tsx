@@ -109,7 +109,7 @@ function AccountContent() {
     setProfileErrorMsg("");
 
     const phoneClean = phoneInput.replace(/[\s\-+]/g, "").slice(-10);
-    if (phoneClean && !/^[6-9]\d{9}$/.test(phoneClean)) {
+    if (phoneClean && !/^\d{10}$/.test(phoneClean)) {
       setProfileErrorMsg("Please enter a valid 10-digit Indian phone number.");
       return;
     }
@@ -136,7 +136,7 @@ function AccountContent() {
       .replace(/[\s\-+]/g, "")
       .slice(-10);
 
-    if (!/^[6-9]\d{9}$/.test(phoneClean)) {
+    if (!/^\d{10}$/.test(phoneClean)) {
       setAddressError("Please enter a valid 10-digit phone number.");
       return;
     }

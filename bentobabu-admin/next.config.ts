@@ -47,7 +47,7 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://media.bentobabu.com https://*.r2.cloudflarestorage.com https://i.ytimg.com https://*.ytimg.com",
+      "img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://media.bentobabu.com https://*.r2.cloudflarestorage.com https://i.ytimg.com https://*.ytimg.com http://localhost:4000 http://127.0.0.1:4000",
       "media-src 'self' blob: https://media.bentobabu.com https://*.r2.cloudflarestorage.com",
       "font-src 'self' data:",
       "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com",
@@ -78,6 +78,14 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "i.ytimg.com",
+      },
+      {
+        protocol: "http",
+        hostname: "127.0.0.1",
+      },
+      {
+        protocol: "http",
+        hostname: "localhost",
       },
     ],
   },

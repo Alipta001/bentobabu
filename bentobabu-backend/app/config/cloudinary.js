@@ -33,14 +33,115 @@ const setMockCloudinary = (mock) => {
 };
 
 /**
+ * Safely formats Cloudinary errors while preserving original message and code
+ * without leaking sensitive credentials
+ */
+const formatCloudinaryError = (error, cloudName = '') => {
+  if (!error) return new Error('Unknown Cloudinary upload error');
+
+  const rawMessage = error.message || (typeof error === 'string' ? error : JSON.stringify(error));
+  const httpCode = error.http_code || error.statusCode || null;
+  const errorCode = error.code || null;
+
+  const err = new Error();
+  err.name = 'CloudinaryUploadError';
+  err.originalMessage = rawMessage;
+  err.originalCode = httpCode || errorCode;
+  err.http_code = httpCode || (errorCode === 'ENOTFOUND' || errorCode === 'ETIMEDOUT' ? 503 : 500);
+
+  const cleanCloudName = cloudName ? String(cloudName).trim() : '';
+
+  if (rawMessage.includes('Invalid cloud_name') || rawMessage.includes('cloud_name mismatch')) {
+    err.message = cleanCloudName
+      ? `Cloudinary configuration error: The cloud_name '${cleanCloudName}' is invalid or does not match your Cloudinary account credentials. Please verify your Cloud Name in the Cloudinary Console (https://console.cloudinary.com) and update CLOUDINARY_CLOUD_NAME in bentobabu-backend/.env.`
+      : `Cloudinary configuration error: Cloud name is missing or invalid. Please check CLOUDINARY_CLOUD_NAME in bentobabu-backend/.env.`;
+    err.code = 'CLOUDINARY_INVALID_CLOUD_NAME';
+    err.statusCode = 400;
+  } else if (
+    rawMessage.includes('Invalid credentials') ||
+    rawMessage.includes('Invalid API key') ||
+    rawMessage.includes('Must supply api_key') ||
+    rawMessage.includes('Unknown API key') ||
+    httpCode === 401
+  ) {
+    err.message = 'Cloudinary configuration error: Invalid API Key or Secret. Please verify CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in bentobabu-backend/.env.';
+    err.code = 'CLOUDINARY_INVALID_CREDENTIALS';
+    err.statusCode = 401;
+  } else if (rawMessage.includes('Invalid Signature') || rawMessage.includes('Signature mismatch') || rawMessage.includes('signature')) {
+    err.message = 'Cloudinary configuration error: Invalid upload signature. Please check your CLOUDINARY_API_SECRET.';
+    err.code = 'CLOUDINARY_INVALID_SIGNATURE';
+    err.statusCode = 401;
+  } else if (
+    rawMessage.includes('File size') ||
+    rawMessage.includes('larger than maximum') ||
+    rawMessage.includes('limit exceeded') ||
+    rawMessage.includes('File too large')
+  ) {
+    err.message = 'Document upload failed: File size exceeds the maximum allowed upload limit.';
+    err.code = 'CLOUDINARY_SIZE_LIMIT_EXCEEDED';
+    err.statusCode = 400;
+  } else if (
+    rawMessage.includes('Unsupported file format') ||
+    rawMessage.includes('Invalid image file') ||
+    rawMessage.includes('Format is not supported') ||
+    rawMessage.includes('not allowed')
+  ) {
+    err.message = 'Document upload failed: Unsupported file format or invalid media buffer.';
+    err.code = 'CLOUDINARY_UNSUPPORTED_FORMAT';
+    err.statusCode = 400;
+  } else if (
+    errorCode === 'ENOTFOUND' ||
+    errorCode === 'ETIMEDOUT' ||
+    errorCode === 'ECONNREFUSED' ||
+    errorCode === 'ECONNRESET' ||
+    rawMessage.includes('getaddrinfo') ||
+    rawMessage.includes('timeout')
+  ) {
+    err.message = `Cloudinary network error: Unable to reach Cloudinary servers (${errorCode || 'timeout'}). Please check your network connection.`;
+    err.code = 'CLOUDINARY_NETWORK_FAILURE';
+    err.statusCode = 503;
+  } else {
+    err.message = `Cloudinary upload error: ${rawMessage}`;
+    err.code = errorCode || 'CLOUDINARY_UPLOAD_ERROR';
+    err.statusCode = httpCode || 500;
+  }
+
+  return err;
+};
+
+/**
  * Upload an in-memory buffer to Cloudinary
- * @param {Buffer} buffer - Pre-optimized WebP buffer
- * @param {Object} options - Upload options (folder, public_id, tags)
+ * @param {Buffer} buffer - Pre-optimized WebP or document buffer
+ * @param {Object} options - Upload options (folder, public_id, tags, resource_type)
  * @returns {Promise<Object>} Cloudinary upload result
  */
 const uploadBuffer = (buffer, options = {}) => {
   return new Promise((resolve, reject) => {
-    const client = mockCloudinary || configureCloudinary();
+    let client;
+    let cloudName = '';
+
+    try {
+      client = mockCloudinary || configureCloudinary();
+      const cfg = client.config ? client.config() : {};
+      cloudName = cfg.cloud_name || '';
+      if (!cloudName) {
+        try {
+          const env = validateEnv();
+          cloudName = env.cloudinaryCloudName || '';
+        } catch {
+          // ignore
+        }
+      }
+    } catch (configErr) {
+      return reject(configErr);
+    }
+
+    if (!buffer || !Buffer.isBuffer(buffer)) {
+      const err = new Error('Invalid buffer provided for upload.');
+      err.statusCode = 400;
+      return reject(err);
+    }
+
     const defaultOptions = {
       resource_type: 'image',
       format: 'webp',
@@ -51,22 +152,60 @@ const uploadBuffer = (buffer, options = {}) => {
     };
 
     if (mockCloudinary && mockCloudinary.uploader?.upload_stream) {
-      const stream = mockCloudinary.uploader.upload_stream(defaultOptions, (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      });
-      stream.end(buffer);
-      return;
+      try {
+        const stream = mockCloudinary.uploader.upload_stream(defaultOptions, (error, result) => {
+          try {
+            if (error) {
+              const formatted = formatCloudinaryError(error, cloudName);
+              return reject(formatted);
+            }
+            resolve(result);
+          } catch (cbErr) {
+            reject(cbErr);
+          }
+        });
+        if (stream && typeof stream.on === 'function') {
+          stream.on('error', (streamErr) => {
+            try {
+              reject(formatCloudinaryError(streamErr, cloudName));
+            } catch (cbErr) {
+              reject(cbErr);
+            }
+          });
+        }
+        stream.end(buffer);
+        return;
+      } catch (mockErr) {
+        return reject(mockErr);
+      }
     }
 
-    const uploadStream = client.uploader.upload_stream(defaultOptions, (error, result) => {
-      if (error) {
-        return reject(error);
-      }
-      resolve(result);
-    });
+    try {
+      const uploadStream = client.uploader.upload_stream(defaultOptions, (error, result) => {
+        try {
+          if (error) {
+            const formatted = formatCloudinaryError(error, cloudName);
+            return reject(formatted);
+          }
+          resolve(result);
+        } catch (cbErr) {
+          reject(cbErr);
+        }
+      });
 
-    uploadStream.end(buffer);
+      uploadStream.on('error', (streamErr) => {
+        try {
+          const formatted = formatCloudinaryError(streamErr, cloudName);
+          reject(formatted);
+        } catch (cbErr) {
+          reject(cbErr);
+        }
+      });
+
+      uploadStream.end(buffer);
+    } catch (streamInitErr) {
+      return reject(formatCloudinaryError(streamInitErr, cloudName));
+    }
   });
 };
 

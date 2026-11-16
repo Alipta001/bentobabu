@@ -35,9 +35,9 @@ const generateAccessToken = (user) => {
 
 /**
  * Generates long-lived Refresh Token (7d default) - Completely Stateless
- * Claims: userId, id, type: 'refresh', jti, iat, exp
+ * Claims: userId, id, type: 'refresh', jti, iat, exp, plus optional extraClaims (e.g. sessionId)
  */
-const generateRefreshToken = (user) => {
+const generateRefreshToken = (user, extraClaims = {}) => {
   const userId = user.id || user._id.toString();
   return jwt.sign(
     {
@@ -45,6 +45,7 @@ const generateRefreshToken = (user) => {
       id: userId,
       type: 'refresh',
       jti: crypto.randomBytes(16).toString('hex'),
+      ...extraClaims,
     },
     env.jwtRefreshSecret,
     {
@@ -117,9 +118,9 @@ const getAccessTokenCookieOptions = () => {
 
 /**
  * Standard cookie configuration for refresh tokens (7d HttpOnly)
- * Scoped to /api/v1/auth/refresh for security while enabling automatic token rotation
+ * Scoped to /api/v1/auth for security while enabling automatic token rotation and logout
  */
-const getRefreshCookieOptions = (path = '/api/v1/auth/refresh') => {
+const getRefreshCookieOptions = (path = '/api/v1/auth') => {
   const opts = {
     httpOnly: true,
     secure: env.cookieSecure,
@@ -174,6 +175,7 @@ module.exports = {
   generateRefreshToken,
   verifyAccessToken,
   verifyRefreshToken,
+  parseDurationToMs,
   getAccessTokenCookieOptions,
   getRefreshCookieOptions,
   getCsrfCookieOptions,

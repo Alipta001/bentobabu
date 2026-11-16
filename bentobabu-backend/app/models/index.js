@@ -17,6 +17,7 @@ const RefreshSession = require('./RefreshSession');
 const OtpChallenge = require('./OtpChallenge');
 const Media = require('./Media');
 const VideoContent = require('./VideoContent');
+const DeliveryApplication = require('./DeliveryApplication');
 
 module.exports = {
   User,
@@ -38,5 +39,6 @@ module.exports = {
   OtpChallenge,
   Media,
   VideoContent,
+  DeliveryApplication,
 };
 

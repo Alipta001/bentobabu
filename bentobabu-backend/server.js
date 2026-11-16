@@ -27,7 +27,11 @@ const env = validateEnv();
 const app = express();
 
 // 1. Secure HTTP Headers
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 // 2. CORS Configuration (Strict Production & Development Origins with Credentials)
 const productionOrigins = [
@@ -44,9 +48,11 @@ const productionOrigins = [
 const developmentOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
+  'http://localhost:3002',
   'http://localhost:3005',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:3001',
+  'http://127.0.0.1:3002',
   'http://127.0.0.1:3005',
   ...(env.frontendUrl && !env.frontendUrl.startsWith('https://') ? [env.frontendUrl] : []),
   ...(env.adminFrontendUrl && !env.adminFrontendUrl.startsWith('https://') ? [env.adminFrontendUrl] : []),
@@ -68,8 +74,8 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    // In development mode only, permit localhost ports 3000, 3001, and 3005
-    if (!env.isProduction && /^http:\/\/(localhost|127\.0\.0\.1):(3000|3001|3005)$/.test(origin)) {
+    // In development mode only, permit localhost ports 3000, 3001, 3002, and 3005
+    if (!env.isProduction && /^http:\/\/(localhost|127\.0\.0\.1):(3000|3001|3002|3005)$/.test(origin)) {
       return callback(null, true);
     }
     return callback(new Error(`Not allowed by CORS origin: ${origin}`));
@@ -102,6 +108,9 @@ app.use(csrfProtect);
 
 // 6. Global Rate Limiting (Redis-backed with memory fallback)
 app.use(globalRateLimiter);
+
+// 6b. Static Uploads (Local fallback for uploaded documents/media)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // 6. Root & Health Check Routes
 app.get('/', (req, res) => {
@@ -165,6 +174,8 @@ const adminNotificationRoutes = require('./app/routes/adminNotificationRoutes');
 const adminMediaRoutes = require('./app/routes/mediaRoutes');
 const videoRoutes = require('./app/routes/videoRoutes');
 const adminVideoRoutes = require('./app/routes/adminVideoRoutes');
+const deliveryOnboardingRoutes = require('./app/routes/deliveryOnboardingRoutes');
+const adminDeliveryApplicationRoutes = require('./app/routes/adminDeliveryApplicationRoutes');
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/categories', categoryRoutes);
@@ -172,6 +183,7 @@ app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/videos', videoRoutes);
 app.use('/api/v1/addresses', addressRoutes);
 app.use('/api/v1/cart', cartRoutes);
+app.use('/api/v1/delivery/onboarding', deliveryOnboardingRoutes);
 app.use('/api/v1/delivery', deliveryRoutes);
 app.use('/api/v1/coupons', couponRoutes);
 app.use('/api/v1/orders', orderRoutes);
@@ -181,6 +193,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/admin/dashboard', adminDashboardRoutes);
 app.use('/api/v1/admin/users', adminUserRoutes);
 app.use('/api/v1/admin/inventory', inventoryRoutes);
+app.use('/api/v1/admin/delivery-applications', adminDeliveryApplicationRoutes);
 app.use('/api/v1/admin/delivery', adminDeliveryRoutes);
 app.use('/api/v1/admin/orders', adminOrderRoutes);
 app.use('/api/v1/admin/settings', adminSettingsRoutes);

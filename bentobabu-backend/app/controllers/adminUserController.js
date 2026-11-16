@@ -1,20 +1,12 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const { User, RefreshSession } = require('../models');
+const { normalizePhone } = require('../utils/sms');
 
 const BCRYPT_ROUNDS = 12;
 
 const normalizeEmail = (email) => {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
-};
-
-const normalizePhone = (phone) => {
-  if (typeof phone !== 'string') return '';
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 12 && digits.startsWith('91')) {
-    return digits.slice(2);
-  }
-  return digits;
 };
 
 /**
@@ -290,7 +282,7 @@ class AdminUserController {
       }
 
       const cleanPhone = normalizePhone(phone);
-      if (!cleanPhone || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      if (!cleanPhone || !/^\d{10}$/.test(cleanPhone)) {
         return res.status(400).json({
           success: false,
           message: 'Please provide a valid 10-digit Indian mobile number.',

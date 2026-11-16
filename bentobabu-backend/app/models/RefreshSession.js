@@ -13,12 +13,21 @@ const refreshSessionSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    previousTokenHash: {
+      type: String,
+      default: null,
+      index: true,
+    },
     expiresAt: {
       type: Date,
       required: true,
       index: { expires: 0 },
     },
     revokedAt: {
+      type: Date,
+      default: null,
+    },
+    rotatedAt: {
       type: Date,
       default: null,
     },

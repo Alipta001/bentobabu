@@ -21,6 +21,7 @@ import {
   Bell,
   UserCheck,
   Video,
+  Bike,
   X,
 } from "lucide-react";
 import { useKPISummary } from "@/hooks/useAdminQueries";
@@ -44,6 +45,7 @@ const NAV_ITEMS = [
   { label: "Payments", href: "/payments", icon: CreditCard },
   { label: "Coupons", href: "/coupons", icon: TicketPercent },
   { label: "Delivery Zones", href: "/delivery", icon: Truck },
+  { label: "Delivery Partners", href: "/delivery-applications", icon: Bike },
   { label: "Notifications", href: "/notifications", icon: Bell },
   { label: "Reviews", href: "/reviews", icon: Star },
   { label: "Reports", href: "/reports", icon: FileBarChart },

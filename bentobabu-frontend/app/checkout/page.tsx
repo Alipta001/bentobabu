@@ -298,7 +298,7 @@ export default function CheckoutPage() {
     setErrorMessage("");
 
     const phoneClean = newAddressData.phone.replace(/[\s\-+]/g, "").slice(-10);
-    if (!/^[6-9]\d{9}$/.test(phoneClean)) {
+    if (!/^\d{10}$/.test(phoneClean)) {
       setErrorMessage("Please enter a valid 10-digit Indian phone number.");
       return;
     }

@@ -58,8 +58,18 @@ function RegisterForm() {
     if (isLoading || isRedirectingRef.current) return;
     setError("");
 
-    const phoneClean = phone.replace(/[\s\-+]/g, "").slice(-10);
-    if (!/^[6-9]\d{9}$/.test(phoneClean)) {
+    const digits = phone.replace(/\D/g, "");
+    let phoneClean = digits;
+    if (digits.length === 11 && digits.startsWith("0")) {
+      phoneClean = digits.slice(1);
+    } else if (digits.length === 12 && digits.startsWith("91")) {
+      phoneClean = digits.slice(2);
+    } else if (digits.length === 13 && digits.startsWith("091")) {
+      phoneClean = digits.slice(3);
+    } else if (digits.length > 10) {
+      phoneClean = digits.slice(-10);
+    }
+    if (phoneClean.length !== 10 || !/^\d{10}$/.test(phoneClean)) {
       setError("Please enter a valid 10-digit Indian mobile number.");
       return;
     }

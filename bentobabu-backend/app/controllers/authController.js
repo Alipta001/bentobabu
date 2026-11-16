@@ -1,9 +1,13 @@
+const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { User, OtpChallenge } = require('../models');
+const { User, OtpChallenge, DeliveryApplication, RefreshSession } = require('../models');
 const {
   generateAccessToken,
   generateRefreshToken,
   verifyRefreshToken,
+  hashToken,
+  parseDurationToMs,
   getAccessTokenCookieOptions,
   getRefreshCookieOptions,
   getClearCookieOptions,
@@ -110,7 +114,7 @@ class AuthController {
       }
 
       const cleanPhone = normalizePhone(phone);
-      if (!cleanPhone || !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      if (!cleanPhone || !/^\d{10}$/.test(cleanPhone)) {
         return res.status(400).json({
           success: false,
           message: 'Please provide a valid 10-digit Indian mobile number',
@@ -649,6 +653,31 @@ class AuthController {
       // 3. Check account active status
       if (!user.isActive) {
         console.warn(`[AuthController.login] Inactive user login attempt: "${cleanInput}"`);
+        if (user.role === 'DELIVERY') {
+          const application = await DeliveryApplication.findOne({ user: user._id }).sort({ createdAt: -1 });
+          const status = application ? application.status : 'PENDING_APPROVAL';
+          let message = 'Your delivery partner application is currently under review by our onboarding team.';
+          if (status === 'REJECTED') {
+            message = `Your delivery partner application was not approved.${application?.rejectionReason ? ` Reason: ${application.rejectionReason}` : ''}`;
+          } else if (status === 'CORRECTIONS_REQUESTED') {
+            message = `Corrections requested on your delivery application: ${application?.requestedCorrections || 'Please review your application.'}`;
+          } else if (status === 'SUSPENDED') {
+            message = 'Your delivery partner account has been suspended. Please contact support.';
+          }
+
+          return res.status(403).json({
+            success: false,
+            message,
+            data: {
+              requiresOnboardingReview: true,
+              applicationStatus: status,
+              applicationNumber: application?.applicationNumber || null,
+              rejectionReason: application?.rejectionReason || null,
+              requestedCorrections: application?.requestedCorrections || null,
+            },
+          });
+        }
+
         return res.status(403).json({
           success: false,
           message: 'Your account is inactive or has been suspended. Please contact support.',
@@ -697,9 +726,21 @@ class AuthController {
 
       console.log(`[AuthController.login] Successful login for: "${cleanInput}" (${user.role})`);
 
-      // 7. Generate stateless JWTs
+      // 7. Generate session-tracked JWTs and persist RefreshSession
+      const sessionId = new mongoose.Types.ObjectId();
+      const refreshToken = generateRefreshToken(user, { sessionId: sessionId.toString() });
       const accessToken = generateAccessToken(user);
-      const refreshToken = generateRefreshToken(user);
+
+      const tokenHash = hashToken(refreshToken);
+      const refreshExpiryMs = parseDurationToMs(activeEnv.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000);
+      const expiresAt = new Date(Date.now() + refreshExpiryMs);
+
+      await RefreshSession.create({
+        _id: sessionId,
+        user: user._id,
+        tokenHash,
+        expiresAt,
+      });
 
       // 8. Set HttpOnly cookies (No raw JWTs in response body)
       res.cookie(activeEnv.accessTokenCookieName, accessToken, getAccessTokenCookieOptions());
@@ -719,16 +760,20 @@ class AuthController {
 
   /**
    * POST /api/v1/auth/refresh
-   * Validates stateless refresh JWT and issues fresh access token HttpOnly cookie
+   * Validates refresh JWT, detects reuse, rotates token & session, issues fresh access cookie
    */
   static async refresh(req, res, next) {
     try {
+      const activeEnv = validateEnv();
+      const env = activeEnv;
+
       const rawRefreshToken =
-        req.cookies?.[env.refreshTokenCookieName] ||
+        req.cookies?.[activeEnv.refreshTokenCookieName] ||
         req.cookies?.refreshToken ||
+        req.cookies?.['bb_refresh_token'] ||
         req.body?.refreshToken;
 
-      if (!rawRefreshToken) {
+      if (!rawRefreshToken || typeof rawRefreshToken !== 'string') {
         console.warn(`[AuthController.refresh] Refresh token is missing from cookies and body`);
         return res.status(401).json({
           success: false,
@@ -766,12 +811,79 @@ class AuthController {
         });
       }
 
-      const newAccessToken = generateAccessToken(user);
-      const newRefreshToken = generateRefreshToken(user);
+      const incomingHash = hashToken(rawRefreshToken);
 
-      // Set rotated cookies
-      res.cookie(env.accessTokenCookieName, newAccessToken, getAccessTokenCookieOptions());
-      res.cookie(env.refreshTokenCookieName, newRefreshToken, getRefreshCookieOptions());
+      // Locate RefreshSession: by sessionId claim first, or fallback to hash match
+      let session = null;
+      if (decoded.sessionId && mongoose.Types.ObjectId.isValid(decoded.sessionId)) {
+        session = await RefreshSession.findOne({ _id: decoded.sessionId, user: user._id });
+      }
+      if (!session) {
+        session = await RefreshSession.findOne({
+          user: user._id,
+          $or: [
+            { tokenHash: incomingHash },
+            { previousTokenHash: incomingHash },
+          ],
+        });
+      }
+
+      if (!session) {
+        console.warn(`[AuthController.refresh] No active refresh session found for user ID: ${userId}`);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid or expired refresh session. Please log in again.',
+        });
+      }
+
+      if (session.revokedAt) {
+        console.warn(`[AuthController.refresh] Attempted use of revoked refresh session for user ID: ${userId}`);
+        return res.status(401).json({
+          success: false,
+          message: 'Session has been revoked. Please log in again.',
+        });
+      }
+
+      if (session.expiresAt && new Date() > session.expiresAt) {
+        console.warn(`[AuthController.refresh] Refresh session expired for user ID: ${userId}`);
+        return res.status(401).json({
+          success: false,
+          message: 'Refresh token has expired. Please log in again.',
+        });
+      }
+
+      // Reuse detection check
+      if (session.tokenHash !== incomingHash) {
+        if (session.previousTokenHash === incomingHash) {
+          console.warn(`[AuthController.refresh] Token reuse detected! Revoking session for user ID: ${userId}`);
+          session.revokedAt = new Date();
+          await session.save();
+          return res.status(401).json({
+            success: false,
+            message: 'Refresh token has already been used and rotated. Session revoked for security.',
+          });
+        }
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid refresh token.',
+        });
+      }
+
+      // Perform rotation: generate new refresh token linked to the session and update hash
+      const newRefreshToken = generateRefreshToken(user, { sessionId: session._id.toString() });
+      const newAccessToken = generateAccessToken(user);
+      const newHash = hashToken(newRefreshToken);
+      const refreshExpiryMs = parseDurationToMs(activeEnv.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000);
+
+      session.previousTokenHash = incomingHash;
+      session.tokenHash = newHash;
+      session.rotatedAt = new Date();
+      session.expiresAt = new Date(Date.now() + refreshExpiryMs);
+      await session.save();
+
+      // Set rotated HttpOnly cookies
+      res.cookie(activeEnv.accessTokenCookieName, newAccessToken, getAccessTokenCookieOptions());
+      res.cookie(activeEnv.refreshTokenCookieName, newRefreshToken, getRefreshCookieOptions());
 
       return res.status(200).json({
         success: true,
@@ -787,14 +899,48 @@ class AuthController {
 
   /**
    * POST /api/v1/auth/logout
-   * Stateless logout clears HttpOnly cookies from the browser
+   * Revokes current refresh session and clears authentication cookies
    */
   static async logout(req, res, next) {
     try {
-      res.clearCookie(env.accessTokenCookieName, getClearCookieOptions('/'));
-      res.clearCookie(env.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
-      res.clearCookie(env.refreshTokenCookieName, getClearCookieOptions('/'));
-      res.clearCookie(env.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth'));
+      const activeEnv = validateEnv();
+      const rawRefreshToken =
+        req.cookies?.[activeEnv.refreshTokenCookieName] ||
+        req.cookies?.refreshToken ||
+        req.cookies?.['bb_refresh_token'] ||
+        req.body?.refreshToken;
+
+      if (rawRefreshToken && typeof rawRefreshToken === 'string') {
+        try {
+          const tokenHash = hashToken(rawRefreshToken);
+          let sessionId = null;
+          try {
+            const decoded = verifyRefreshToken(rawRefreshToken);
+            sessionId = decoded?.sessionId;
+          } catch {
+            const decoded = jwt.decode(rawRefreshToken);
+            sessionId = decoded?.sessionId;
+          }
+
+          const query = {
+            $or: [{ tokenHash }, { previousTokenHash: tokenHash }],
+          };
+          if (sessionId && mongoose.Types.ObjectId.isValid(sessionId)) {
+            query.$or.push({ _id: sessionId });
+          }
+
+          await RefreshSession.updateMany(query, {
+            $set: { revokedAt: new Date() },
+          });
+        } catch (sessionErr) {
+          console.warn(`[AuthController.logout] Failed to revoke refresh session: ${sessionErr.message}`);
+        }
+      }
+
+      res.clearCookie(activeEnv.accessTokenCookieName, getClearCookieOptions('/'));
+      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
+      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/'));
+      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth'));
       res.clearCookie('accessToken', getClearCookieOptions('/'));
       res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
       res.clearCookie('refreshToken', getClearCookieOptions('/'));
@@ -812,14 +958,24 @@ class AuthController {
 
   /**
    * POST /api/v1/auth/logout-all
-   * Clears cookies across all devices
+   * Revokes all active refresh sessions for the authenticated user and clears cookies
    */
   static async logoutAll(req, res, next) {
     try {
-      res.clearCookie(env.accessTokenCookieName, getClearCookieOptions('/'));
-      res.clearCookie(env.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
-      res.clearCookie(env.refreshTokenCookieName, getClearCookieOptions('/'));
-      res.clearCookie(env.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth'));
+      const activeEnv = validateEnv();
+      const userId = req.user?.id || req.user?._id;
+
+      if (userId) {
+        await RefreshSession.updateMany(
+          { user: userId, revokedAt: null },
+          { $set: { revokedAt: new Date() } }
+        );
+      }
+
+      res.clearCookie(activeEnv.accessTokenCookieName, getClearCookieOptions('/'));
+      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
+      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/'));
+      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth'));
       res.clearCookie('accessToken', getClearCookieOptions('/'));
       res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
       res.clearCookie('refreshToken', getClearCookieOptions('/'));

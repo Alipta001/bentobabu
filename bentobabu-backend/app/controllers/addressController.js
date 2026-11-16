@@ -29,7 +29,7 @@ class AddressController {
         });
       }
 
-      if (!phone || typeof phone !== 'string' || !/^[6-9]\d{9}$/.test(phone.trim())) {
+      if (!phone || typeof phone !== 'string' || !/^\d{10}$/.test(phone.trim())) {
         return res.status(400).json({
           success: false,
           message: 'Please provide a valid 10-digit Indian phone number',
@@ -205,7 +205,7 @@ class AddressController {
       }
 
       if (phone !== undefined) {
-        if (typeof phone !== 'string' || !/^[6-9]\d{9}$/.test(phone.trim())) {
+        if (typeof phone !== 'string' || !/^\d{10}$/.test(phone.trim())) {
           return res.status(400).json({ success: false, message: 'Please provide a valid 10-digit Indian phone number' });
         }
         address.phone = phone.trim();

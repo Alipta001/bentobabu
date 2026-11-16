@@ -57,6 +57,26 @@ const getInAppMessage = (eventType, { orderNumber = '', grandTotal = 0, reason =
         subject: `Order Expired (#${orderNumber})`,
         message: `Order #${orderNumber} expired due to payment timeout. Reserved items have been released.`,
       };
+    case 'DELIVERY_APPLICATION_SUBMITTED':
+      return {
+        subject: `Delivery Partner Application Received (#${orderNumber})`,
+        message: `Your application #${orderNumber} to join the BentoBabu delivery fleet has been received and is under review.`,
+      };
+    case 'DELIVERY_APPLICATION_APPROVED':
+      return {
+        subject: `Welcome to the BentoBabu Fleet! (#${orderNumber})`,
+        message: `Congratulations! Your delivery partner application #${orderNumber} has been approved. You can now log in and start delivering.`,
+      };
+    case 'DELIVERY_APPLICATION_REJECTED':
+      return {
+        subject: `Delivery Partner Application Update (#${orderNumber})`,
+        message: `Your application #${orderNumber} was not approved.${reason ? ` Reason: ${reason}` : ''}`,
+      };
+    case 'DELIVERY_APPLICATION_CORRECTIONS_REQUESTED':
+      return {
+        subject: `Corrections Requested for Application (#${orderNumber})`,
+        message: `Please review your application #${orderNumber}: ${reason || 'Additional information or clearer documents are requested.'}`,
+      };
     default:
       return {
         subject: `Order Update (#${orderNumber})`,

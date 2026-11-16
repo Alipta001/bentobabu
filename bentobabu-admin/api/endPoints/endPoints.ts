@@ -104,4 +104,12 @@ export const ADMIN_API_ENDPOINTS = {
     DELETE: (id: string) => `/admin/videos/${id}`,
     TOGGLE_STATUS: (id: string) => `/admin/videos/${id}/status`,
   },
+  DELIVERY_APPLICATIONS: {
+    LIST: "/admin/delivery-applications",
+    DETAIL: (id: string) => `/admin/delivery-applications/${id}`,
+    APPROVE: (id: string) => `/admin/delivery-applications/${id}/approve`,
+    REJECT: (id: string) => `/admin/delivery-applications/${id}/reject`,
+    REQUEST_CORRECTIONS: (id: string) => `/admin/delivery-applications/${id}/request-corrections`,
+    SUSPEND: (id: string) => `/admin/delivery-applications/${id}/suspend`,
+  },
 } as const;

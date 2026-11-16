@@ -8,8 +8,8 @@ import { useAdminAuth } from "@/context/AdminAuthContext";
 export default function AdminLoginPage() {
   const router = useRouter();
   const { login } = useAdminAuth();
-  const [email, setEmail] = useState("admin@bentobabu.in");
-  const [password, setPassword] = useState("AdminPassword@123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,17 +146,6 @@ export default function AdminLoginPage() {
               )}
             </button>
           </form>
-
-          {/* Demo Quick Credential Hint */}
-          <div className="bg-[#F7F3EA] p-3 rounded-xl border border-[#E5DFD3] text-[11px] text-[#354B35]/80 flex items-center justify-between">
-            <div>
-              <span className="font-semibold text-[#1E2B1E]">Demo Admin: </span>
-              <span>admin@bentobabu.in</span>
-            </div>
-            <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-[#E5DFD3] font-mono">
-              Auto-filled
-            </span>
-          </div>
         </div>
 
         <p className="text-center text-[11px] text-[#354B35]/60 mt-6">

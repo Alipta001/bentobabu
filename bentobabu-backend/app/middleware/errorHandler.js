@@ -61,6 +61,7 @@ const errorHandler = (err, req, res, next) => {
   const response = {
     success: false,
     message,
+    ...(err.code && { code: err.code }),
     ...(errors && { errors }),
     ...(!isProduction && { stack: err.stack }),
   };

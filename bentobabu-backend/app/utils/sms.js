@@ -14,11 +14,14 @@ const setSmsSender = (sender) => {
  * Normalizes 10-digit Indian mobile number
  */
 const normalizePhone = (phone) => {
-  if (typeof phone !== 'string') return '';
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length === 12 && digits.startsWith('91')) {
-    return digits.slice(2);
-  }
+  if (phone === null || phone === undefined) return '';
+  const str = String(phone).trim();
+  const digits = str.replace(/\D/g, '');
+  if (digits.length === 10) return digits;
+  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+  if (digits.length === 13 && digits.startsWith('091')) return digits.slice(3);
+  if (digits.length > 10) return digits.slice(-10);
   return digits;
 };
 

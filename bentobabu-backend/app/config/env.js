@@ -60,6 +60,21 @@ const validateEnv = () => {
     }
   }
 
+  let cloudinaryCloudName = (process.env.CLOUDINARY_CLOUD_NAME || '').trim();
+  let cloudinaryApiKey = (process.env.CLOUDINARY_API_KEY || '').trim();
+  let cloudinaryApiSecret = (process.env.CLOUDINARY_API_SECRET || '').trim();
+
+  if (process.env.CLOUDINARY_URL) {
+    try {
+      const parsedCloudinary = new URL(process.env.CLOUDINARY_URL);
+      if (parsedCloudinary.hostname) cloudinaryCloudName = parsedCloudinary.hostname;
+      if (parsedCloudinary.username) cloudinaryApiKey = parsedCloudinary.username;
+      if (parsedCloudinary.password) cloudinaryApiSecret = parsedCloudinary.password;
+    } catch {
+      // ignore malformed CLOUDINARY_URL
+    }
+  }
+
   return {
     isProduction: isProd,
     port: parseInt(process.env.PORT, 10) || 4000,
@@ -104,9 +119,9 @@ const validateEnv = () => {
     otpResendCooldownSeconds: parseInt(process.env.OTP_RESEND_COOLDOWN_SECONDS, 10) || 60,
     otpMaxResends: parseInt(process.env.OTP_MAX_RESENDS, 10) || 3,
     // Cloudinary Media Configuration
-    cloudinaryCloudName: (process.env.CLOUDINARY_CLOUD_NAME || '').trim(),
-    cloudinaryApiKey: (process.env.CLOUDINARY_API_KEY || '').trim(),
-    cloudinaryApiSecret: (process.env.CLOUDINARY_API_SECRET || '').trim(),
+    cloudinaryCloudName,
+    cloudinaryApiKey,
+    cloudinaryApiSecret,
     // Cloudflare R2 Media Configuration
     r2AccountId: (process.env.R2_ACCOUNT_ID || '').trim(),
     r2AccessKeyId: (process.env.R2_ACCESS_KEY_ID || '').trim(),

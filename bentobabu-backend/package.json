@@ -22,6 +22,7 @@
     "test:otp": "node test/otp_signup_verification.test.js",
     "test:media": "node test/media_management.test.js",
     "test:video": "node test/video_content.test.js",
+    "test:onboarding": "node test/delivery_onboarding.test.js",
     "test:all": "npm test"
   },
   "author": "Alipta Ghosh",
