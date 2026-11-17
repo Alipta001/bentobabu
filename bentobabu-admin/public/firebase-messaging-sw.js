@@ -1,16 +1,20 @@
 /**
  * BentoBabu Firebase Messaging Service Worker
- * Handles background push notifications, sound, vibration, and navigation.
+ * Production-ready Web Push Notification handler for Admin & Kitchen staff.
  */
 
 /* eslint-disable no-undef */
-importScripts('https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js');
+try {
+  importScripts('https://www.gstatic.com/firebasejs/13.4.0/firebase-app-compat.js');
+  importScripts('https://www.gstatic.com/firebasejs/13.4.0/firebase-messaging-compat.js');
+} catch (importErr) {
+  console.error('[SW] Failed to import Firebase scripts:', importErr);
+}
 
-// Parse configuration from service worker registration URL query parameters if present
+// Parse configuration from service worker registration URL query parameters
 const urlParams = new URLSearchParams(self.location.search);
 
-let firebaseConfig = {
+const firebaseConfig = {
   apiKey: urlParams.get('apiKey') || '',
   authDomain: urlParams.get('authDomain') || '',
   projectId: urlParams.get('projectId') || '',
@@ -20,17 +24,21 @@ let firebaseConfig = {
 
 let messaging = null;
 
-function initFirebaseMessaging(config) {
-  if (!config.apiKey || !config.projectId) {
-    return false;
-  }
+// Only initialize if all critical credentials are provided
+if (
+  typeof firebase !== 'undefined' &&
+  firebaseConfig.apiKey &&
+  firebaseConfig.projectId &&
+  firebaseConfig.messagingSenderId &&
+  firebaseConfig.appId
+) {
   try {
     if (!firebase.apps.length) {
-      firebase.initializeApp(config);
+      firebase.initializeApp(firebaseConfig);
     }
     messaging = firebase.messaging();
 
-    // Background push notification handler
+    // Register Firebase background notification handler
     messaging.onBackgroundMessage((payload) => {
       console.log('[SW] Firebase onBackgroundMessage received:', payload);
 
@@ -62,69 +70,13 @@ function initFirebaseMessaging(config) {
 
       return self.registration.showNotification(title, notificationOptions);
     });
-
-    return true;
-  } catch (err) {
-    console.error('[SW] Firebase messaging SW initialization error:', err);
-    return false;
+    console.log('[SW] Firebase Messaging initialized successfully.');
+  } catch (initErr) {
+    console.error('[SW] Error during Firebase initialization:', initErr);
   }
+} else {
+  console.log('[SW] Firebase config parameters not provided in query. SW loaded in standby mode.');
 }
-
-// Initial attempt using URL query parameters
-initFirebaseMessaging(firebaseConfig);
-
-// Listen for runtime config injection from client
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SET_FIREBASE_CONFIG') {
-    firebaseConfig = { ...firebaseConfig, ...event.data.config };
-    initFirebaseMessaging(firebaseConfig);
-  }
-});
-
-// Fallback raw Web Push event listener in case Firebase compat is delayed
-self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
-  try {
-    const rawData = event.data.json();
-    console.log('[SW] Push event received:', rawData);
-
-    // If Firebase Messaging already handles this, let onBackgroundMessage process it
-    if (messaging) {
-      return;
-    }
-
-    const title =
-      rawData.notification?.title ||
-      rawData.data?.title ||
-      'BentoBabu — New Order Received!';
-
-    const body =
-      rawData.notification?.body ||
-      rawData.data?.body ||
-      'A new customer order has been placed.';
-
-    const options = {
-      body,
-      icon: '/bentobabu_logo.png',
-      badge: '/bentobabu_logo.png',
-      tag: rawData.data?.orderId ? `order_${rawData.data.orderId}` : 'bentobabu_order_alert',
-      renotify: true,
-      requireInteraction: true,
-      vibrate: [200, 100, 200],
-      data: {
-        clickAction: rawData.data?.clickAction || '/orders',
-        orderId: rawData.data?.orderId || '',
-        orderNumber: rawData.data?.orderNumber || '',
-        timestamp: Date.now(),
-      },
-    };
-
-    event.waitUntil(self.registration.showNotification(title, options));
-  } catch (parseErr) {
-    console.warn('[SW] Could not parse push payload as JSON:', parseErr);
-  }
-});
 
 // Handle notification click: Focus existing dashboard window or open order details
 self.addEventListener('notificationclick', (event) => {

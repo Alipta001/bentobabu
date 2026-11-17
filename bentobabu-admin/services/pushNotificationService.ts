@@ -187,14 +187,6 @@ export const pushNotificationService = {
     });
     await navigator.serviceWorker.ready;
 
-    // Send config to active service worker instance
-    if (swReg.active) {
-      swReg.active.postMessage({
-        type: "SET_FIREBASE_CONFIG",
-        config: firebaseConfig,
-      });
-    }
-
     // 3. Get FCM Messaging client & token
     const messaging = await getFirebaseMessagingClient();
     if (!messaging) {

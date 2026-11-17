@@ -10,6 +10,10 @@ const connectSrc = [
   "https://res.cloudinary.com",
   "https://media.bentobabu.com",
   "https://*.r2.cloudflarestorage.com",
+  "https://*.googleapis.com",
+  "https://*.firebaseio.com",
+  "https://fcmregistrations.googleapis.com",
+  "https://firebaseinstallations.googleapis.com",
 ].join(" ");
 
 const securityHeaders = [
@@ -45,7 +49,7 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.gstatic.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://media.bentobabu.com https://*.r2.cloudflarestorage.com https://i.ytimg.com https://*.ytimg.com http://localhost:4000 http://127.0.0.1:4000",
       "media-src 'self' blob: https://media.bentobabu.com https://*.r2.cloudflarestorage.com",
@@ -94,6 +98,23 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      {
+        source: "/firebase-messaging-sw.js",
+        headers: [
+          {
+            key: "Content-Type",
+            value: "application/javascript; charset=utf-8",
+          },
+          {
+            key: "Service-Worker-Allowed",
+            value: "/",
+          },
+          {
+            key: "Cache-Control",
+            value: "no-cache, no-store, must-revalidate",
+          },
+        ],
+      },
       {
         source: "/:path*",
         headers: securityHeaders,
