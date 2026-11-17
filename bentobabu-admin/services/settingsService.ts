@@ -7,6 +7,7 @@ export interface BackendSystemSettings {
   SUPPORT_EMAIL?: string;
   SUPPORT_PHONE?: string;
   MINIMUM_ORDER_AMOUNT?: number;
+  MINIMUM_ORDER_VALUE?: number;
   DEFAULT_DELIVERY_FEE?: number;
   DELIVERY_CHARGE_ENABLED?: boolean;
   DELIVERY_CHARGE_AMOUNT?: number;
@@ -29,6 +30,7 @@ const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
   freeDeliveryThreshold: 500,
   deliveryChargeEnabled: s.DELIVERY_CHARGE_ENABLED ?? true,
   deliveryChargeAmount: s.DELIVERY_CHARGE_AMOUNT ?? s.DEFAULT_DELIVERY_FEE ?? 30,
+  minimumOrderValue: s.MINIMUM_ORDER_VALUE ?? s.MINIMUM_ORDER_AMOUNT ?? 0,
   isOrderingEnabled: s.ORDER_ACCEPTANCE_ENABLED ?? true,
 });
 
@@ -56,6 +58,10 @@ export const settingsService = {
     if (data.deliveryChargeAmount !== undefined) {
       backendPayload.DELIVERY_CHARGE_AMOUNT = data.deliveryChargeAmount;
       backendPayload.DEFAULT_DELIVERY_FEE = data.deliveryChargeAmount;
+    }
+    if (data.minimumOrderValue !== undefined) {
+      backendPayload.MINIMUM_ORDER_VALUE = Number(data.minimumOrderValue);
+      backendPayload.MINIMUM_ORDER_AMOUNT = Number(data.minimumOrderValue);
     }
     if (data.operatingHours && data.operatingHours.includes("-")) {
       const parts = data.operatingHours.split("-").map((p) => p.trim());

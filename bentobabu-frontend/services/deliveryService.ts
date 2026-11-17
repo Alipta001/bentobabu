@@ -111,5 +111,40 @@ export const deliveryService = {
       return [];
     }
   },
+
+  /**
+   * Retrieve platform delivery configuration (admin-configured minimum order value and delivery fees)
+   */
+  async getConfig(): Promise<{
+    minimumOrderValue: number;
+    deliveryChargeEnabled: boolean;
+    deliveryChargeAmount: number;
+  }> {
+    try {
+      const response = await apiClient.get<
+        ApiResponse<{
+          minimumOrderValue: number;
+          minimumOrderAmount: number;
+          deliveryChargeEnabled: boolean;
+          deliveryChargeAmount: number;
+        }>
+      >(API_ENDPOINTS.DELIVERY.CONFIG);
+
+      const raw = response.data;
+      const data = raw && "data" in raw ? raw.data : (raw as any);
+
+      return {
+        minimumOrderValue: typeof data?.minimumOrderValue === "number" ? data.minimumOrderValue : 0,
+        deliveryChargeEnabled: data?.deliveryChargeEnabled ?? true,
+        deliveryChargeAmount: typeof data?.deliveryChargeAmount === "number" ? data.deliveryChargeAmount : 30,
+      };
+    } catch {
+      return {
+        minimumOrderValue: 0,
+        deliveryChargeEnabled: true,
+        deliveryChargeAmount: 30,
+      };
+    }
+  },
 };
 

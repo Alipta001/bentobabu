@@ -18,10 +18,11 @@ class DeliveryController {
 
       const cleanPin = pincode.trim();
 
-      // Query only currently active delivery zones
+      // Query only currently active and non-deleted delivery zones
       const zone = await DeliveryZone.findOne({
         pincodes: cleanPin,
         isActive: true,
+        isDeleted: { $ne: true },
       });
 
       if (!zone) {
@@ -32,10 +33,11 @@ class DeliveryController {
         });
       }
 
-      // Check admin-configured delivery charge settings
-      const [chargeEnabledSetting, chargeAmountSetting] = await Promise.all([
+      // Check admin-configured delivery charge and minimum order settings
+      const [chargeEnabledSetting, chargeAmountSetting, minOrderSetting] = await Promise.all([
         SystemSetting.findOne({ key: 'DELIVERY_CHARGE_ENABLED' }).lean(),
         SystemSetting.findOne({ key: 'DELIVERY_CHARGE_AMOUNT' }).lean(),
+        SystemSetting.findOne({ key: { $in: ['MINIMUM_ORDER_VALUE', 'MINIMUM_ORDER_AMOUNT'] } }).lean(),
       ]);
 
       let finalDeliveryCharge = 0;
@@ -51,6 +53,12 @@ class DeliveryController {
         }
       }
 
+      // Determine authoritative minimum order amount
+      let effectiveMinOrder = (zone && typeof zone.minimumOrderAmount === 'number') ? zone.minimumOrderAmount : 0;
+      if (minOrderSetting && typeof minOrderSetting.value === 'number') {
+        effectiveMinOrder = minOrderSetting.value;
+      }
+
       res.status(200).json({
         success: true,
         serviceable: true,
@@ -58,16 +66,53 @@ class DeliveryController {
           zoneName: zone.name,
           deliveryCharge: finalDeliveryCharge,
           deliveryFee: finalDeliveryCharge,
-          minimumOrderAmount: zone.minimumOrderAmount,
+          minimumOrderAmount: effectiveMinOrder,
+          minimumOrderValue: effectiveMinOrder,
           estimatedDeliveryMinutes: zone.estimatedDeliveryMinutes,
           zone: {
             id: zone._id.toString(),
             name: zone.name,
             deliveryCharge: finalDeliveryCharge,
             deliveryFee: finalDeliveryCharge,
-            minimumOrderAmount: zone.minimumOrderAmount,
+            minimumOrderAmount: effectiveMinOrder,
+            minimumOrderValue: effectiveMinOrder,
             estimatedDeliveryMinutes: zone.estimatedDeliveryMinutes,
           },
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/delivery/config
+   * Public: returns global delivery settings (minimum order value, delivery charge config)
+   */
+  static async getDeliveryConfig(req, res, next) {
+    try {
+      const [minOrderSetting, chargeEnabledSetting, chargeAmountSetting] = await Promise.all([
+        SystemSetting.findOne({ key: { $in: ['MINIMUM_ORDER_VALUE', 'MINIMUM_ORDER_AMOUNT'] } }).lean(),
+        SystemSetting.findOne({ key: 'DELIVERY_CHARGE_ENABLED' }).lean(),
+        SystemSetting.findOne({ key: 'DELIVERY_CHARGE_AMOUNT' }).lean(),
+      ]);
+
+      const minimumOrderValue = (minOrderSetting && typeof minOrderSetting.value === 'number')
+        ? minOrderSetting.value
+        : 99;
+
+      const deliveryChargeEnabled = chargeEnabledSetting ? chargeEnabledSetting.value !== false : true;
+      const deliveryChargeAmount = (chargeAmountSetting && typeof chargeAmountSetting.value === 'number')
+        ? chargeAmountSetting.value
+        : 30;
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          minimumOrderValue,
+          minimumOrderAmount: minimumOrderValue,
+          deliveryChargeEnabled,
+          deliveryChargeAmount,
         },
       });
     } catch (error) {
@@ -97,6 +142,7 @@ class DeliveryController {
       const zone = await DeliveryZone.findOne({
         pincodes: cleanPin,
         isActive: true,
+        isDeleted: { $ne: true },
       });
 
       if (!zone) {

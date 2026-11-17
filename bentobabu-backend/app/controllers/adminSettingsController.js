@@ -4,7 +4,8 @@ const DEFAULT_SETTINGS = {
   BUSINESS_NAME: 'Bento Babu',
   SUPPORT_EMAIL: 'support@bentobabu.in',
   SUPPORT_PHONE: '9876543210',
-  MINIMUM_ORDER_AMOUNT: 150,
+  MINIMUM_ORDER_AMOUNT: 99,
+  MINIMUM_ORDER_VALUE: 99,
   DEFAULT_DELIVERY_FEE: 30,
   DELIVERY_CHARGE_ENABLED: true,
   DELIVERY_CHARGE_AMOUNT: 30,
@@ -123,15 +124,17 @@ class AdminSettingsController {
             break;
           }
 
-          case 'MINIMUM_ORDER_AMOUNT': {
+          case 'MINIMUM_ORDER_AMOUNT':
+          case 'MINIMUM_ORDER_VALUE': {
             const num = Number(val);
             if (isNaN(num) || num < 0) {
               return res.status(400).json({
                 success: false,
-                message: 'MINIMUM_ORDER_AMOUNT must be a non-negative number.',
+                message: `${key} must be a non-negative number.`,
               });
             }
-            updatesToApply[key] = num;
+            updatesToApply.MINIMUM_ORDER_AMOUNT = num;
+            updatesToApply.MINIMUM_ORDER_VALUE = num;
             break;
           }
 

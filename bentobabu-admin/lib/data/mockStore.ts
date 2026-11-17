@@ -604,5 +604,6 @@ export const INITIAL_SETTINGS: BusinessSettings = {
   freeDeliveryThreshold: 499,
   deliveryChargeEnabled: true,
   deliveryChargeAmount: 30,
+  minimumOrderValue: 99,
   isOrderingEnabled: true,
 };

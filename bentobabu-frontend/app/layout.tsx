@@ -4,6 +4,7 @@ import { Providers } from "@/providers/Providers";
 import { brandConfig } from "@/config/brand";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
   title: {
     default: `${brandConfig.name} | ${brandConfig.tagline}`,
     template: `%s | ${brandConfig.name}`,
@@ -19,6 +20,11 @@ export const metadata: Metadata = {
     "senior citizen soft meals",
     "office healthy lunch",
   ],
+  icons: {
+    icon: brandConfig.logo.imagePath,
+    shortcut: brandConfig.logo.imagePath,
+    apple: brandConfig.logo.imagePath,
+  },
   authors: [{ name: brandConfig.name }],
   openGraph: {
     title: `${brandConfig.name} | ${brandConfig.tagline}`,
@@ -26,6 +32,14 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_IN",
     siteName: brandConfig.name,
+    images: [
+      {
+        url: brandConfig.logo.imagePath,
+        width: 1040,
+        height: 1024,
+        alt: brandConfig.name,
+      },
+    ],
   },
 };
 

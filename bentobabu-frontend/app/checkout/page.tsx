@@ -27,6 +27,7 @@ import {
   useAddresses,
   useSaveAddress,
   useServiceability,
+  useDeliveryConfig,
 } from "@/hooks/useQueries";
 import { useAuth } from "@/context/AuthContext";
 import { cartService } from "@/services/cartService";
@@ -230,6 +231,7 @@ export default function CheckoutPage() {
   // Live serviceability check for active address PIN
   const { data: serviceability, isLoading: isCheckingServiceability } =
     useServiceability(activePincode);
+  const { data: deliveryConfig } = useDeliveryConfig();
 
   // Step 7: Live Authoritative Checkout Summary (only when cart is hydrated and has items, and address is selected)
   useEffect(() => {
@@ -291,6 +293,12 @@ export default function CheckoutPage() {
   const finalDelivery = checkoutSummary?.deliveryCharge ?? clientDelivery;
   const finalTax = checkoutSummary?.taxAmount ?? clientTax;
   const finalTotal = checkoutSummary?.grandTotal ?? clientTotal;
+
+  const minimumOrderValue =
+    checkoutSummary?.minimumOrderValue ??
+    (serviceability?.minimumOrderAmount ?? deliveryConfig?.minimumOrderValue ?? 0);
+  const isBelowMinimum = minimumOrderValue > 0 && finalSubtotal < minimumOrderValue;
+  const shortfall = isBelowMinimum ? minimumOrderValue - finalSubtotal : 0;
 
   // Save new address handler
   const handleSaveNewAddress = async (e: React.FormEvent) => {
@@ -979,10 +987,27 @@ export default function CheckoutPage() {
                     </span>
                   </div>
 
+                  {isBelowMinimum && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-xs text-amber-900">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-semibold block">Minimum order value is ₹{minimumOrderValue}.</span>
+                        <span className="text-[11px] text-amber-800">Add ₹{shortfall} more to continue.</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {summaryError && !isBelowMinimum && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2 text-xs text-rose-800">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <span>{summaryError}</span>
+                    </div>
+                  )}
+
                   {/* Place Order CTA */}
                   <button
                     type="submit"
-                    disabled={isSubmitting || (serviceability && !serviceability.serviceable)}
+                    disabled={isSubmitting || isBelowMinimum || (serviceability && !serviceability.serviceable)}
                     className="w-full flex items-center justify-center gap-2 py-4 rounded-full bg-[#354B35] text-[#F7F3EA] text-sm font-bold shadow-md hover:bg-[#253525] disabled:opacity-50 cursor-pointer transition-all"
                   >
                     {isSubmitting ? (
@@ -990,6 +1015,8 @@ export default function CheckoutPage() {
                         <Loader2 className="w-4 h-4 animate-spin text-[#B99A60]" />
                         <span>Confirming Order...</span>
                       </>
+                    ) : isBelowMinimum ? (
+                      <span>Minimum Order ₹{minimumOrderValue} (Add ₹{shortfall})</span>
                     ) : (
                       <>
                         <span>Place Order • ₹{finalTotal}</span>

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { DeliveryZone, DeliverySlot } = require('../models');
+const { DeliveryZone, DeliverySlot, Order } = require('../models');
 
 /**
  * Class-based Controller for Admin Delivery Configuration & Slot Management
@@ -16,7 +16,7 @@ class AdminDeliveryController {
   static async getZones(req, res, next) {
     try {
       const { isActive } = req.query;
-      const filter = {};
+      const filter = { isDeleted: { $ne: true } };
 
       if (isActive !== undefined && isActive !== '') {
         filter.isActive = isActive === 'true' || isActive === true;
@@ -82,6 +82,7 @@ class AdminDeliveryController {
       if (isActive !== false) {
         const conflictZone = await DeliveryZone.findOne({
           isActive: true,
+          isDeleted: { $ne: true },
           pincodes: { $in: cleanPincodes },
         });
 
@@ -128,7 +129,7 @@ class AdminDeliveryController {
         });
       }
 
-      const zone = await DeliveryZone.findById(id).lean();
+      const zone = await DeliveryZone.findOne({ _id: id, isDeleted: { $ne: true } }).lean();
       if (!zone) {
         return res.status(404).json({
           success: false,
@@ -168,12 +169,21 @@ class AdminDeliveryController {
         });
       }
 
-      const zone = await DeliveryZone.findById(id);
+      const zone = await DeliveryZone.findOne({ _id: id, isDeleted: { $ne: true } });
       if (!zone) {
         return res.status(404).json({
           success: false,
           message: 'Delivery zone not found.',
         });
+      }
+
+      if (name !== undefined) {
+        if (typeof name !== 'string' || !name.trim()) {
+          return res.status(400).json({
+            success: false,
+            message: 'Zone name cannot be empty.',
+          });
+        }
       }
 
       let cleanPincodes = zone.pincodes;
@@ -197,6 +207,36 @@ class AdminDeliveryController {
         }
       }
 
+      if (deliveryCharge !== undefined) {
+        const numCharge = Number(deliveryCharge);
+        if (isNaN(numCharge) || numCharge < 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Delivery charge must be a non-negative number.',
+          });
+        }
+      }
+
+      if (minimumOrderAmount !== undefined) {
+        const numMin = Number(minimumOrderAmount);
+        if (isNaN(numMin) || numMin < 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Minimum order amount must be a non-negative number.',
+          });
+        }
+      }
+
+      if (estimatedDeliveryMinutes !== undefined) {
+        const numEst = Number(estimatedDeliveryMinutes);
+        if (isNaN(numEst) || numEst < 1) {
+          return res.status(400).json({
+            success: false,
+            message: 'Estimated delivery time must be at least 1 minute.',
+          });
+        }
+      }
+
       const activeState = isActive !== undefined ? Boolean(isActive) : zone.isActive;
 
       // Check conflict if zone is or will be active
@@ -204,6 +244,7 @@ class AdminDeliveryController {
         const conflictZone = await DeliveryZone.findOne({
           _id: { $ne: zone._id },
           isActive: true,
+          isDeleted: { $ne: true },
           pincodes: { $in: cleanPincodes },
         });
 
@@ -259,7 +300,7 @@ class AdminDeliveryController {
         });
       }
 
-      const zone = await DeliveryZone.findById(id);
+      const zone = await DeliveryZone.findOne({ _id: id, isDeleted: { $ne: true } });
       if (!zone) {
         return res.status(404).json({
           success: false,
@@ -272,6 +313,7 @@ class AdminDeliveryController {
         const conflictZone = await DeliveryZone.findOne({
           _id: { $ne: zone._id },
           isActive: true,
+          isDeleted: { $ne: true },
           pincodes: { $in: zone.pincodes },
         });
 
@@ -291,6 +333,58 @@ class AdminDeliveryController {
         success: true,
         message: `Delivery zone ${isActive ? 'activated' : 'deactivated'} successfully.`,
         data: { zone },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE /api/v1/admin/delivery/zones/:id
+   * Soft-delete a delivery zone if no active operational orders exist
+   */
+  static async deleteZone(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid delivery zone ID format.',
+        });
+      }
+
+      const zone = await DeliveryZone.findOne({ _id: id, isDeleted: { $ne: true } });
+      if (!zone) {
+        return res.status(404).json({
+          success: false,
+          message: 'Delivery zone not found or already deleted.',
+        });
+      }
+
+      // Prevent accidental deletion if zone is actively tied to live in-progress orders
+      const activeOrdersCount = await Order.countDocuments({
+        deliveryZone: zone._id,
+        orderStatus: { $in: ['PENDING', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY'] },
+      });
+
+      if (activeOrdersCount > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot delete delivery zone "${zone.name}". It is associated with ${activeOrdersCount} active in-flight order(s). Please complete or reassign those orders first.`,
+        });
+      }
+
+      // Soft-delete to preserve historical order records and references
+      zone.isDeleted = true;
+      zone.isActive = false;
+      zone.deletedAt = new Date();
+      await zone.save();
+
+      return res.status(200).json({
+        success: true,
+        message: `Delivery zone "${zone.name}" has been deleted successfully.`,
+        data: { id: zone._id, name: zone.name },
       });
     } catch (error) {
       next(error);

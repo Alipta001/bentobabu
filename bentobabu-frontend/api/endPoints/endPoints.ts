@@ -40,6 +40,7 @@ export const API_ENDPOINTS = {
     DELETE: (id: string) => `/addresses/${id}`,
   },
   DELIVERY: {
+    CONFIG: "/delivery/config",
     SERVICEABILITY: (pincode: string) => `/delivery/serviceability?pincode=${encodeURIComponent(pincode)}`,
     SLOTS: (pincode: string, date: string) =>
       `/delivery/slots?pincode=${encodeURIComponent(pincode)}&date=${encodeURIComponent(date)}`,

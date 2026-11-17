@@ -439,6 +439,39 @@ export function useCreateDeliveryZone() {
   });
 }
 
+export function useUpdateDeliveryZone() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: {
+        name?: string;
+        pincodes?: string[];
+        deliveryCharge?: number;
+        minimumOrderAmount?: number;
+        estimatedDeliveryMinutes?: number;
+        isActive?: boolean;
+      };
+    }) => deliveryService.updateZone(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliveryZones"] });
+    },
+  });
+}
+
+export function useDeleteDeliveryZone() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deliveryService.deleteZone(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliveryZones"] });
+    },
+  });
+}
+
 export function useToggleDeliveryZone() {
   const queryClient = useQueryClient();
   return useMutation({

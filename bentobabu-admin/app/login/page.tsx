@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Lock, Mail, Eye, EyeOff, ShieldCheck, ArrowRight } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
@@ -40,8 +41,15 @@ export default function AdminLoginPage() {
       <div className="w-full max-w-md">
         {/* Brand Card */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-[#354B35] flex items-center justify-center mx-auto mb-4 shadow-md border border-[#4A654A]">
-            <span className="font-serif text-3xl font-bold text-[#B99A60]">B</span>
+          <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-[#354B35] flex items-center justify-center mx-auto mb-4 shadow-md border border-[#4A654A]">
+            <Image
+              src="/bentobabu_logo.png"
+              alt="Bento Babu"
+              width={80}
+              height={80}
+              className="w-full h-full object-contain p-1"
+              priority
+            />
           </div>
           <h1 className="font-serif text-3xl font-bold text-[#1E2B1E] tracking-tight">
             Bento Babu

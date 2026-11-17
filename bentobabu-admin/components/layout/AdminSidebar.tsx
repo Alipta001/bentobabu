@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -63,8 +64,15 @@ export function AdminSidebar({ mobileOpen, onCloseMobile }: AdminSidebarProps) {
       {/* Brand Header */}
       <div className="p-6 border-b border-[#2C3E2C] flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-xl bg-[#354B35] flex items-center justify-center font-serif text-xl font-bold text-[#B99A60] shadow-sm border border-[#4A654A] group-hover:scale-105 transition-transform">
-            B
+          <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-[#354B35] flex items-center justify-center shadow-sm border border-[#4A654A] group-hover:scale-105 transition-transform">
+            <Image
+              src="/bentobabu_logo.png"
+              alt="Bento Babu"
+              width={40}
+              height={40}
+              className="w-full h-full object-contain p-0.5"
+              priority
+            />
           </div>
           <div>
             <div className="font-serif text-lg font-bold tracking-tight text-white leading-none">

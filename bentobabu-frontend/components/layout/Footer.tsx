@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Heart,
   ShieldCheck,
@@ -63,14 +64,20 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-[#354B35]/60">
           {/* Brand Info */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#354B35] flex items-center justify-center text-[#B99A60] font-serif text-xl font-bold">
-                B
+            <Link href="/" className="inline-flex items-center gap-3 group">
+              <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-[#354B35] flex items-center justify-center border border-[#4A654A] group-hover:scale-105 transition-transform">
+                <Image
+                  src={brandConfig.logo.imagePath}
+                  alt={brandConfig.name}
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-contain p-0.5"
+                />
               </div>
-              <span className="font-serif text-2xl font-bold tracking-tight text-white">
+              <span className="font-serif text-2xl font-bold tracking-tight text-white group-hover:text-[#DFC89B] transition-colors">
                 {brandConfig.name}
               </span>
-            </div>
+            </Link>
             <p className="text-xs leading-relaxed text-[#B5C4B1] max-w-sm">
               {brandConfig.description}
             </p>

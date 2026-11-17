@@ -188,6 +188,7 @@ export interface BusinessSettings {
   freeDeliveryThreshold: number;
   deliveryChargeEnabled?: boolean;
   deliveryChargeAmount?: number;
+  minimumOrderValue?: number;
   isOrderingEnabled: boolean;
 }
 

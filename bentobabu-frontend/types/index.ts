@@ -252,6 +252,7 @@ export interface CheckoutSummary {
   deliveryZone?: DeliveryZone;
   deliverySlot?: DeliverySlot;
   coupon?: Coupon;
+  minimumOrderValue?: number;
 }
 
 export interface Notification {

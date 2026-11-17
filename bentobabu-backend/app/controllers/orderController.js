@@ -67,6 +67,7 @@ class OrderController {
       const zone = await DeliveryZone.findOne({
         pincodes: address.pincode,
         isActive: true,
+        isDeleted: { $ne: true },
       });
 
       if (!zone) {
@@ -175,27 +176,44 @@ class OrderController {
         });
       }
 
-      // Check zone minimum order amount
-      const zoneMinOrderPaise = Math.round(zone.minimumOrderAmount * 100);
-      if (itemTotalPaise < zoneMinOrderPaise) {
-        return res.status(400).json({
-          success: false,
-          message: `Minimum order amount of ₹${zone.minimumOrderAmount} required for delivery zone "${zone.name}"`,
-        });
-      }
+      // Check system-level admin configured minimum order value
+      const minOrderSetting = await SystemSetting.findOne({
+        key: { $in: ['MINIMUM_ORDER_VALUE', 'MINIMUM_ORDER_AMOUNT'] },
+      }).lean();
 
-      // Check system-level minimum order amount
-      const minOrderSetting = await SystemSetting.findOne({ key: 'MINIMUM_ORDER_AMOUNT' }).lean();
+      let configuredMinOrder = 0;
       if (
         minOrderSetting &&
         typeof minOrderSetting.value === 'number' &&
-        minOrderSetting.value > 0
+        minOrderSetting.value >= 0
       ) {
-        const platformMinPaise = Math.round(minOrderSetting.value * 100);
+        configuredMinOrder = minOrderSetting.value;
+      }
+
+      if (configuredMinOrder > 0) {
+        const platformMinPaise = Math.round(configuredMinOrder * 100);
         if (itemTotalPaise < platformMinPaise) {
+          const diff = Math.ceil((platformMinPaise - itemTotalPaise) / 100);
           return res.status(400).json({
             success: false,
-            message: `Minimum order amount of ₹${minOrderSetting.value} is required.`,
+            message: `Minimum order value is ₹${configuredMinOrder}. Add ₹${diff} more to continue.`,
+            minimumOrderValue: configuredMinOrder,
+            shortfall: diff,
+          });
+        }
+      }
+
+      if (
+        configuredMinOrder > 0 &&
+        typeof zone.minimumOrderAmount === 'number' &&
+        zone.minimumOrderAmount > configuredMinOrder
+      ) {
+        const zoneMinOrderPaise = Math.round(zone.minimumOrderAmount * 100);
+        if (itemTotalPaise < zoneMinOrderPaise) {
+          const diff = Math.ceil((zoneMinOrderPaise - itemTotalPaise) / 100);
+          return res.status(400).json({
+            success: false,
+            message: `Minimum order amount of ₹${zone.minimumOrderAmount} required for delivery zone "${zone.name}". Add ₹${diff} more to continue.`,
           });
         }
       }
@@ -325,6 +343,7 @@ class OrderController {
           deliveryCharge: deliveryChargePaise / 100,
           taxAmount: taxAmountPaise / 100,
           grandTotal: grandTotalPaise / 100,
+          minimumOrderValue: configuredMinOrder,
         },
       });
     } catch (error) {
@@ -436,6 +455,7 @@ class OrderController {
       const zoneQuery = DeliveryZone.findOne({
         pincodes: address.pincode,
         isActive: true,
+        isDeleted: { $ne: true },
       });
       const zone = session ? await zoneQuery.session(session) : await zoneQuery;
 
@@ -579,24 +599,39 @@ class OrderController {
         });
       }
 
-      // Check zone minimum order amount
-      const zoneMinOrderPaise = Math.round(zone.minimumOrderAmount * 100);
-      if (itemTotalPaise < zoneMinOrderPaise) {
-        throw new Error(
-          `Minimum order amount of ₹${zone.minimumOrderAmount} required for delivery zone "${zone.name}"`
-        );
-      }
+      // Check system-level admin configured minimum order value
+      const minOrderSetting = await SystemSetting.findOne({
+        key: { $in: ['MINIMUM_ORDER_VALUE', 'MINIMUM_ORDER_AMOUNT'] },
+      }).lean();
 
-      // Check system-level minimum order amount
-      const minOrderSetting = await SystemSetting.findOne({ key: 'MINIMUM_ORDER_AMOUNT' }).lean();
+      let configuredMinOrder = 0;
       if (
         minOrderSetting &&
         typeof minOrderSetting.value === 'number' &&
-        minOrderSetting.value > 0
+        minOrderSetting.value >= 0
       ) {
-        const platformMinPaise = Math.round(minOrderSetting.value * 100);
+        configuredMinOrder = minOrderSetting.value;
+      }
+
+      if (configuredMinOrder > 0) {
+        const platformMinPaise = Math.round(configuredMinOrder * 100);
         if (itemTotalPaise < platformMinPaise) {
-          throw new Error(`Minimum order amount of ₹${minOrderSetting.value} is required.`);
+          const diff = Math.ceil((platformMinPaise - itemTotalPaise) / 100);
+          throw new Error(`Minimum order value is ₹${configuredMinOrder}. Add ₹${diff} more to continue.`);
+        }
+      }
+
+      if (
+        configuredMinOrder > 0 &&
+        typeof zone.minimumOrderAmount === 'number' &&
+        zone.minimumOrderAmount > configuredMinOrder
+      ) {
+        const zoneMinOrderPaise = Math.round(zone.minimumOrderAmount * 100);
+        if (itemTotalPaise < zoneMinOrderPaise) {
+          const diff = Math.ceil((zoneMinOrderPaise - itemTotalPaise) / 100);
+          throw new Error(
+            `Minimum order amount of ₹${zone.minimumOrderAmount} required for delivery zone "${zone.name}". Add ₹${diff} more to continue.`
+          );
         }
       }
 

@@ -183,6 +183,14 @@ export function useUpdateProfile() {
   });
 }
 
+export function useDeliveryConfig() {
+  return useQuery({
+    queryKey: ["delivery", "config"],
+    queryFn: () => deliveryService.getConfig(),
+    staleTime: 30 * 1000,
+  });
+}
+
 export function useServiceability(pincode: string) {
   return useQuery({
     queryKey: QUERY_KEYS.SERVICEABILITY(pincode),

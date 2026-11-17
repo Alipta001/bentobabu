@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Cart, Product, DailyMenu } = require('../models');
+const { Cart, Product, DailyMenu, SystemSetting } = require('../models');
 const { getKolkataDateString } = require('../utils/businessDate');
 
 class CartController {
@@ -122,11 +122,20 @@ class CartController {
       });
     }
 
+    const minOrderSetting = await SystemSetting.findOne({
+      key: { $in: ['MINIMUM_ORDER_VALUE', 'MINIMUM_ORDER_AMOUNT'] },
+    }).lean();
+    const minimumOrderValue = (minOrderSetting && typeof minOrderSetting.value === 'number')
+      ? minOrderSetting.value
+      : 0;
+
     return {
       items: calculatedItems,
       itemCount: calculatedItems.length,
       itemTotal: totalPaise / 100,
       isAllOrderable: allOrderable,
+      minimumOrderValue,
+      minimumOrderAmount: minimumOrderValue,
     };
   }
 

@@ -227,6 +227,7 @@ export const cartService = {
       deliveryZone: summary.deliveryZone,
       deliverySlot: summary.deliverySlot,
       coupon: summary.coupon,
+      minimumOrderValue: summary.minimumOrderValue,
     };
   },
 };

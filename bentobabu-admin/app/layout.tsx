@@ -5,6 +5,11 @@ import { AdminProviders } from "@/providers/AdminProviders";
 export const metadata: Metadata = {
   title: "Bento Babu | Kitchen & Business Management",
   description: "Executive control panel for Bento Babu mindful Indian nutrition e-commerce.",
+  icons: {
+    icon: "/bentobabu_logo.png",
+    shortcut: "/bentobabu_logo.png",
+    apple: "/bentobabu_logo.png",
+  },
 };
 
 export const viewport: Viewport = {

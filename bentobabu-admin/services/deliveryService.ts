@@ -107,6 +107,10 @@ export const deliveryService = {
     return mapZone(z);
   },
 
+  async deleteZone(id: string): Promise<void> {
+    await adminApiClient.delete(ADMIN_API_ENDPOINTS.DELIVERY.ZONE_DETAIL(id));
+  },
+
   // Slots
   async getSlots(params?: { date?: string; isActive?: boolean }): Promise<DeliverySlotItem[]> {
     const res = await adminApiClient.get<{

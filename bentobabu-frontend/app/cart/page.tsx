@@ -23,10 +23,12 @@ import { useAppDispatch } from "@/store/hooks";
 import { applyCoupon } from "@/store/cartSlice";
 import { useCartSync } from "@/hooks/useCartSync";
 import { cartService } from "@/services/cartService";
+import { useDeliveryConfig } from "@/hooks/useQueries";
 
 export default function CartPage() {
   const dispatch = useAppDispatch();
   const { cartItems, appliedCoupon, setQuantity, removeItem, clear } = useCartSync();
+  const { data: deliveryConfig } = useDeliveryConfig();
 
   const [couponInput, setCouponInput] = useState("");
   const [couponError, setCouponError] = useState("");
@@ -37,6 +39,10 @@ export default function CartPage() {
     (acc, item) => acc + item.product.price * item.quantity,
     0
   );
+
+  const minimumOrderValue = deliveryConfig?.minimumOrderValue ?? 0;
+  const isBelowMinimum = minimumOrderValue > 0 && subtotal < minimumOrderValue;
+  const shortfall = isBelowMinimum ? minimumOrderValue - subtotal : 0;
 
   const discount = appliedCoupon
     ? appliedCoupon.discountType === "PERCENTAGE"
@@ -341,13 +347,32 @@ export default function CartPage() {
                   </span>
                 </div>
 
-                <Link
-                  href="/checkout"
-                  className="w-full flex items-center justify-center gap-2 py-4 rounded-full bg-[#354B35] text-[#F7F3EA] text-sm font-bold shadow-md hover:bg-[#253525] transition-all cursor-pointer"
-                >
-                  <span>Proceed to Checkout</span>
-                  <ArrowRight className="w-4 h-4 text-[#B99A60]" />
-                </Link>
+                {isBelowMinimum && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-xs text-amber-900">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold block">Minimum order value is ₹{minimumOrderValue}.</span>
+                      <span className="text-[11px] text-amber-800">Add ₹{shortfall} more to continue.</span>
+                    </div>
+                  </div>
+                )}
+
+                {isBelowMinimum ? (
+                  <button
+                    disabled
+                    className="w-full flex items-center justify-center gap-2 py-4 rounded-full bg-gray-200 text-gray-400 text-sm font-bold shadow-none cursor-not-allowed opacity-80"
+                  >
+                    <span>Minimum Order ₹{minimumOrderValue} (Add ₹{shortfall})</span>
+                  </button>
+                ) : (
+                  <Link
+                    href="/checkout"
+                    className="w-full flex items-center justify-center gap-2 py-4 rounded-full bg-[#354B35] text-[#F7F3EA] text-sm font-bold shadow-md hover:bg-[#253525] transition-all cursor-pointer"
+                  >
+                    <span>Proceed to Checkout</span>
+                    <ArrowRight className="w-4 h-4 text-[#B99A60]" />
+                  </Link>
+                )}
 
                 <div className="pt-2 flex items-center justify-center gap-2 text-[11px] text-[#8A9A86]">
                   <ShieldCheck className="w-4 h-4 text-[#354B35]" />

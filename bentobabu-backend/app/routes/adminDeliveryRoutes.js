@@ -11,6 +11,7 @@ router.post('/zones', AdminDeliveryController.createZone);
 router.get('/zones/:id', AdminDeliveryController.getZoneById);
 router.put('/zones/:id', AdminDeliveryController.updateZone);
 router.put('/zones/:id/status', AdminDeliveryController.updateZoneStatus);
+router.delete('/zones/:id', AdminDeliveryController.deleteZone);
 
 // Delivery Slots
 router.get('/slots', AdminDeliveryController.getSlots);

@@ -11,6 +11,7 @@ export interface BrandConfig {
   logo: {
     text: string;
     subtext: string;
+    imagePath: string;
     iconSvgPath?: string;
   };
   contact: {
@@ -47,6 +48,7 @@ export const brandConfig: BrandConfig = {
   logo: {
     text: "Bento Babu",
     subtext: "Mindful Kitchen",
+    imagePath: "/bentobabu_logo.png",
   },
   contact: {
     email: "care@bentobabu.in",

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ShoppingBag,
@@ -119,10 +120,15 @@ export function Header() {
         <div className="flex items-center justify-between h-18 sm:h-20 gap-4">
           {/* Brand Identity */}
           <Link href="/" className="flex items-center gap-3 group shrink-0">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br from-[#354B35] to-[#1F2C1F] flex items-center justify-center text-[#F7F3EA] shadow-md border border-[#DFC89B]/30 group-hover:scale-105 group-hover:shadow-lg transition-all duration-300">
-              <span className="font-serif text-2xl font-bold tracking-tight text-[#DFC89B] select-none">
-                B
-              </span>
+            <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-2xl overflow-hidden bg-gradient-to-br from-[#354B35] to-[#1F2C1F] flex items-center justify-center shadow-md border border-[#DFC89B]/30 group-hover:scale-105 group-hover:shadow-lg transition-all duration-300">
+              <Image
+                src={brandConfig.logo.imagePath}
+                alt={brandConfig.name}
+                width={44}
+                height={44}
+                className="w-full h-full object-contain p-0.5"
+                priority
+              />
             </div>
             <div className="flex flex-col">
               <span className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-[#222922] group-hover:text-[#354B35] transition-colors leading-none">

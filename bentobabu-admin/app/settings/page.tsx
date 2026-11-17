@@ -13,6 +13,7 @@ import {
   Power,
   Save,
   CheckCircle2,
+  ShoppingBag,
 } from "lucide-react";
 import { useAdminSettings, useUpdateSettings } from "@/hooks/useAdminQueries";
 import { BusinessSettings } from "@/types";
@@ -234,7 +235,7 @@ function SettingsForm({ initialSettings }: { initialSettings: BusinessSettings }
             </label>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
             <div>
               <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
                 Standard Delivery Charge (₹)
@@ -258,6 +259,31 @@ function SettingsForm({ initialSettings }: { initialSettings: BusinessSettings }
               </div>
               <p className="text-[10px] text-[#354B35]/60 mt-1">
                 Set to ₹0 for operational free delivery across all orders.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+                Minimum Order Value (₹)
+              </label>
+              <div className="relative">
+                <ShoppingBag className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#354B35]/50" />
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  value={formData.minimumOrderValue ?? 0}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      minimumOrderValue: Math.max(0, Number(e.target.value)),
+                    })
+                  }
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+                />
+              </div>
+              <p className="text-[10px] text-[#354B35]/60 mt-1">
+                Set to ₹0 to disable minimum order requirement across checkout.
               </p>
             </div>
 
