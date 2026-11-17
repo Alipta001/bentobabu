@@ -845,6 +845,13 @@ class OrderController {
         }).catch((e) => console.error('[Notification] ORDER_CONFIRMED dispatch error:', e.message));
       }
 
+      // Dispatch real-time web push and in-app alerts to active ADMIN and KITCHEN staff
+      NotificationDispatcher.dispatchStaffOrderPush({
+        orderId: order._id,
+        order,
+        eventType: 'ORDER_CREATED',
+      }).catch((e) => console.error('[Notification] ORDER_CREATED staff push dispatch error:', e.message));
+
       // Invalidate product stock cache and admin dashboard live KPIs
       await redisDelPattern('cache:products:*');
       await redisDelPattern('cache:admin:dashboard:*');

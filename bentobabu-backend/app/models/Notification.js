@@ -17,7 +17,7 @@ const notificationSchema = new mongoose.Schema(
     channel: {
       type: String,
       enum: {
-        values: ['EMAIL', 'WHATSAPP', 'IN_APP'],
+        values: ['EMAIL', 'WHATSAPP', 'IN_APP', 'PUSH'],
         message: '{VALUE} is not a valid notification channel',
       },
       required: [true, 'Notification channel is required'],
@@ -28,6 +28,7 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       enum: {
         values: [
+          'ORDER_CREATED',
           'ORDER_PLACED',
           'PAYMENT_SUCCESS',
           'PAYMENT_FAILED',

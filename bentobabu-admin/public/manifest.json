@@ -1,0 +1,22 @@
+{
+  "name": "BentoBabu Admin",
+  "short_name": "BentoBabu",
+  "description": "Kitchen & Executive Management Portal for BentoBabu",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F9F7F1",
+  "theme_color": "#354B35",
+  "icons": [
+    {
+      "src": "/bentobabu_logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/bentobabu_logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

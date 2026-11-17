@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminHeader } from "./AdminHeader";
+import { useAdminAuth } from "@/context/AdminAuthContext";
+import { useForegroundNotifications } from "@/hooks/useForegroundNotifications";
 
 interface AdminShellProps {
   children: React.ReactNode;
@@ -16,6 +19,22 @@ export function AdminShell({
   subtitle,
 }: AdminShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const router = useRouter();
+  const { admin, status, isLoading } = useAdminAuth();
+
+  // Role & Authentication Guard: Only ADMIN and KITCHEN staff can access the admin shell
+  useEffect(() => {
+    if (!isLoading) {
+      if (status === "unauthenticated" || !admin) {
+        router.push("/login");
+      } else if (!["ADMIN", "KITCHEN"].includes(admin.role)) {
+        router.push("/login");
+      }
+    }
+  }, [isLoading, status, admin, router]);
+
+  // Activate real-time FCM foreground listener with audio chime and order cache invalidation
+  useForegroundNotifications();
 
   return (
     <div className="min-h-screen flex bg-[#F9F7F1]">

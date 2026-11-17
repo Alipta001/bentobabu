@@ -38,8 +38,8 @@ export const adminAuthService = {
       throw new Error("Invalid response received from authentication server.");
     }
 
-    if (userData.role !== "ADMIN") {
-      throw new Error("Access denied. Admin portal is restricted to ADMIN users only.");
+    if (userData.role !== "ADMIN" && userData.role !== "KITCHEN") {
+      throw new Error("Access denied. Admin portal is restricted to ADMIN and KITCHEN users only.");
     }
 
     if (typeof window !== "undefined") {
@@ -74,7 +74,7 @@ export const adminAuthService = {
 
       const user = res.data?.data?.user;
       if (user) {
-        if (user.role !== "ADMIN") {
+        if (user.role !== "ADMIN" && user.role !== "KITCHEN") {
           await this.logout();
           return null;
         }

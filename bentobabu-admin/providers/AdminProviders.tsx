@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AdminAuthProvider } from "@/context/AdminAuthContext";
+import { Toaster } from "sonner";
 
 export function AdminProviders({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -22,6 +23,7 @@ export function AdminProviders({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AdminAuthProvider>
         {children}
+        <Toaster position="top-right" richColors closeButton />
       </AdminAuthProvider>
     </QueryClientProvider>
   );

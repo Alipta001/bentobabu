@@ -20,6 +20,7 @@ const VideoContent = require('./VideoContent');
 const DeliveryApplication = require('./DeliveryApplication');
 const DeliveryPartnerPresence = require('./DeliveryPartnerPresence');
 const DailyMenu = require('./DailyMenu');
+const DeviceToken = require('./DeviceToken');
 
 module.exports = {
   User,
@@ -44,5 +45,6 @@ module.exports = {
   DeliveryApplication,
   DeliveryPartnerPresence,
   DailyMenu,
+  DeviceToken,
 };
 

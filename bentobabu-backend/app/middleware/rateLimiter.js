@@ -178,10 +178,28 @@ const mediaUploadRateLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+/**
+ * Rate limiter for push notification test endpoint
+ */
+const pushTestRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: isDevOrTest ? 1000 : 10, // 10 test pushes per 15 min
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new ResilientStore('rl:pushtest:'),
+  passOnStoreError: false,
+  message: {
+    success: false,
+    message: 'Too many test push attempts. Please wait 15 minutes.',
+  },
+  validate: { trustProxy: false },
+});
+
 module.exports = {
   globalRateLimiter,
   authRateLimiter,
   refreshRateLimiter,
   otpRateLimiter,
   mediaUploadRateLimiter,
+  pushTestRateLimiter,
 };

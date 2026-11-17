@@ -5,6 +5,7 @@ import { AdminProviders } from "@/providers/AdminProviders";
 export const metadata: Metadata = {
   title: "Bento Babu | Kitchen & Business Management",
   description: "Executive control panel for Bento Babu mindful Indian nutrition e-commerce.",
+  manifest: "/manifest.json",
   icons: {
     icon: "/bentobabu_logo.png",
     shortcut: "/bentobabu_logo.png",

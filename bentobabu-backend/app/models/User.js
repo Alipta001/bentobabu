@@ -71,6 +71,18 @@ const userSchema = new mongoose.Schema(
         type: Boolean,
         default: true,
       },
+      push: {
+        type: Boolean,
+        default: true,
+      },
+      newOrderPushEnabled: {
+        type: Boolean,
+        default: true,
+      },
+      orderUpdatePushEnabled: {
+        type: Boolean,
+        default: true,
+      },
     },
   },
   {

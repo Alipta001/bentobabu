@@ -153,10 +153,20 @@ class NotificationController {
     try {
       const user = await User.findById(req.user._id).select('notificationPreferences');
 
-      const preferences = user?.notificationPreferences || {
-        email: true,
-        whatsapp: false,
-        inApp: true,
+      const isStaff = ['ADMIN', 'KITCHEN'].includes(req.user.role);
+      const userPrefs = user?.notificationPreferences || {};
+
+      const preferences = {
+        email: userPrefs.email ?? true,
+        whatsapp: userPrefs.whatsapp ?? false,
+        inApp: userPrefs.inApp ?? true,
+        push: userPrefs.push ?? true,
+        ...(isStaff
+          ? {
+              newOrderPushEnabled: userPrefs.newOrderPushEnabled ?? true,
+              orderUpdatePushEnabled: userPrefs.orderUpdatePushEnabled ?? true,
+            }
+          : {}),
       };
 
       return res.status(200).json({
@@ -170,16 +180,30 @@ class NotificationController {
 
   /**
    * PATCH /api/v1/notifications/preferences
-   * Update notification preferences (email, whatsapp opt-in/opt-out, inApp)
+   * Update notification preferences (email, whatsapp opt-in/opt-out, inApp, push)
    */
   static async updatePreferences(req, res, next) {
     try {
-      const { email, whatsapp, inApp } = req.body;
+      const {
+        email,
+        whatsapp,
+        inApp,
+        push,
+        newOrderPushEnabled,
+        orderUpdatePushEnabled,
+      } = req.body;
 
-      if (email === undefined && whatsapp === undefined && inApp === undefined) {
+      if (
+        email === undefined &&
+        whatsapp === undefined &&
+        inApp === undefined &&
+        push === undefined &&
+        newOrderPushEnabled === undefined &&
+        orderUpdatePushEnabled === undefined
+      ) {
         return res.status(400).json({
           success: false,
-          message: 'At least one preference field (email, whatsapp, inApp) must be provided.',
+          message: 'At least one valid preference field must be provided.',
         });
       }
 
@@ -196,6 +220,9 @@ class NotificationController {
           email: true,
           whatsapp: false,
           inApp: true,
+          push: true,
+          newOrderPushEnabled: ['ADMIN', 'KITCHEN'].includes(req.user.role),
+          orderUpdatePushEnabled: true,
         };
       }
 
@@ -227,6 +254,59 @@ class NotificationController {
           });
         }
         user.notificationPreferences.inApp = inApp;
+      }
+
+      if (push !== undefined) {
+        if (typeof push !== 'boolean') {
+          return res.status(400).json({
+            success: false,
+            message: 'push preference must be a boolean (true or false).',
+          });
+        }
+        user.notificationPreferences.push = push;
+      }
+
+      // Security check: Reject any role elevation attempt
+      if (req.body.role && req.body.role !== req.user.role) {
+        return res.status(403).json({
+          success: false,
+          message: 'Role elevation is not permitted.',
+        });
+      }
+
+      // Security check: Only ADMIN and KITCHEN users can configure staff new-order alerts
+      const isStaff = ['ADMIN', 'KITCHEN'].includes(req.user.role);
+
+      if (newOrderPushEnabled !== undefined) {
+        if (typeof newOrderPushEnabled !== 'boolean') {
+          return res.status(400).json({
+            success: false,
+            message: 'newOrderPushEnabled must be a boolean.',
+          });
+        }
+        if (!isStaff) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only authorized ADMIN and KITCHEN staff can configure new order push alerts.',
+          });
+        }
+        user.notificationPreferences.newOrderPushEnabled = newOrderPushEnabled;
+      }
+
+      if (orderUpdatePushEnabled !== undefined) {
+        if (typeof orderUpdatePushEnabled !== 'boolean') {
+          return res.status(400).json({
+            success: false,
+            message: 'orderUpdatePushEnabled must be a boolean.',
+          });
+        }
+        if (!isStaff) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only authorized ADMIN and KITCHEN staff can configure staff order update alerts.',
+          });
+        }
+        user.notificationPreferences.orderUpdatePushEnabled = orderUpdatePushEnabled;
       }
 
       await user.save();

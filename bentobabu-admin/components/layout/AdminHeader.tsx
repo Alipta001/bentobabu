@@ -1,11 +1,13 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Menu,
   LogOut,
   Flame,
+  Bell,
 } from "lucide-react";
 import { useAdminAuth } from "@/context/AdminAuthContext";
 
@@ -54,13 +56,24 @@ export function AdminHeader({
           </div>
         </div>
 
-        {/* Right: Kitchen Status & Admin Profile */}
+        {/* Right: Kitchen Status, Notification Bell & Admin Profile */}
         <div className="flex items-center gap-3 sm:gap-4">
           <div className="hidden sm:flex items-center gap-2 bg-[#EBF0E9] border border-[#8A9A86]/30 px-3 py-1.5 rounded-full text-xs font-semibold text-[#354B35]">
             <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
             <Flame className="w-3.5 h-3.5 text-[#B99A60]" />
             <span>Kitchen Live • Dispatch Active</span>
           </div>
+
+          {/* Quick Notification Bell */}
+          <Link
+            href="/notifications"
+            title="Push Notifications & Alert Settings"
+            className="relative p-2 rounded-xl text-[#667266] hover:text-[#354B35] hover:bg-[#EDE8DE] border border-[#E5DFC5] bg-white transition-colors cursor-pointer"
+          >
+            <Bell className="w-4 h-4" />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-600 ring-2 ring-white" />
+            <span className="sr-only">Notifications</span>
+          </Link>
 
           {/* Admin User Info */}
           {isLoading ? (

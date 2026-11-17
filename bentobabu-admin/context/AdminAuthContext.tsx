@@ -36,7 +36,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = useCallback(async (): Promise<AdminUser | null> => {
     try {
       const user = await adminAuthService.getMe();
-      if (user && user.role === "ADMIN") {
+      if (user && (user.role === "ADMIN" || user.role === "KITCHEN")) {
         setAdmin(user);
         setStatus("authenticated");
         return user;

@@ -9,6 +9,9 @@ import {
   RotateCcw,
   Clock,
   Send,
+  Bell,
+  ListFilter,
+  Smartphone,
 } from "lucide-react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import {
@@ -16,8 +19,10 @@ import {
   useNotificationStats,
   useRetryNotification,
 } from "@/hooks/useAdminQueries";
+import { PushNotificationManager } from "@/components/notifications/PushNotificationManager";
 
 export default function NotificationsCenterPage() {
+  const [activeTab, setActiveTab] = useState<"push" | "logs">("push");
   const [channelFilter, setChannelFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState<number>(1);
@@ -53,11 +58,48 @@ export default function NotificationsCenterPage() {
 
   return (
     <AdminShell
-      title="Customer Notifications Center"
-      subtitle="Auditing, delivery metrics and retry queue for automated transactional Email and WhatsApp dispatches"
+      title={activeTab === "push" ? "Staff Push Notifications & Alerts" : "Customer Notifications Center"}
+      subtitle={
+        activeTab === "push"
+          ? "Configure browser push alerts, chime tones, and registered staff devices for instant kitchen & admin order notifications"
+          : "Auditing, delivery metrics and retry queue for automated transactional Email, WhatsApp, and Push dispatches"
+      }
     >
-      {/* 1. Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#E5DFC5] pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab("push")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+            activeTab === "push"
+              ? "bg-[#354B35] text-white shadow-xs"
+              : "bg-white text-[#667266] border border-[#E5DFC5] hover:bg-[#F7F3EA]"
+          }`}
+        >
+          <Bell className="w-4 h-4" />
+          <span>Staff Push Alerts & Devices</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("logs")}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+            activeTab === "logs"
+              ? "bg-[#354B35] text-white shadow-xs"
+              : "bg-white text-[#667266] border border-[#E5DFC5] hover:bg-[#F7F3EA]"
+          }`}
+        >
+          <ListFilter className="w-4 h-4" />
+          <span>Outbound Dispatch Logs</span>
+        </button>
+      </div>
+
+      {activeTab === "push" ? (
+        <PushNotificationManager />
+      ) : (
+        <>
+          {/* 1. Metrics Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-3xl border border-[#E5DFC5] shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[#667266]">Total Dispatches</span>
@@ -281,6 +323,8 @@ export default function NotificationsCenterPage() {
           </div>
         )}
       </div>
+        </>
+      )}
     </AdminShell>
   );
 }

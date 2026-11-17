@@ -12,6 +12,7 @@ import {
   Plus,
   Boxes,
   CalendarCheck2,
+  Bell,
 } from "lucide-react";
 import {
   AreaChart,
@@ -83,6 +84,14 @@ export default function AdminDashboardPage() {
           >
             <Boxes className="w-3.5 h-3.5 text-[#354B35]" />
             <span>Restock Inventory</span>
+          </Link>
+
+          <Link
+            href="/notifications"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[#E5DFC5] bg-white text-[#1F271F] text-xs font-semibold hover:bg-[#EDE8DE] transition-colors"
+          >
+            <Bell className="w-3.5 h-3.5 text-[#B99A60]" />
+            <span>Push Order Alerts</span>
           </Link>
         </div>
       </div>

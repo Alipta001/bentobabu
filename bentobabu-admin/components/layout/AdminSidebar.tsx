@@ -36,6 +36,7 @@ interface AdminSidebarProps {
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Orders", href: "/orders", icon: ShoppingBag, badgeKey: "pendingOrders" },
+  { label: "Push Alerts", href: "/notifications", icon: Bell },
   { label: "Products", href: "/products", icon: UtensilsCrossed },
   { label: "Categories", href: "/categories", icon: Tags },
   { label: "Video Library", href: "/videos", icon: Video },
@@ -49,7 +50,6 @@ const NAV_ITEMS = [
   { label: "Delivery Zones", href: "/delivery", icon: Truck },
   { label: "Delivery Operations", href: "/delivery-operations", icon: Navigation },
   { label: "Delivery Partners", href: "/delivery-applications", icon: Bike },
-  { label: "Notifications", href: "/notifications", icon: Bell },
   { label: "Reviews", href: "/reviews", icon: Star },
   { label: "Reports", href: "/reports", icon: FileBarChart },
   { label: "Settings", href: "/settings", icon: Settings },

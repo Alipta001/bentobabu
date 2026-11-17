@@ -92,6 +92,11 @@ export const ADMIN_API_ENDPOINTS = {
     STATS: "/admin/notifications/stats",
     DETAIL: (id: string) => `/admin/notifications/${id}`,
     RETRY: (id: string) => `/admin/notifications/${id}/retry`,
+    PUSH_REGISTER: "/notifications/push/register",
+    PUSH_UNREGISTER: "/notifications/push/unregister",
+    PUSH_DEVICES: "/notifications/push/devices",
+    PUSH_TEST: "/notifications/push/test",
+    PREFERENCES: "/notifications/preferences",
   },
   MEDIA: {
     UPLOAD_IMAGE: "/admin/media/images/upload",

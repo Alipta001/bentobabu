@@ -1,6 +1,7 @@
-const { Notification, User, Order } = require('../models');
+const { Notification, User, Order, DeviceToken } = require('../models');
 const { getEmailTemplate, sendEmail } = require('./email');
 const { sendWhatsApp, WHATSAPP_TEMPLATE_MAP } = require('./whatsapp');
+const { getMessaging, isFirebaseConfigured } = require('../config/firebase');
 
 /**
  * Human-readable in-app notification messages by event type
@@ -10,6 +11,11 @@ const getInAppMessage = (
   { orderNumber = '', grandTotal = 0, reason = '', partnerName = '', isOutForDelivery = false } = {}
 ) => {
   switch (eventType) {
+    case 'ORDER_CREATED':
+      return {
+        subject: `New Order Received (#${orderNumber})`,
+        message: `New order #${orderNumber} has been placed. Total: ₹${grandTotal}.`,
+      };
     case 'ORDER_PLACED':
       return {
         subject: `Order Placed (#${orderNumber})`,
@@ -437,6 +443,274 @@ class NotificationDispatcher {
       notification.lastError = err.message || 'Retry failed with unhandled exception';
       await notification.save();
       throw err;
+    }
+  }
+
+  /**
+   * Retrieves all active device tokens belonging to active ADMIN and KITCHEN staff
+   */
+  static async getStaffDeviceTokens({ eventType = 'ORDER_CREATED' } = {}) {
+    const staffUsers = await User.find({
+      role: { $in: ['ADMIN', 'KITCHEN'] },
+      isActive: true,
+    }).select('_id name email role notificationPreferences');
+
+    const eligibleUsers = staffUsers.filter((u) => {
+      const prefs = u.notificationPreferences;
+      if (!prefs) return true;
+      if (prefs.push === false) return false;
+      if (eventType === 'ORDER_CREATED' && prefs.newOrderPushEnabled === false) return false;
+      if (eventType !== 'ORDER_CREATED' && prefs.orderUpdatePushEnabled === false) return false;
+      return true;
+    });
+
+    if (eligibleUsers.length === 0) return [];
+
+    const eligibleUserIds = eligibleUsers.map((u) => u._id);
+    const devices = await DeviceToken.find({
+      user: { $in: eligibleUserIds },
+      isActive: true,
+    }).populate({
+      path: 'user',
+      select: '_id role name email notificationPreferences',
+    });
+
+    return devices;
+  }
+
+  /**
+   * Dispatches push and in-app notifications for staff (ADMIN and KITCHEN) upon order creation
+   * Durable, idempotent, and resilient against payment retries and worker restarts.
+   */
+  static async dispatchStaffOrderPush(options = {}) {
+    try {
+      let resolvedOrder = null;
+      let eventType = 'ORDER_CREATED';
+
+      if (options && (options._id || options.orderNumber)) {
+        resolvedOrder = options;
+        if (options.eventType) eventType = options.eventType;
+      } else if (options && typeof options === 'object') {
+        resolvedOrder = options.order || null;
+        if (options.eventType) eventType = options.eventType;
+        if (!resolvedOrder && options.orderId) {
+          resolvedOrder = await Order.findById(options.orderId).lean();
+        }
+      }
+
+      if (!resolvedOrder) {
+        console.warn(`[NotificationDispatcher] Order not found for staff push`);
+        return { success: false, reason: 'Order not found' };
+      }
+
+      // Accurate payment description without false claims
+      const isCod = resolvedOrder.paymentMethod === 'COD' || resolvedOrder.payment?.method === 'COD';
+      const isPaid = resolvedOrder.paymentStatus === 'PAID' || resolvedOrder.payment?.status === 'PAID' || resolvedOrder.payment?.status === 'COMPLETED';
+      const paymentLabel = isCod ? 'COD' : (isPaid ? 'Paid' : 'Payment Pending');
+      const grandTotal = resolvedOrder.grandTotal || resolvedOrder.pricing?.finalPayable || 0;
+
+      // 1. Resolve active ADMIN and KITCHEN users
+      const staffUsers = await User.find({
+        role: { $in: ['ADMIN', 'KITCHEN'] },
+        isActive: true,
+      }).select('_id name email role notificationPreferences');
+
+      // 2. Filter by notification preferences (default true for eligible staff)
+      const eligibleUsers = staffUsers.filter((u) => {
+        const prefs = u.notificationPreferences;
+        if (!prefs) return true;
+        if (prefs.push === false) return false;
+        if (prefs.newOrderPushEnabled === false) return false;
+        return true;
+      });
+
+      if (eligibleUsers.length === 0) {
+        console.log(`[NotificationDispatcher] No eligible active staff users to notify for order ${resolvedOrder.orderNumber}`);
+        return { success: true, count: 0, targetedStaffCount: 0 };
+      }
+
+      // 3. Create in-app notifications for eligible staff users
+      for (const user of eligibleUsers) {
+        const inAppKey = `inapp_staff_${user._id}_${resolvedOrder._id}_${eventType}`;
+        try {
+          await Notification.findOneAndUpdate(
+            { idempotencyKey: inAppKey },
+            {
+              $setOnInsert: {
+                user: user._id,
+                order: resolvedOrder._id,
+                channel: 'IN_APP',
+                eventType,
+                recipient: user._id.toString(),
+                subject: `New Order Received (#${resolvedOrder.orderNumber})`,
+                message: `Order #${resolvedOrder.orderNumber} placed (${paymentLabel}). Total: ₹${grandTotal}.`,
+                status: 'SENT',
+                isRead: false,
+                sentAt: new Date(),
+                metadata: {
+                  orderNumber: resolvedOrder.orderNumber,
+                  grandTotal,
+                  paymentMethod: resolvedOrder.paymentMethod || resolvedOrder.payment?.method || 'COD',
+                  paymentStatus: resolvedOrder.paymentStatus || resolvedOrder.payment?.status || 'PENDING',
+                },
+              },
+            },
+            { upsert: true, returnDocument: 'after' }
+          );
+        } catch (inAppErr) {
+          // ignore duplicate key
+        }
+      }
+
+      // 4. Find all active registered devices for eligible staff users
+      const eligibleUserIds = eligibleUsers.map((u) => u._id);
+      const devices = await DeviceToken.find({
+        user: { $in: eligibleUserIds },
+        isActive: true,
+      });
+
+      if (!devices || devices.length === 0) {
+        console.log(`[NotificationDispatcher] No active device tokens found for ${eligibleUsers.length} staff members.`);
+        return { success: true, inAppCount: eligibleUsers.length, pushCount: 0, targetedStaffCount: eligibleUsers.length };
+      }
+
+      const messaging = getMessaging();
+      const isConfigured = isFirebaseConfigured();
+
+      const pushTitle = 'BentoBabu — New Order Received!';
+      const pushBody = `Order #${resolvedOrder.orderNumber} has been placed (${paymentLabel}). Total: ₹${grandTotal}.`;
+      const pushData = {
+        type: eventType,
+        eventType,
+        orderId: resolvedOrder._id.toString(),
+        orderNumber: resolvedOrder.orderNumber,
+        grandTotal: grandTotal.toString(),
+        paymentMethod: resolvedOrder.paymentMethod || resolvedOrder.payment?.method || 'COD',
+        paymentStatus: resolvedOrder.paymentStatus || resolvedOrder.payment?.status || 'PENDING',
+        clickAction: '/orders',
+      };
+
+      let successCount = 0;
+      let failureCount = 0;
+      let skippedCount = 0;
+
+      for (const device of devices) {
+        const pushIdempotencyKey = `push_${device._id}_${resolvedOrder._id}_${eventType}`;
+
+        let notifRecord = null;
+        try {
+          notifRecord = await Notification.findOne({ idempotencyKey: pushIdempotencyKey });
+          if (notifRecord && (notifRecord.status === 'SENT' || notifRecord.status === 'PROCESSING')) {
+            // Already dispatched / delivered to this device
+            skippedCount++;
+            continue;
+          }
+
+          if (!notifRecord) {
+            notifRecord = await Notification.create({
+              user: device.user,
+              order: resolvedOrder._id,
+              channel: 'PUSH',
+              eventType,
+              recipient: device.token.length > 20 ? `${device.token.substring(0, 10)}...` : device.token,
+              subject: pushTitle,
+              message: pushBody,
+              status: 'PROCESSING',
+              idempotencyKey: pushIdempotencyKey,
+              attempts: 0,
+              maxAttempts: 3,
+              metadata: pushData,
+            });
+          }
+        } catch (dbErr) {
+          if (dbErr.code === 11000) {
+            skippedCount++;
+            continue;
+          }
+          console.error('[NotificationDispatcher] DB error on push notification creation:', dbErr.message);
+        }
+
+        if (!isConfigured || !messaging) {
+          // Dry-run mode for local development/testing without live Firebase credentials
+          console.log(`[NotificationDispatcher:DryRun] Simulated push for order #${resolvedOrder.orderNumber} to device ${device._id}`);
+          if (notifRecord) {
+            notifRecord.status = 'SENT';
+            notifRecord.sentAt = new Date();
+            notifRecord.providerMessageId = 'dry-run-simulated-msg-id';
+            await notifRecord.save();
+          }
+          successCount++;
+          continue;
+        }
+
+        try {
+          const response = await messaging.send({
+            token: device.token,
+            notification: {
+              title: pushTitle,
+              body: pushBody,
+            },
+            data: pushData,
+            webpush: {
+              fcmOptions: {
+                link: '/orders',
+              },
+              notification: {
+                icon: '/bentobabu_logo.png',
+                badge: '/bentobabu_logo.png',
+              },
+            },
+          });
+
+          device.lastSeenAt = new Date();
+          await device.save();
+
+          if (notifRecord) {
+            notifRecord.status = 'SENT';
+            notifRecord.sentAt = new Date();
+            notifRecord.providerMessageId = response;
+            await notifRecord.save();
+          }
+          successCount++;
+        } catch (fcmErr) {
+          failureCount++;
+          const errCode = fcmErr.code || '';
+          console.error(`[NotificationDispatcher] FCM send failure to device ${device._id}:`, fcmErr.message);
+
+          // Permanent error handling: Deactivate dead/unregistered tokens
+          if (
+            errCode === 'messaging/registration-token-not-registered' ||
+            errCode === 'messaging/invalid-registration-token'
+          ) {
+            device.isActive = false;
+            device.deactivationReason = 'UNREGISTERED';
+            await device.save();
+            console.log(`[NotificationDispatcher] Deactivated invalid device token: ${device._id}`);
+          }
+
+          if (notifRecord) {
+            notifRecord.status = 'FAILED';
+            notifRecord.lastError = fcmErr.message?.substring(0, 500) || 'FCM send failed';
+            notifRecord.attempts = (notifRecord.attempts || 0) + 1;
+            await notifRecord.save();
+          }
+        }
+      }
+
+      console.log(`[NotificationDispatcher] Staff push dispatch complete for order #${resolvedOrder.orderNumber}: ${successCount} sent, ${failureCount} failed out of ${devices.length} devices.`);
+
+      return {
+        success: true,
+        devicesCount: devices.length,
+        targetedStaffCount: eligibleUsers.length,
+        successCount,
+        failureCount,
+        skippedCount,
+        alreadyProcessed: skippedCount === devices.length && devices.length > 0,
+      };
+    } catch (err) {
+      console.error('[NotificationDispatcher] Unexpected error in dispatchStaffOrderPush:', err.message);
+      return { success: false, error: err.message };
     }
   }
 }
