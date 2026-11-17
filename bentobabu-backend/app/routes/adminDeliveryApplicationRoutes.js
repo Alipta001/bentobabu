@@ -12,6 +12,9 @@ router.get('/', AdminDeliveryApplicationController.listApplications);
 // Get single application
 router.get('/:id', AdminDeliveryApplicationController.getApplicationById);
 
+// Get short-lived signed URL for KYC document
+router.get('/:id/documents/:documentKey', AdminDeliveryApplicationController.getDocumentSignedUrl);
+
 // Approve application
 router.post('/:id/approve', AdminDeliveryApplicationController.approveApplication);
 

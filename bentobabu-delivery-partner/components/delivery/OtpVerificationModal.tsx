@@ -5,6 +5,7 @@ import { X, ShieldCheck, AlertCircle, CheckCircle, Lock } from "lucide-react";
 import { Order } from "@/types";
 import { OtpInput } from "./OtpInput";
 import { useVerifyDeliveryOtp } from "@/hooks/useDeliveryQueries";
+import { deliveryApi } from "@/lib/api/delivery.api";
 import { toast } from "sonner";
 
 interface OtpVerificationModalProps {
@@ -44,6 +45,14 @@ export function OtpVerificationModal({
         otp: otp.trim(),
         note: "Delivery verified via partner app with customer OTP",
       });
+
+      if (isCod) {
+        try {
+          await deliveryApi.collectCash(orderId, "Cash collected by partner upon OTP delivery");
+        } catch (cashErr: any) {
+          console.warn("[CashCollection] Note:", cashErr?.response?.data?.message || cashErr?.message);
+        }
+      }
 
       toast.success("Delivery verified and completed successfully!");
       setOtp("");

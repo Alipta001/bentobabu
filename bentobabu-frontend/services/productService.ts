@@ -89,6 +89,10 @@ export const productService = {
         params.category = filters.categoryId || filters.category;
       }
 
+      if (filters?.date) {
+        params.date = filters.date;
+      }
+
       if (filters?.dietary && filters.dietary.length > 0) {
         const dietaryMap: Record<string, string> = {
           vegetarian: "VEG",
@@ -125,7 +129,7 @@ export const productService = {
       }
 
       if (filters?.page) params.page = filters.page;
-      if (filters?.limit) params.limit = filters.limit;
+      params.limit = filters?.limit || 50;
 
       const response = await apiClient.get<
         ApiResponse<{ products: any[]; pagination?: any }> | { products: any[] } | any[]

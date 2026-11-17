@@ -314,6 +314,30 @@ const getEmailTemplate = (eventType, data = {}) => {
         </p>`;
       break;
 
+    case 'ORDER_REASSIGNED':
+      title = 'Delivery Partner Updated';
+      preheader = `A new delivery partner has been assigned to order #${orderNumber}.`;
+      content = `
+        <p style="font-size: 15px; color: #4b5563; margin: 0 0 12px 0;">
+          A new delivery partner has been assigned to your order <strong>#${orderNumber}</strong>.
+        </p>
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          Your order is on its way. You can track your updated delivery status in the BentoBabu app.
+        </p>`;
+      break;
+
+    case 'DELIVERY_ASSIGNMENT':
+      title = 'New Delivery Assignment';
+      preheader = `You have been assigned order #${orderNumber}.`;
+      content = `
+        <p style="font-size: 15px; color: #4b5563; margin: 0 0 12px 0;">
+          You have been assigned order <strong>#${orderNumber}</strong>.
+        </p>
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          Please open your delivery partner dashboard to review order details and proceed with the delivery.
+        </p>`;
+      break;
+
     default:
       title = 'BentoBabu Order Update';
       content = `<p style="font-size: 15px; color: #374151;">There is an update on your order #${orderNumber}.</p>`;

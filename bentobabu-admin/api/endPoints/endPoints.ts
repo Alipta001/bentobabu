@@ -79,6 +79,14 @@ export const ADMIN_API_ENDPOINTS = {
     GET: "/admin/settings",
     UPDATE: "/admin/settings",
   },
+  MENU: {
+    DAILY: "/menu/daily",
+    SAVE_DAILY: "/menu/daily",
+    CONTINUE_YESTERDAY: "/menu/daily/continue-yesterday",
+    WEEKLY: "/menu/weekly",
+    SAVE_WEEKLY: "/menu/weekly",
+    APPLY_WEEK_ALL: "/menu/weekly/apply-all",
+  },
   NOTIFICATIONS: {
     LIST: "/admin/notifications",
     STATS: "/admin/notifications/stats",

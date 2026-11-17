@@ -9,9 +9,11 @@ const {
   Coupon,
   CouponUsage,
   SystemSetting,
+  DailyMenu,
 } = require('../models');
 const NotificationDispatcher = require('../utils/notificationDispatcher');
 const { redisDelPattern } = require('../config/redis');
+const { getKolkataDateString } = require('../utils/businessDate');
 
 /**
  * Class-based Controller for Checkout & Order Processing
@@ -109,12 +111,21 @@ class OrderController {
         });
       }
 
-      // 5. Fetch Live Product Records & Validate Stock
+      // 5. Fetch Live Product Records & Validate Stock and Daily Menu Availability
+      const todayStr = getKolkataDateString();
+      const dailyMenu = await DailyMenu.findOne({ date: todayStr, isPublished: true }).lean();
+      const dailyMap = new Map();
+      if (dailyMenu && Array.isArray(dailyMenu.items)) {
+        dailyMenu.items.forEach((it) => {
+          const idStr = it.product?._id ? it.product._id.toString() : it.product?.toString();
+          if (idStr) dailyMap.set(idStr, Boolean(it.isAvailable));
+        });
+      }
+
       const productIds = cart.items.map((i) => i.product);
       const products = await Product.find({
         _id: { $in: productIds },
         isActive: true,
-        isAvailable: true,
       });
 
       const productMap = new Map();
@@ -128,7 +139,18 @@ class OrderController {
         if (!prod) {
           return res.status(400).json({
             success: false,
-            message: `One or more products in your cart are no longer available`,
+            message: `One or more products in your cart are no longer active`,
+          });
+        }
+
+        const isAvailableToday = dailyMap.has(prod._id.toString())
+          ? dailyMap.get(prod._id.toString())
+          : prod.isAvailable;
+
+        if (!isAvailableToday) {
+          return res.status(400).json({
+            success: false,
+            message: `"${prod.name}" is not available on today's menu`,
           });
         }
 
@@ -178,8 +200,26 @@ class OrderController {
         }
       }
 
-      // 6. Delivery Fee calculation
-      const deliveryChargePaise = Math.round(zone.deliveryCharge * 100);
+      // 6. Admin-controlled Delivery Fee calculation
+      const [chargeEnabledSetting, chargeAmountSetting] = await Promise.all([
+        SystemSetting.findOne({ key: 'DELIVERY_CHARGE_ENABLED' }).lean(),
+        SystemSetting.findOne({ key: 'DELIVERY_CHARGE_AMOUNT' }).lean(),
+      ]);
+
+      let adminDeliveryCharge = 0;
+      const isChargeEnabled = chargeEnabledSetting ? chargeEnabledSetting.value !== false : true;
+
+      if (isChargeEnabled) {
+        if (typeof zone.deliveryCharge === 'number' && zone.deliveryCharge >= 0) {
+          adminDeliveryCharge = zone.deliveryCharge;
+        } else if (chargeAmountSetting && typeof chargeAmountSetting.value === 'number') {
+          adminDeliveryCharge = chargeAmountSetting.value;
+        } else {
+          adminDeliveryCharge = 30;
+        }
+      }
+
+      const deliveryChargePaise = Math.round(adminDeliveryCharge * 100);
 
       // 7. Validate Coupon (if provided)
       let couponDiscountPaise = 0;
@@ -469,6 +509,35 @@ class OrderController {
       }
 
       // 5. Atomically reserve product stock and build immutable snapshots
+      const todayStr = getKolkataDateString();
+      const dailyMenu = await DailyMenu.findOne({ date: todayStr, isPublished: true }).lean();
+      const dailyMap = new Map();
+      if (dailyMenu && Array.isArray(dailyMenu.items)) {
+        dailyMenu.items.forEach((it) => {
+          const idStr = it.product?._id ? it.product._id.toString() : it.product?.toString();
+          if (idStr) dailyMap.set(idStr, Boolean(it.isAvailable));
+        });
+      }
+
+      // Verify daily availability for all products in cart
+      const cartProductIds = cart.items.map((i) => i.product);
+      const cartProducts = await Product.find({ _id: { $in: cartProductIds }, isActive: true }).lean();
+      const cartProductMap = new Map();
+      cartProducts.forEach((p) => cartProductMap.set(p._id.toString(), p));
+
+      for (const item of cart.items) {
+        const prod = cartProductMap.get(item.product.toString());
+        if (!prod) {
+          throw new Error('One or more products in your cart are no longer active');
+        }
+        const isAvailableToday = dailyMap.has(prod._id.toString())
+          ? dailyMap.get(prod._id.toString())
+          : prod.isAvailable;
+        if (!isAvailableToday) {
+          throw new Error(`"${prod.name}" is not available on today's menu`);
+        }
+      }
+
       let itemTotalPaise = 0;
       const itemSnapshots = [];
 
@@ -481,7 +550,6 @@ class OrderController {
           {
             _id: item.product,
             stockQuantity: { $gte: item.quantity },
-            isAvailable: true,
             isActive: true,
           },
           { $inc: { stockQuantity: -item.quantity } },
@@ -489,7 +557,7 @@ class OrderController {
         );
 
         if (!product) {
-          throw new Error(`Insufficient stock or product unavailable for item in cart`);
+          throw new Error(`Insufficient stock or product inactive for item in cart`);
         }
 
         reservedStockItems.push({
@@ -532,7 +600,26 @@ class OrderController {
         }
       }
 
-      const deliveryChargePaise = Math.round(zone.deliveryCharge * 100);
+      // Admin-controlled Delivery Fee calculation
+      const [chargeEnabledSetting, chargeAmountSetting] = await Promise.all([
+        SystemSetting.findOne({ key: 'DELIVERY_CHARGE_ENABLED' }).lean(),
+        SystemSetting.findOne({ key: 'DELIVERY_CHARGE_AMOUNT' }).lean(),
+      ]);
+
+      let adminDeliveryCharge = 0;
+      const isChargeEnabled = chargeEnabledSetting ? chargeEnabledSetting.value !== false : true;
+
+      if (isChargeEnabled) {
+        if (typeof zone.deliveryCharge === 'number' && zone.deliveryCharge >= 0) {
+          adminDeliveryCharge = zone.deliveryCharge;
+        } else if (chargeAmountSetting && typeof chargeAmountSetting.value === 'number') {
+          adminDeliveryCharge = chargeAmountSetting.value;
+        } else {
+          adminDeliveryCharge = 30;
+        }
+      }
+
+      const deliveryChargePaise = Math.round(adminDeliveryCharge * 100);
 
       // 6. Atomically reserve coupon usage (if provided)
       let couponDiscountPaise = 0;

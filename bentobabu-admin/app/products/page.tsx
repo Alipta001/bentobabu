@@ -18,6 +18,7 @@ import {
   useUpdateProduct,
   useDeleteProduct,
   useToggleProductAvailability,
+  useToggleProductStatus,
 } from "@/hooks/useAdminQueries";
 import { Product, DietaryType } from "@/types";
 import { MediaImageUpload } from "@/components/media/MediaImageUpload";
@@ -71,6 +72,7 @@ function ProductsContent() {
   const updateProductMutation = useUpdateProduct();
   const deleteProductMutation = useDeleteProduct();
   const toggleAvailabilityMutation = useToggleProductAvailability();
+  const toggleStatusMutation = useToggleProductStatus();
 
   const handleOpenCreate = () => {
     setEditingProduct(null);
@@ -220,7 +222,8 @@ function ProductsContent() {
                   <th className="py-3.5 px-4 font-bold">Price / Cost</th>
                   <th className="py-3.5 px-4 font-bold">Stock</th>
                   <th className="py-3.5 px-4 font-bold">Macros (P/C/F)</th>
-                  <th className="py-3.5 px-4 font-bold">Available</th>
+                  <th className="py-3.5 px-4 font-bold">Availability</th>
+                  <th className="py-3.5 px-4 font-bold">Status</th>
                   <th className="py-3.5 px-6 font-bold text-right">Actions</th>
                 </tr>
               </thead>
@@ -289,14 +292,39 @@ function ProductsContent() {
 
                     <td className="py-3.5 px-4">
                       <button
-                        onClick={() => toggleAvailabilityMutation.mutate(p.id)}
+                        onClick={() =>
+                          toggleAvailabilityMutation.mutate({
+                            id: p.id,
+                            isAvailable: !p.isAvailable,
+                          })
+                        }
                         className={`px-3 py-1 rounded-full text-[11px] font-bold cursor-pointer transition-colors ${
                           p.isAvailable
                             ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
-                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            : "bg-amber-100 text-amber-900 hover:bg-amber-200"
                         }`}
+                        title="Toggle customer ordering availability"
                       >
-                        {p.isAvailable ? "Orderable" : "Paused"}
+                        {p.isAvailable ? "Available" : "Unavailable"}
+                      </button>
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <button
+                        onClick={() =>
+                          toggleStatusMutation.mutate({
+                            id: p.id,
+                            isActive: p.isActive === false ? true : false,
+                          })
+                        }
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold cursor-pointer transition-colors ${
+                          p.isActive !== false
+                            ? "bg-teal-50 text-teal-800 border border-teal-200 hover:bg-teal-100"
+                            : "bg-gray-100 text-gray-500 border border-gray-300 hover:bg-gray-200"
+                        }`}
+                        title="Activate or Deactivate product in master catalog without deleting"
+                      >
+                        {p.isActive !== false ? "Active" : "Inactive"}
                       </button>
                     </td>
 

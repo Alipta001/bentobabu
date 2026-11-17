@@ -85,11 +85,35 @@ const deliveryAddressSnapshotSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const cashCollectionRecordSchema = new mongoose.Schema(
+  {
+    orderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: true },
+    partnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    amount: { type: Number, required: true },
+    method: { type: String, default: 'CASH' },
+    collectedAt: { type: Date, default: Date.now },
+    status: {
+      type: String,
+      enum: ['COLLECTED_BY_RIDER', 'DEPOSITED'],
+      default: 'COLLECTED_BY_RIDER',
+    },
+    note: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
 const paymentDetailsSchema = new mongoose.Schema(
   {
     razorpayOrderId: { type: String, default: null },
     razorpayPaymentId: { type: String, default: null },
     razorpaySignature: { type: String, default: null },
+    collectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    collectedAt: { type: Date, default: null },
+    method: { type: String, default: null },
+    cashCollection: {
+      type: cashCollectionRecordSchema,
+      default: null,
+    },
   },
   { _id: false }
 );
@@ -178,7 +202,7 @@ const orderSchema = new mongoose.Schema(
     paymentStatus: {
       type: String,
       enum: {
-        values: ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'COD_PENDING'],
+        values: ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'COD_PENDING', 'COLLECTED_BY_RIDER'],
         message: '{VALUE} is not a valid payment status',
       },
       default: 'PENDING',
@@ -236,6 +260,11 @@ const orderSchema = new mongoose.Schema(
       default: 0,
       select: false,
     },
+    deliveryOtpExpiresAt: {
+      type: Date,
+      select: false,
+      default: null,
+    },
     cancellationReason: {
       type: String,
       default: null,
@@ -252,6 +281,7 @@ const orderSchema = new mongoose.Schema(
         delete ret.deliveryOTP;
         delete ret.deliveryOtpCode;
         delete ret.failedOtpAttempts;
+        delete ret.deliveryOtpExpiresAt;
         return ret;
       },
     },

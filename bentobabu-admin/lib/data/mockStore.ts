@@ -602,5 +602,7 @@ export const INITIAL_SETTINGS: BusinessSettings = {
   operatingHours: "7:00 AM – 10:30 PM (Daily)",
   gstRatePercentage: 5,
   freeDeliveryThreshold: 499,
+  deliveryChargeEnabled: true,
+  deliveryChargeAmount: 30,
   isOrderingEnabled: true,
 };

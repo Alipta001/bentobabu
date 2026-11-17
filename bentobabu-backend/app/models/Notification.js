@@ -43,6 +43,8 @@ const notificationSchema = new mongoose.Schema(
           'DELIVERY_APPLICATION_REJECTED',
           'DELIVERY_APPLICATION_CORRECTIONS_REQUESTED',
           'DELIVERY_APPLICATION_SUSPENDED',
+          'ORDER_REASSIGNED',
+          'DELIVERY_ASSIGNMENT',
         ],
         message: '{VALUE} is not a valid notification event type',
       },

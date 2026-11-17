@@ -5,7 +5,10 @@ const { sendWhatsApp, WHATSAPP_TEMPLATE_MAP } = require('./whatsapp');
 /**
  * Human-readable in-app notification messages by event type
  */
-const getInAppMessage = (eventType, { orderNumber = '', grandTotal = 0, reason = '' }) => {
+const getInAppMessage = (
+  eventType,
+  { orderNumber = '', grandTotal = 0, reason = '', partnerName = '', isOutForDelivery = false } = {}
+) => {
   switch (eventType) {
     case 'ORDER_PLACED':
       return {
@@ -77,6 +80,16 @@ const getInAppMessage = (eventType, { orderNumber = '', grandTotal = 0, reason =
         subject: `Corrections Requested for Application (#${orderNumber})`,
         message: `Please review your application #${orderNumber}: ${reason || 'Additional information or clearer documents are requested.'}`,
       };
+    case 'ORDER_REASSIGNED':
+      return {
+        subject: `Delivery Partner Updated (#${orderNumber})`,
+        message: `A new delivery partner (${partnerName || 'our fleet rider'}) has been assigned to your order #${orderNumber}.${isOutForDelivery ? ' A fresh delivery OTP has been issued for your security.' : ''}`,
+      };
+    case 'DELIVERY_ASSIGNMENT':
+      return {
+        subject: `New Delivery Assignment (#${orderNumber})`,
+        message: `You have been assigned order #${orderNumber}. Please open your partner dashboard to view details and proceed.`,
+      };
     default:
       return {
         subject: `Order Update (#${orderNumber})`,
@@ -144,13 +157,15 @@ class NotificationDispatcher {
         items,
         deliveryAddress,
         reason,
+        partnerName: metadata.partnerName || '',
+        isOutForDelivery: metadata.isOutForDelivery || false,
       };
 
       const createdNotifications = [];
 
       // 1. ================= IN_APP NOTIFICATION =================
       if (preferences.inApp !== false) {
-        const inAppIdempotencyKey = `inapp_${orderRef || user._id}_${eventType}`;
+        const inAppIdempotencyKey = `inapp_${orderRef || user._id}_${eventType}${metadata.idempotencySuffix || ''}`;
         const { subject, message } = getInAppMessage(eventType, templateData);
 
         try {
@@ -181,7 +196,7 @@ class NotificationDispatcher {
 
       // 2. ================= EMAIL NOTIFICATION =================
       if (preferences.email !== false && user.email) {
-        const emailIdempotencyKey = `email_${orderRef || user._id}_${eventType}`;
+        const emailIdempotencyKey = `email_${orderRef || user._id}_${eventType}${metadata.idempotencySuffix || ''}`;
         const { subject, html, text } = getEmailTemplate(eventType, templateData);
 
         let emailRecord = null;

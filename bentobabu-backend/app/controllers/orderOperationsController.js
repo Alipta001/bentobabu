@@ -282,6 +282,12 @@ class OrderOperationsController {
           order.assignedDeliveryPartner &&
           order.assignedDeliveryPartner.toString() !== req.user.id
         ) {
+          if (normalizedStatus === 'OUT_FOR_DELIVERY') {
+            return res.status(409).json({
+              success: false,
+              message: 'This order has already been assigned to another delivery partner.',
+            });
+          }
           return res.status(403).json({
             success: false,
             message: 'This order is assigned to another delivery partner',
@@ -291,87 +297,224 @@ class OrderOperationsController {
 
       const current = order.orderStatus;
 
-      // 1. Transition: READY_FOR_PICKUP -> OUT_FOR_DELIVERY
+      // 1. Transition: READY_FOR_PICKUP -> OUT_FOR_DELIVERY (ATOMIC CLAIM)
       if (normalizedStatus === 'OUT_FOR_DELIVERY') {
-        if (current !== 'READY_FOR_PICKUP') {
-          return res.status(400).json({
-            success: false,
-            message: `Cannot transition order to OUT_FOR_DELIVERY from "${current}". Order must be in READY_FOR_PICKUP status.`,
-          });
-        }
+        const { DeliveryPartnerPresence, User } = require('../models');
 
-        // Delivery partner role constraints & suspension check
+        // If DELIVERY role: verify partner eligibility
         if (req.user.role === 'DELIVERY') {
-          const { DeliveryPartnerPresence } = require('../models');
+          // Check User account status
+          const user = await User.findById(req.user.id).lean();
+          if (!user || !user.isActive || user.role !== 'DELIVERY') {
+            return res.status(403).json({
+              success: false,
+              message: 'Only active and approved delivery partners can accept delivery assignments.',
+            });
+          }
+
+          // Check DeliveryPartnerPresence
           const presence = await DeliveryPartnerPresence.findOne({ user: req.user.id });
-          if (presence && presence.accountStatus !== 'ACTIVE') {
+          if (!presence || presence.accountStatus !== 'ACTIVE') {
             return res.status(403).json({
               success: false,
               message: 'Suspended delivery partners cannot accept delivery assignments.',
             });
           }
-        }
 
-        // Assign delivery partner
-        order.assignedDeliveryPartner = req.user.id;
+          if (presence.availabilityStatus !== 'ONLINE') {
+            return res.status(400).json({
+              success: false,
+              message: 'Delivery partner must be ONLINE and available to accept delivery assignments.',
+            });
+          }
 
-        // Generate 6-digit Delivery OTP and hash it securely
-        const plainOtp = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpHash = crypto.createHash('sha256').update(plainOtp).digest('hex');
+          // Check if partner already has another active in-progress order
+          const existingActiveOrder = await Order.findOne({
+            assignedDeliveryPartner: req.user.id,
+            orderStatus: 'OUT_FOR_DELIVERY',
+          }).select('_id orderNumber');
 
-        order.deliveryOTP = otpHash;
-        order.deliveryOtpCode = plainOtp;
-        order.orderStatus = 'OUT_FOR_DELIVERY';
-
-        order.statusHistory.push({
-          status: 'OUT_FOR_DELIVERY',
-          changedBy: req.user.id,
-          changedAt: new Date(),
-          note: note || 'Order picked up and is out for delivery',
-        });
-
-        await order.save();
-        await redisDelPattern('cache:admin:dashboard:*');
-
-        // Recalculate partner availability according to explicit preference
-        if (req.user.role === 'DELIVERY') {
-          const { DeliveryPartnerPresence } = require('../models');
-          const presence = await DeliveryPartnerPresence.findOne({ user: req.user.id });
-          if (presence) {
-            presence.currentOrderId = null;
-            presence.availabilityStatus =
-              presence.intendedAvailability === 'ONLINE' && presence.accountStatus === 'ACTIVE'
-                ? 'ONLINE'
-                : 'OFFLINE';
-            presence.lastHeartbeat = new Date();
-            await presence.save().catch((e) => console.warn('[Presence] Update DELIVERED error:', e.message));
+          if (
+            existingActiveOrder ||
+            (presence.currentOrderId && presence.currentOrderId.toString() !== id)
+          ) {
+            return res.status(400).json({
+              success: false,
+              message:
+                'You already have an active order in progress. Complete your current delivery before accepting another.',
+            });
           }
         }
 
-        // Update partner presence to BUSY with active order
-        if (req.user.role === 'DELIVERY') {
-          const { DeliveryPartnerPresence } = require('../models');
-          await DeliveryPartnerPresence.findOneAndUpdate(
-            { user: req.user.id },
-            {
-              $set: {
-                availabilityStatus: 'BUSY',
-                currentOrderId: order._id,
-                lastHeartbeat: new Date(),
-              },
-            },
-            { upsert: true }
-          ).catch((e) => console.warn('[Presence] Update BUSY error:', e.message));
+        // Check current order state before proceeding
+        const existingOrder = await Order.findById(id).select('+deliveryOTP +deliveryOtpCode');
+        if (!existingOrder) {
+          return res.status(404).json({
+            success: false,
+            message: 'Order not found',
+          });
         }
 
+        if (
+          existingOrder.assignedDeliveryPartner &&
+          existingOrder.assignedDeliveryPartner.toString() !== req.user.id
+        ) {
+          return res.status(409).json({
+            success: false,
+            message: 'This order has already been assigned to another delivery partner.',
+          });
+        }
+
+        if (existingOrder.orderStatus !== 'READY_FOR_PICKUP') {
+          return res.status(400).json({
+            success: false,
+            message: `Cannot transition order to OUT_FOR_DELIVERY from "${existingOrder.orderStatus}". Order must be in READY_FOR_PICKUP status.`,
+          });
+        }
+
+        // Generate cryptographically secure 6-digit Delivery OTP and hash it securely
+        const plainOtp = crypto.randomInt(100000, 1000000).toString();
+        const otpHash = crypto.createHash('sha256').update(plainOtp).digest('hex');
+        const otpExpiryMinutes = parseInt(process.env.DELIVERY_OTP_EXPIRY_MINUTES, 10) || 60;
+        const otpExpiresAt = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
+
+        // Execute atomic assignment inside MongoDB transaction (with fallback for standalone DBs)
+        const session = await mongoose.startSession();
+        let updatedOrder = null;
+
+        try {
+          const executeAssignment = async (sess) => {
+            // Task 1: Atomically lock delivery partner presence first to prevent multi-order claim race
+            let lockedPresence = null;
+            if (req.user.role === 'DELIVERY') {
+              const presenceOptions = { returnDocument: 'after' };
+              if (sess) presenceOptions.session = sess;
+
+              lockedPresence = await DeliveryPartnerPresence.findOneAndUpdate(
+                {
+                  user: req.user.id,
+                  accountStatus: 'ACTIVE',
+                  availabilityStatus: 'ONLINE',
+                  currentOrderId: null,
+                },
+                {
+                  $set: {
+                    availabilityStatus: 'BUSY',
+                    currentOrderId: id,
+                    lastHeartbeat: new Date(),
+                  },
+                },
+                presenceOptions
+              );
+
+              if (!lockedPresence) {
+                const err = new Error(
+                  'You are not available to accept an order, or already have an active order in progress.'
+                );
+                err.statusCode = 409;
+                throw err;
+              }
+            }
+
+            const findQuery = {
+              _id: id,
+              orderStatus: 'READY_FOR_PICKUP',
+              assignedDeliveryPartner: null,
+            };
+
+            const updateOps = {
+              $set: {
+                assignedDeliveryPartner: req.user.id,
+                orderStatus: 'OUT_FOR_DELIVERY',
+                deliveryOTP: otpHash,
+                deliveryOtpCode: plainOtp,
+                deliveryOtpExpiresAt: otpExpiresAt,
+                failedOtpAttempts: 0,
+              },
+              $push: {
+                statusHistory: {
+                  status: 'OUT_FOR_DELIVERY',
+                  changedBy: req.user.id,
+                  changedAt: new Date(),
+                  note: note || 'Order claimed and is out for delivery',
+                },
+              },
+            };
+
+            const orderOptions = { returnDocument: 'after' };
+            if (sess) orderOptions.session = sess;
+
+            updatedOrder = await Order.findOneAndUpdate(findQuery, updateOps, orderOptions);
+
+            if (!updatedOrder) {
+              // Rollback presence lock if running without session (standalone DB fallback)
+              if (!sess && lockedPresence) {
+                await DeliveryPartnerPresence.findOneAndUpdate(
+                  { user: req.user.id, currentOrderId: id },
+                  { $set: { availabilityStatus: 'ONLINE', currentOrderId: null } }
+                );
+              }
+
+              const checkOrder = sess
+                ? await Order.findById(id).session(sess)
+                : await Order.findById(id);
+
+              if (checkOrder && checkOrder.assignedDeliveryPartner) {
+                const err = new Error('This order has already been assigned to another delivery partner.');
+                err.statusCode = 409;
+                throw err;
+              }
+              const err = new Error('Order is no longer available for pickup.');
+              err.statusCode = 400;
+              throw err;
+            }
+          };
+
+          // Try transaction if supported by MongoDB deployment
+          try {
+            await session.withTransaction(async () => {
+              await executeAssignment(session);
+            });
+          } catch (txErr) {
+            if (
+              txErr.message &&
+              (txErr.message.includes('Transaction numbers are only allowed') ||
+                txErr.message.includes('replica set member'))
+            ) {
+              // Standalone MongoDB fallback
+              await executeAssignment(null);
+            } else {
+              throw txErr;
+            }
+          }
+        } catch (assignErr) {
+          if (assignErr.statusCode === 409) {
+            return res.status(409).json({
+              success: false,
+              message: assignErr.message,
+            });
+          }
+          if (assignErr.statusCode === 400) {
+            return res.status(400).json({
+              success: false,
+              message: assignErr.message,
+            });
+          }
+          throw assignErr;
+        } finally {
+          await session.endSession();
+        }
+
+        await redisDelPattern('cache:admin:dashboard:*');
+
         NotificationDispatcher.dispatch({
-          userId: order.user,
-          orderId: order._id,
-          order,
+          userId: updatedOrder.user,
+          orderId: updatedOrder._id,
+          order: updatedOrder,
           eventType: 'OUT_FOR_DELIVERY',
         }).catch((e) => console.error('[Notification] OUT_FOR_DELIVERY dispatch error:', e.message));
 
-        const responseOrder = order.toJSON();
+        const responseOrder = updatedOrder.toJSON();
         return res.status(200).json({
           success: true,
           message: 'Order is out for delivery and delivery OTP has been generated',
@@ -381,15 +524,36 @@ class OrderOperationsController {
 
       // 2. Transition: OUT_FOR_DELIVERY -> DELIVERED
       if (normalizedStatus === 'DELIVERED') {
-        if (current !== 'OUT_FOR_DELIVERY') {
+        const order = await Order.findById(id).select('+deliveryOTP +deliveryOtpCode +failedOtpAttempts +deliveryOtpExpiresAt');
+        if (!order) {
+          return res.status(404).json({
+            success: false,
+            message: 'Order not found',
+          });
+        }
+
+        // Ownership check
+        if (req.user.role === 'DELIVERY') {
+          if (
+            !order.assignedDeliveryPartner ||
+            order.assignedDeliveryPartner.toString() !== req.user.id
+          ) {
+            return res.status(403).json({
+              success: false,
+              message: 'This order is assigned to another delivery partner',
+            });
+          }
+        }
+
+        if (order.orderStatus !== 'OUT_FOR_DELIVERY') {
           return res.status(400).json({
             success: false,
-            message: `Cannot mark order as DELIVERED from "${current}". Order must be OUT_FOR_DELIVERY.`,
+            message: `Cannot mark order as DELIVERED from "${order.orderStatus}". Order must be OUT_FOR_DELIVERY.`,
           });
         }
 
         // Verify Delivery OTP
-        if (!otp || typeof otp !== 'string' && typeof otp !== 'number') {
+        if (!otp || (typeof otp !== 'string' && typeof otp !== 'number')) {
           return res.status(400).json({
             success: false,
             message: 'Delivery OTP is required to complete delivery',
@@ -408,6 +572,14 @@ class OrderOperationsController {
             success: false,
             message:
               'Maximum delivery OTP verification attempts exceeded (5/5). Order delivery verification locked. Contact support.',
+          });
+        }
+
+        // Verify OTP Expiry
+        if (order.deliveryOtpExpiresAt && new Date() > new Date(order.deliveryOtpExpiresAt)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Delivery OTP has expired. Contact support or admin to refresh verification.',
           });
         }
 
@@ -430,12 +602,14 @@ class OrderOperationsController {
         order.orderStatus = 'DELIVERED';
         order.deliveryOTP = null;
         order.deliveryOtpCode = null;
+        order.deliveryOtpExpiresAt = null;
         order.failedOtpAttempts = 0;
 
-        // If Cash on Delivery, mark as PAID upon physical delivery
-        if (order.paymentMethod === 'COD') {
-          order.paymentStatus = 'PAID';
-        }
+        // NOTE: Delivery OTP confirms physical delivery ONLY.
+        // For COD orders, paymentStatus is NOT marked as PAID automatically.
+        // It remains in its existing state (e.g. 'COD_PENDING' or 'COLLECTED_BY_RIDER')
+        // until cash collection is explicitly recorded.
+        // For prepaid orders (RAZORPAY), paymentStatus was already 'PAID' and remains 'PAID'.
 
         order.statusHistory.push({
           status: 'DELIVERED',
@@ -480,6 +654,165 @@ class OrderOperationsController {
       return res.status(400).json({
         success: false,
         message: `Invalid delivery status: ${normalizedStatus}`,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELIVERY / ADMIN: Record cash collection for COD orders
+   * POST /api/v1/operations/delivery/orders/:id/collect-cash
+   */
+  static async collectCash(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { note } = req.body || {};
+
+      if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid order ID format',
+        });
+      }
+
+      const order = await Order.findById(id);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found',
+        });
+      }
+
+      // Authorization: Only the assigned delivery partner (or ADMIN) may confirm collection
+      if (req.user.role === 'DELIVERY') {
+        if (
+          !order.assignedDeliveryPartner ||
+          order.assignedDeliveryPartner.toString() !== req.user.id
+        ) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only the assigned delivery partner may confirm cash collection.',
+          });
+        }
+      }
+
+      // COD payment method check
+      if (order.paymentMethod !== 'COD') {
+        return res.status(400).json({
+          success: false,
+          message: `Payment method is ${order.paymentMethod}. Cash collection is only applicable for Cash on Delivery (COD) orders.`,
+        });
+      }
+
+      // Task 5: Order status check: strictly DELIVERED before cash collection can be confirmed
+      if (order.orderStatus !== 'DELIVERED') {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot record cash collection when order is in "${order.orderStatus}" status. Order must be DELIVERED before cash collection can be confirmed.`,
+        });
+      }
+
+      // Idempotency: Prevent duplicate cash collection records
+      if (
+        order.paymentStatus === 'COLLECTED_BY_RIDER' ||
+        order.paymentDetails?.cashCollection?.status === 'COLLECTED_BY_RIDER'
+      ) {
+        return res.status(200).json({
+          success: true,
+          message: 'Cash collection has already been recorded for this order.',
+          data: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            paymentStatus: order.paymentStatus,
+            cashCollection: order.paymentDetails?.cashCollection || null,
+          },
+        });
+      }
+
+      // Amount calculated from persisted order, NEVER from frontend input
+      const collectedAmount = order.grandTotal;
+
+      const cashRecord = {
+        orderId: order._id,
+        partnerId: req.user.id,
+        amount: collectedAmount,
+        method: 'CASH',
+        collectedAt: new Date(),
+        status: 'COLLECTED_BY_RIDER',
+        note: (note || 'Cash payment collected from customer at doorstep').trim(),
+      };
+
+      // Atomic conditional update to prevent concurrent double-collection
+      const findQuery = {
+        _id: id,
+        orderStatus: 'DELIVERED',
+        paymentMethod: 'COD',
+        paymentStatus: { $ne: 'COLLECTED_BY_RIDER' },
+      };
+      if (req.user.role === 'DELIVERY') {
+        findQuery.assignedDeliveryPartner = req.user.id;
+      }
+
+      const updateOps = {
+        $set: {
+          paymentStatus: 'COLLECTED_BY_RIDER',
+          'paymentDetails.collectedBy': req.user.id,
+          'paymentDetails.collectedAt': cashRecord.collectedAt,
+          'paymentDetails.method': 'CASH',
+          'paymentDetails.cashCollection': cashRecord,
+        },
+        $push: {
+          statusHistory: {
+            status: 'CASH_COLLECTED',
+            changedBy: req.user.id,
+            changedAt: new Date(),
+            note: `Cash amount of ₹${collectedAmount} collected by delivery partner`,
+          },
+        },
+      };
+
+      const updatedOrder = await Order.findOneAndUpdate(findQuery, updateOps, {
+        returnDocument: 'after',
+      });
+
+      if (!updatedOrder) {
+        // Check if concurrent request already completed collection
+        const latestOrder = await Order.findById(id);
+        if (
+          latestOrder &&
+          (latestOrder.paymentStatus === 'COLLECTED_BY_RIDER' ||
+            latestOrder.paymentDetails?.cashCollection?.status === 'COLLECTED_BY_RIDER')
+        ) {
+          return res.status(200).json({
+            success: true,
+            message: 'Cash collection has already been recorded for this order.',
+            data: {
+              orderId: latestOrder._id,
+              orderNumber: latestOrder.orderNumber,
+              paymentStatus: latestOrder.paymentStatus,
+              cashCollection: latestOrder.paymentDetails?.cashCollection || null,
+            },
+          });
+        }
+
+        return res.status(400).json({
+          success: false,
+          message: 'Unable to record cash collection. Order state or authorization check failed.',
+        });
+      }
+
+      await redisDelPattern('cache:admin:dashboard:*');
+
+      return res.status(200).json({
+        success: true,
+        message: `Cash collection of ₹${collectedAmount} recorded successfully.`,
+        data: {
+          orderId: updatedOrder._id,
+          orderNumber: updatedOrder.orderNumber,
+          paymentStatus: updatedOrder.paymentStatus,
+          cashCollection: cashRecord,
+        },
       });
     } catch (error) {
       next(error);

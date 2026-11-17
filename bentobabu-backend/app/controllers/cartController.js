@@ -1,7 +1,33 @@
 const mongoose = require('mongoose');
-const { Cart, Product } = require('../models');
+const { Cart, Product, DailyMenu } = require('../models');
+const { getKolkataDateString } = require('../utils/businessDate');
 
 class CartController {
+  /**
+   * Helper to check whether a product is available on today's business date
+   */
+  static async checkProductAvailabilityToday(productId, masterProduct = null) {
+    const todayStr = getKolkataDateString();
+    const dailyMenu = await DailyMenu.findOne({ date: todayStr, isPublished: true }).lean();
+
+    if (dailyMenu && Array.isArray(dailyMenu.items)) {
+      const match = dailyMenu.items.find((it) => {
+        const idStr = it.product?._id ? it.product._id.toString() : it.product?.toString();
+        return idStr === productId.toString();
+      });
+      if (match !== undefined) {
+        return Boolean(match.isAvailable);
+      }
+    }
+
+    if (masterProduct) {
+      return Boolean(masterProduct.isAvailable);
+    }
+
+    const prod = await Product.findById(productId).select('isAvailable isActive').lean();
+    return prod ? Boolean(prod.isAvailable) : false;
+  }
+
   /**
    * Helper to format and compute live cart items and totals
    */
@@ -32,6 +58,16 @@ class CartController {
       };
     }
 
+    const todayStr = getKolkataDateString();
+    const dailyMenu = await DailyMenu.findOne({ date: todayStr, isPublished: true }).lean();
+    const dailyMap = new Map();
+    if (dailyMenu && Array.isArray(dailyMenu.items)) {
+      dailyMenu.items.forEach((it) => {
+        const idStr = it.product?._id ? it.product._id.toString() : it.product?.toString();
+        if (idStr) dailyMap.set(idStr, Boolean(it.isAvailable));
+      });
+    }
+
     let totalPaise = 0;
     let allOrderable = true;
     const calculatedItems = [];
@@ -40,8 +76,12 @@ class CartController {
       if (!item.product) continue;
 
       const p = item.product;
+      const isAvailableToday = dailyMap.has(p._id.toString())
+        ? dailyMap.get(p._id.toString())
+        : Boolean(p.isAvailable);
+
       const isSufficientStock = p.stockQuantity >= item.quantity;
-      const isOrderable = p.isActive && p.isAvailable && isSufficientStock;
+      const isOrderable = p.isActive && isAvailableToday && isSufficientStock;
 
       if (!isOrderable) {
         allOrderable = false;
@@ -64,7 +104,7 @@ class CartController {
           images: p.images,
           price: p.price,
           stockQuantity: p.stockQuantity,
-          isAvailable: p.isAvailable,
+          isAvailable: isAvailableToday,
           isActive: p.isActive,
           dietaryTags: p.dietaryTags,
         },
@@ -74,8 +114,8 @@ class CartController {
         isOrderable,
         orderableReason: !p.isActive
           ? 'Product is no longer available'
-          : !p.isAvailable
-          ? 'Product is temporarily unavailable'
+          : !isAvailableToday
+          ? 'Product is not available on today\'s menu'
           : !isSufficientStock
           ? `Only ${p.stockQuantity} item(s) in stock`
           : null,
@@ -201,10 +241,11 @@ class CartController {
         });
       }
 
-      if (!product.isAvailable) {
+      const isAvailableToday = await CartController.checkProductAvailabilityToday(productId, product);
+      if (!isAvailableToday) {
         return res.status(400).json({
           success: false,
-          message: 'Product is currently unavailable for ordering',
+          message: `"${product.name}" is not available on today's menu`,
         });
       }
 
@@ -285,10 +326,11 @@ class CartController {
         });
       }
 
-      if (!product.isAvailable) {
+      const isAvailableToday = await CartController.checkProductAvailabilityToday(productId, product);
+      if (!isAvailableToday) {
         return res.status(400).json({
           success: false,
-          message: 'Product is currently unavailable',
+          message: `"${product.name}" is not available on today's menu`,
         });
       }
 

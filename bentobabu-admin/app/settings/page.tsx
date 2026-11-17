@@ -203,60 +203,89 @@ function SettingsForm({ initialSettings }: { initialSettings: BusinessSettings }
         <div className="flex items-center gap-2 pb-3 border-b border-[#E5DFD3]">
           <Truck className="w-4 h-4 text-[#354B35]" />
           <h3 className="font-serif text-base font-bold text-[#1E2B1E]">
-            Taxation & Logistics Policy
+            Delivery Charge & Logistics Policy
           </h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
-              GST Rate (% on food preparation)
-            </label>
-            <div className="relative">
-              <Percent className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#354B35]/50" />
+        {/* Admin Delivery Charge Control */}
+        <div className="p-4 bg-[#F9F7F1] rounded-xl border border-[#E5DFD3] space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold text-[#1E2B1E] block">
+                Apply Delivery Charge to Orders
+              </span>
+              <p className="text-[11px] text-[#354B35]/70">
+                When disabled, all customer orders automatically receive ₹0 Free Delivery.
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
               <input
-                type="number"
-                required
-                min={0}
-                max={28}
-                value={formData.gstRatePercentage}
+                type="checkbox"
+                checked={formData.deliveryChargeEnabled ?? true}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    gstRatePercentage: Number(e.target.value),
+                    deliveryChargeEnabled: e.target.checked,
                   })
                 }
-                className="w-full pl-9 pr-3 py-2 bg-[#F9F7F1] border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+                className="sr-only peer"
               />
-            </div>
-            <p className="text-[10px] text-[#354B35]/60 mt-1">
-              Standard cloud kitchen food service GST is 5% (no ITC).
-            </p>
+              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#354B35]"></div>
+            </label>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
-              Free Delivery Threshold (₹)
-            </label>
-            <div className="relative">
-              <Truck className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#354B35]/50" />
-              <input
-                type="number"
-                required
-                min={0}
-                value={formData.freeDeliveryThreshold}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    freeDeliveryThreshold: Number(e.target.value),
-                  })
-                }
-                className="w-full pl-9 pr-3 py-2 bg-[#F9F7F1] border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+                Standard Delivery Charge (₹)
+              </label>
+              <div className="relative">
+                <Truck className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#354B35]/50" />
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  disabled={!(formData.deliveryChargeEnabled ?? true)}
+                  value={formData.deliveryChargeAmount ?? 30}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      deliveryChargeAmount: Math.max(0, Number(e.target.value)),
+                    })
+                  }
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35] disabled:bg-gray-100 disabled:opacity-60"
+                />
+              </div>
+              <p className="text-[10px] text-[#354B35]/60 mt-1">
+                Set to ₹0 for operational free delivery across all orders.
+              </p>
             </div>
-            <p className="text-[10px] text-[#354B35]/60 mt-1">
-              Orders with subtotal above this get free delivery.
-            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+                GST Rate (% on food preparation)
+              </label>
+              <div className="relative">
+                <Percent className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#354B35]/50" />
+                <input
+                  type="number"
+                  required
+                  min={0}
+                  max={28}
+                  value={formData.gstRatePercentage}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      gstRatePercentage: Number(e.target.value),
+                    })
+                  }
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+                />
+              </div>
+              <p className="text-[10px] text-[#354B35]/60 mt-1">
+                Standard cloud kitchen food service GST is 5% (no ITC).
+              </p>
+            </div>
           </div>
         </div>
       </div>

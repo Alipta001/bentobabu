@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
-const { Product, Category, Media } = require('../models');
+const { Product, Category, Media, DailyMenu } = require('../models');
 const { slugify } = require('../utils/slugify');
 const { redisGet, redisSet, redisDelPattern } = require('../config/redis');
 const { deleteAsset } = require('../config/cloudinary');
 const { deleteObject } = require('../config/r2');
+const { getKolkataDateString, isValidDateString } = require('../utils/businessDate');
 
 class ProductController {
   /**
@@ -18,17 +19,51 @@ class ProductController {
         return res.status(200).json(cached);
       }
       const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 12));
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
       const skip = (page - 1) * limit;
 
       // Base query: Only active products are visible publicly
       const filter = { isActive: true };
 
-      // Availability: Exclude unavailable products from normal customer browsing unless specified
-      if (req.query.isAvailable !== undefined) {
-        filter.isAvailable = req.query.isAvailable === 'true';
+      // Resolve business date and daily menu availability
+      const businessDate =
+        req.query.date && typeof req.query.date === 'string' && isValidDateString(req.query.date.trim())
+          ? req.query.date.trim()
+          : getKolkataDateString();
+
+      const dailyMenu = await DailyMenu.findOne({ date: businessDate, isPublished: true }).lean();
+
+      if (dailyMenu && Array.isArray(dailyMenu.items) && dailyMenu.items.length > 0) {
+        const unavailableProductIds = [];
+        const availableProductIds = [];
+
+        dailyMenu.items.forEach((it) => {
+          const prodId = it.product?._id ? it.product._id.toString() : it.product?.toString();
+          if (prodId && mongoose.Types.ObjectId.isValid(prodId)) {
+            if (it.isAvailable === false) {
+              unavailableProductIds.push(new mongoose.Types.ObjectId(prodId));
+            } else if (it.isAvailable === true) {
+              availableProductIds.push(new mongoose.Types.ObjectId(prodId));
+            }
+          }
+        });
+
+        // If customer explicitly requests unavailable items (e.g. for admin previews)
+        if (req.query.isAvailable === 'false') {
+          filter._id = { $in: unavailableProductIds };
+        } else {
+          // Normal customer browsing: exclude explicitly unavailable products
+          if (unavailableProductIds.length > 0) {
+            filter._id = { $nin: unavailableProductIds };
+          }
+        }
       } else {
-        filter.isAvailable = true;
+        // Fallback: Exclude unavailable products from normal customer browsing unless specified
+        if (req.query.isAvailable !== undefined) {
+          filter.isAvailable = req.query.isAvailable === 'true';
+        } else {
+          filter.isAvailable = true;
+        }
       }
 
       // Keyword Search: Sanitize string to prevent ReDoS / NoSQL injection
@@ -42,18 +77,20 @@ class ProductController {
         }
       }
 
-      // Category Filter: Supports either Category Slug or Category ObjectId
+      // Category Filter: Supports either Category Slug or Category ObjectId (ignores "all" or empty)
       if (req.query.category && typeof req.query.category === 'string') {
         const catParam = req.query.category.trim();
-        if (mongoose.Types.ObjectId.isValid(catParam)) {
-          filter.category = new mongoose.Types.ObjectId(catParam);
-        } else {
-          const categoryDoc = await Category.findOne({ slug: catParam.toLowerCase() });
-          if (categoryDoc) {
-            filter.category = categoryDoc._id;
+        if (catParam && catParam.toLowerCase() !== 'all') {
+          if (mongoose.Types.ObjectId.isValid(catParam)) {
+            filter.category = new mongoose.Types.ObjectId(catParam);
           } else {
-            // Non-existent category slug produces empty results safely
-            filter.category = new mongoose.Types.ObjectId();
+            const categoryDoc = await Category.findOne({ slug: catParam.toLowerCase() });
+            if (categoryDoc) {
+              filter.category = categoryDoc._id;
+            } else {
+              // Non-existent category slug produces empty results safely
+              filter.category = new mongoose.Types.ObjectId();
+            }
           }
         }
       }
@@ -202,11 +239,26 @@ class ProductController {
         });
       }
 
-      await redisSet(cacheKey, product, 1800); // 30 minutes TTL
+      // Check today's daily menu availability
+      const todayStr = getKolkataDateString();
+      const dailyMenu = await DailyMenu.findOne({ date: todayStr, isPublished: true }).lean();
+      let isAvailableToday = product.isAvailable;
+      if (dailyMenu && Array.isArray(dailyMenu.items)) {
+        const itemEntry = dailyMenu.items.find((it) => {
+          const idStr = it.product?._id ? it.product._id.toString() : it.product?.toString();
+          return idStr === product._id.toString();
+        });
+        if (itemEntry !== undefined) {
+          isAvailableToday = Boolean(itemEntry.isAvailable);
+        }
+      }
+
+      const productResponse = product.toObject ? product.toObject() : { ...product };
+      productResponse.isAvailable = isAvailableToday;
 
       res.status(200).json({
         success: true,
-        data: product,
+        data: productResponse,
       });
     } catch (error) {
       next(error);

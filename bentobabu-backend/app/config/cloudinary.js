@@ -270,6 +270,36 @@ const getDeliveryUrl = (publicId, preset = 'card') => {
   });
 };
 
+/**
+ * Generate a short-lived signed access URL for private/authenticated Cloudinary documents
+ * @param {string} publicId - Cloudinary public ID
+ * @param {Object} [options]
+ * @param {number} [options.expiresInSeconds=900] - Expiration in seconds (default: 15 minutes)
+ * @param {string} [options.resourceType='image'] - 'image' or 'auto' or 'raw'
+ * @param {string} [options.type='authenticated'] - 'authenticated' or 'upload'
+ * @returns {string} Short-lived signed URL
+ */
+const generateSignedDocumentUrl = (publicId, options = {}) => {
+  if (!publicId) return '';
+  if (publicId.startsWith('http') && !publicId.includes('res.cloudinary.com')) {
+    return publicId;
+  }
+
+  const client = mockCloudinary || configureCloudinary();
+  const expiresIn = options.expiresInSeconds || 15 * 60; // 15 minutes default
+  const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
+  const resourceType = options.resourceType || 'image';
+  const type = options.type || 'authenticated';
+
+  return client.url(publicId, {
+    secure: true,
+    sign_url: true,
+    type,
+    resource_type: resourceType,
+    expires_at: expiresAt,
+  });
+};
+
 module.exports = {
   configureCloudinary,
   setMockCloudinary,
@@ -277,5 +307,6 @@ module.exports = {
   deleteAsset,
   getUsage,
   getDeliveryUrl,
+  generateSignedDocumentUrl,
   DELIVERY_PRESETS,
 };

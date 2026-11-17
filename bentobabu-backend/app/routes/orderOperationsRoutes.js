@@ -34,5 +34,12 @@ router.patch(
   OrderOperationsController.updateDeliveryStatus
 );
 
+router.post(
+  '/delivery/orders/:id/collect-cash',
+  authenticate,
+  authorize('DELIVERY', 'ADMIN'),
+  OrderOperationsController.collectCash
+);
+
 module.exports = router;
 

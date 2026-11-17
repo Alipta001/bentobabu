@@ -270,6 +270,7 @@ export interface ProductFilterOptions {
   categoryId?: string;
   category?: string;
   search?: string;
+  date?: string;
   dietary?: DietaryType[];
   dietaryTags?: string;
   mealTypes?: string;

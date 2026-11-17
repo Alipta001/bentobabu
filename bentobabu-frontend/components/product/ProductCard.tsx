@@ -76,7 +76,12 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
         {/* Dietary Badge Top Left */}
         <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
           <DietaryBadge type={product.dietary} />
-          {product.isBestseller && (
+          {!product.isAvailable && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase bg-rose-700 text-white shadow-sm">
+              Unavailable Today
+            </span>
+          )}
+          {product.isAvailable && product.isBestseller && (
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase bg-[#755C2B] text-white shadow-sm">
               <Flame className="w-3 h-3" />
               Bestseller
@@ -147,7 +152,15 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
           </div>
 
           {/* Cart Stepper or Add Button */}
-          {quantityInCart > 0 ? (
+          {!product.isAvailable ? (
+            <span className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500 border border-gray-200">
+              Unavailable Today
+            </span>
+          ) : (product.stockQuantity ?? 1) <= 0 ? (
+            <span className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500 border border-gray-200">
+              Out of Stock
+            </span>
+          ) : quantityInCart > 0 ? (
             <div className="flex items-center gap-2 bg-[#354B35] text-[#F7F3EA] rounded-full p-1 shadow-sm">
               <button
                 onClick={handleDecrement}

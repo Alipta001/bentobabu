@@ -282,7 +282,7 @@ export default function CheckoutPage() {
         )
       : appliedCoupon.discountValue
     : 0;
-  const clientDelivery = serviceability?.deliveryFee ?? (clientSubtotal >= 499 ? 0 : 40);
+  const clientDelivery = serviceability?.deliveryFee ?? 0;
   const clientTax = 0; // Food standard or included
   const clientTotal = Math.max(0, clientSubtotal - clientDiscount + clientDelivery + clientTax);
 

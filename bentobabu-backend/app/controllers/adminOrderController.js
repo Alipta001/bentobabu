@@ -1,5 +1,8 @@
+const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { Order, User } = require('../models');
+const { Order, User, DeliveryPartnerPresence } = require('../models');
+const { redisDelPattern } = require('../config/redis');
+const NotificationDispatcher = require('../utils/notificationDispatcher');
 
 /**
  * Class-based Controller for Admin Order Management
@@ -186,7 +189,7 @@ class AdminOrderController {
   static async assignDeliveryPartner(req, res, next) {
     try {
       const { id } = req.params;
-      const { deliveryPartnerId } = req.body;
+      const { deliveryPartnerId, reassign, forceReassign } = req.body || {};
 
       if (!mongoose.isValidObjectId(id)) {
         return res.status(400).json({
@@ -225,22 +228,237 @@ class AdminOrderController {
         });
       }
 
-      order.assignedDeliveryPartner = partner._id;
-      order.statusHistory.push({
-        status: order.orderStatus,
-        changedBy: req.user._id,
-        note: `Delivery partner assigned: ${partner.name} (${partner.phone})`,
-        changedAt: new Date(),
-      });
+      // Check if target partner is already assigned to this exact order
+      if (
+        order.assignedDeliveryPartner &&
+        order.assignedDeliveryPartner.toString() === partner._id.toString()
+      ) {
+        return res.status(200).json({
+          success: true,
+          message: 'Delivery partner is already assigned to this order.',
+          data: {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            assignedDeliveryPartner: {
+              id: partner._id,
+              name: partner.name,
+              phone: partner.phone,
+            },
+          },
+        });
+      }
 
-      await order.save();
+      const oldPartnerId = order.assignedDeliveryPartner;
+      const isReassignment = Boolean(oldPartnerId);
+
+      // Guard reassignment without explicit permission
+      if (isReassignment && !reassign && !forceReassign) {
+        return res.status(409).json({
+          success: false,
+          message: 'This order is already assigned to another delivery partner. Set reassign: true to force reassignment.',
+        });
+      }
+
+      // Pre-check target partner presence and availability
+      const targetPresence = await DeliveryPartnerPresence.findOne({ user: partner._id });
+      if (!targetPresence || targetPresence.accountStatus !== 'ACTIVE') {
+        return res.status(403).json({
+          success: false,
+          message: 'Delivery partner account is suspended or inactive.',
+        });
+      }
+
+      if (targetPresence.availabilityStatus !== 'ONLINE' || targetPresence.currentOrderId) {
+        return res.status(409).json({
+          success: false,
+          message: 'Delivery partner is currently offline or busy with another delivery.',
+        });
+      }
+
+      // Check if order is OUT_FOR_DELIVERY and prepare fresh secure delivery OTP
+      const isOutForDelivery = order.orderStatus === 'OUT_FOR_DELIVERY';
+      let newPlainOtp = null;
+      let newOtpHash = null;
+      let newOtpExpiresAt = null;
+
+      if (isOutForDelivery) {
+        newPlainOtp = crypto.randomInt(100000, 1000000).toString();
+        newOtpHash = crypto.createHash('sha256').update(newPlainOtp).digest('hex');
+        const otpExpiryMinutes = parseInt(process.env.DELIVERY_OTP_EXPIRY_MINUTES, 10) || 60;
+        newOtpExpiresAt = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
+      }
+
+      // Execute assignment atomically inside transaction with standalone fallback
+      const session = await mongoose.startSession();
+      let updatedOrder = null;
+
+      try {
+        const executeAdminAssignment = async (sess) => {
+          // 1. Release previous partner's presence if reassignment
+          if (isReassignment && oldPartnerId) {
+            const oldPresence = sess
+              ? await DeliveryPartnerPresence.findOne({ user: oldPartnerId }).session(sess)
+              : await DeliveryPartnerPresence.findOne({ user: oldPartnerId });
+
+            if (oldPresence) {
+              oldPresence.currentOrderId = null;
+              oldPresence.availabilityStatus =
+                oldPresence.intendedAvailability === 'ONLINE' && oldPresence.accountStatus === 'ACTIVE'
+                  ? 'ONLINE'
+                  : 'OFFLINE';
+              oldPresence.lastHeartbeat = new Date();
+              if (sess) {
+                await oldPresence.save({ session: sess });
+              } else {
+                await oldPresence.save();
+              }
+            }
+          }
+
+          // 2. Lock target partner's presence atomically
+          const lockOptions = { returnDocument: 'after' };
+          if (sess) lockOptions.session = sess;
+
+          const lockedPresence = await DeliveryPartnerPresence.findOneAndUpdate(
+            {
+              user: partner._id,
+              accountStatus: 'ACTIVE',
+              availabilityStatus: 'ONLINE',
+              currentOrderId: null,
+            },
+            {
+              $set: {
+                availabilityStatus: 'BUSY',
+                currentOrderId: order._id,
+                lastHeartbeat: new Date(),
+              },
+            },
+            lockOptions
+          );
+
+          if (!lockedPresence) {
+            const err = new Error('Delivery partner is no longer available or already handling another order.');
+            err.statusCode = 409;
+            throw err;
+          }
+
+          // 3. Atomically update order assignment and refresh OTP if OUT_FOR_DELIVERY
+          const orderFindQuery = {
+            _id: id,
+            orderStatus: { $in: ['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'] },
+            ...(isReassignment ? { assignedDeliveryPartner: oldPartnerId } : { assignedDeliveryPartner: null }),
+          };
+
+          const updateOps = {
+            $set: {
+              assignedDeliveryPartner: partner._id,
+              ...(isOutForDelivery
+                ? {
+                    deliveryOTP: newOtpHash,
+                    deliveryOtpCode: newPlainOtp,
+                    deliveryOtpExpiresAt: newOtpExpiresAt,
+                    failedOtpAttempts: 0,
+                  }
+                : {}),
+            },
+            $push: {
+              statusHistory: {
+                status: order.orderStatus,
+                changedBy: req.user._id || req.user.id,
+                note: isReassignment
+                  ? `Delivery partner reassigned by admin to: ${partner.name} (${partner.phone})${isOutForDelivery ? '. Fresh delivery OTP generated for security.' : ''}`
+                  : `Delivery partner assigned by admin: ${partner.name} (${partner.phone})`,
+                changedAt: new Date(),
+              },
+            },
+          };
+
+          const orderOptions = { returnDocument: 'after' };
+          if (sess) orderOptions.session = sess;
+
+          updatedOrder = await Order.findOneAndUpdate(orderFindQuery, updateOps, orderOptions);
+
+          if (!updatedOrder) {
+            // Standalone fallback: rollback locked target presence
+            if (!sess && lockedPresence) {
+              await DeliveryPartnerPresence.findOneAndUpdate(
+                { user: partner._id, currentOrderId: order._id },
+                { $set: { availabilityStatus: 'ONLINE', currentOrderId: null } }
+              );
+            }
+            const err = new Error('Failed to assign order. Order status or assignment state changed concurrently.');
+            err.statusCode = 409;
+            throw err;
+          }
+        };
+
+        try {
+          await session.withTransaction(async () => {
+            await executeAdminAssignment(session);
+          });
+        } catch (txErr) {
+          if (
+            txErr.message &&
+            (txErr.message.includes('Transaction numbers are only allowed') ||
+              txErr.message.includes('replica set member'))
+          ) {
+            await executeAdminAssignment(null);
+          } else {
+            throw txErr;
+          }
+        }
+      } catch (assignErr) {
+        if (assignErr.statusCode) {
+          return res.status(assignErr.statusCode).json({
+            success: false,
+            message: assignErr.message,
+          });
+        }
+        throw assignErr;
+      } finally {
+        await session.endSession();
+      }
+
+      await redisDelPattern('cache:admin:dashboard:*');
+
+      // Dispatch non-blocking notifications safely (failures do not corrupt the committed assignment)
+      const eventTimestamp = Date.now();
+
+      NotificationDispatcher.dispatch({
+        userId: updatedOrder.user,
+        orderId: updatedOrder._id,
+        order: updatedOrder,
+        eventType: 'ORDER_REASSIGNED',
+        metadata: {
+          partnerName: partner.name,
+          partnerPhone: partner.phone,
+          isOutForDelivery,
+          orderNumber: updatedOrder.orderNumber,
+          idempotencySuffix: `_${eventTimestamp}`,
+        },
+      }).catch((e) => console.error('[Notification] ORDER_REASSIGNED dispatch error:', e.message));
+
+      NotificationDispatcher.dispatch({
+        userId: partner._id,
+        orderId: updatedOrder._id,
+        order: updatedOrder,
+        eventType: 'DELIVERY_ASSIGNMENT',
+        metadata: {
+          orderNumber: updatedOrder.orderNumber,
+          grandTotal: updatedOrder.grandTotal,
+          isReassignment,
+          idempotencySuffix: `_${eventTimestamp}`,
+        },
+      }).catch((e) => console.error('[Notification] DELIVERY_ASSIGNMENT dispatch error:', e.message));
 
       return res.status(200).json({
         success: true,
-        message: 'Delivery partner assigned successfully.',
+        message: isReassignment
+          ? 'Delivery partner reassigned successfully.'
+          : 'Delivery partner assigned successfully.',
         data: {
-          orderId: order._id,
-          orderNumber: order.orderNumber,
+          orderId: updatedOrder._id,
+          orderNumber: updatedOrder.orderNumber,
           assignedDeliveryPartner: {
             id: partner._id,
             name: partner.name,

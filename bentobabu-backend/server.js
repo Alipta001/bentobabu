@@ -178,10 +178,12 @@ const deliveryOnboardingRoutes = require('./app/routes/deliveryOnboardingRoutes'
 const adminDeliveryApplicationRoutes = require('./app/routes/adminDeliveryApplicationRoutes');
 const deliveryPresenceRoutes = require('./app/routes/deliveryPresenceRoutes');
 const adminDeliveryOperationsRoutes = require('./app/routes/adminDeliveryOperationsRoutes');
+const dailyMenuRoutes = require('./app/routes/dailyMenuRoutes');
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/categories', categoryRoutes);
 app.use('/api/v1/products', productRoutes);
+app.use('/api/v1/menu', dailyMenuRoutes);
 app.use('/api/v1/videos', videoRoutes);
 app.use('/api/v1/addresses', addressRoutes);
 app.use('/api/v1/cart', cartRoutes);

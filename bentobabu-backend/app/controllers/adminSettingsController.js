@@ -6,6 +6,8 @@ const DEFAULT_SETTINGS = {
   SUPPORT_PHONE: '9876543210',
   MINIMUM_ORDER_AMOUNT: 150,
   DEFAULT_DELIVERY_FEE: 30,
+  DELIVERY_CHARGE_ENABLED: true,
+  DELIVERY_CHARGE_AMOUNT: 30,
   DEFAULT_PREPARATION_TIME: 25,
   OPERATING_DAYS: [
     'Monday',
@@ -133,17 +135,31 @@ class AdminSettingsController {
             break;
           }
 
-          case 'DEFAULT_DELIVERY_FEE': {
+          case 'DEFAULT_DELIVERY_FEE':
+          case 'DELIVERY_CHARGE_AMOUNT': {
             const fee = Number(val);
             if (isNaN(fee) || fee < 0) {
               return res.status(400).json({
                 success: false,
-                message: 'DEFAULT_DELIVERY_FEE must be a non-negative number.',
+                message: `${key} must be a non-negative number.`,
               });
             }
             updatesToApply[key] = fee;
+            // Keep DEFAULT_DELIVERY_FEE and DELIVERY_CHARGE_AMOUNT in sync
+            updatesToApply.DEFAULT_DELIVERY_FEE = fee;
+            updatesToApply.DELIVERY_CHARGE_AMOUNT = fee;
             break;
           }
+
+          case 'DELIVERY_CHARGE_ENABLED':
+            if (typeof val !== 'boolean') {
+              return res.status(400).json({
+                success: false,
+                message: 'DELIVERY_CHARGE_ENABLED must be a boolean (true or false).',
+              });
+            }
+            updatesToApply[key] = val;
+            break;
 
           case 'DEFAULT_PREPARATION_TIME': {
             const prep = Number(val);

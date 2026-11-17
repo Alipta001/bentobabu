@@ -47,9 +47,8 @@ export default function CartPage() {
       : appliedCoupon.discountValue
     : 0;
 
-  const deliveryFee = subtotal >= 499 || subtotal === 0 ? 0 : 40;
   const tax = 0;
-  const total = Math.max(0, subtotal - discount + deliveryFee + tax);
+  const total = Math.max(0, subtotal - discount + tax);
 
   const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,20 +214,16 @@ export default function CartPage() {
                 ))}
               </div>
 
-              {/* Delivery Threshold Notice */}
+              {/* Delivery Policy Notice */}
               <div className="bg-[#EBF0E9] rounded-2xl p-4 border border-[#8A9A86]/30 flex items-center gap-3 text-xs text-[#354B35]">
                 <Truck className="w-5 h-5 text-[#354B35] shrink-0" />
                 <div>
-                  {subtotal >= 499 ? (
-                    <span className="font-semibold">
-                      Awesome! You&apos;ve unlocked FREE delivery on this order.
-                    </span>
-                  ) : (
-                    <span>
-                      Add <strong>₹{499 - subtotal}</strong> more of healthy meals to
-                      qualify for <strong>FREE Delivery</strong>!
-                    </span>
-                  )}
+                  <span className="font-semibold">
+                    Doorstep Delivery Available
+                  </span>
+                  <p className="text-[11px] text-[#4A584A] mt-0.5">
+                    Delivery charge is determined by kitchen administration and verified at checkout.
+                  </p>
                 </div>
               </div>
 
@@ -325,15 +320,9 @@ export default function CartPage() {
                   )}
 
                   <div className="flex justify-between">
-                    <span>Delivery Fee</span>
-                    <span>
-                      {deliveryFee === 0 ? (
-                        <span className="text-emerald-700 font-bold uppercase">
-                          FREE
-                        </span>
-                      ) : (
-                        `₹${deliveryFee}`
-                      )}
+                    <span>Delivery Charge</span>
+                    <span className="text-[#354B35] font-medium text-[11px]">
+                      Calculated at checkout
                     </span>
                   </div>
 

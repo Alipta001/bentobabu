@@ -437,6 +437,22 @@ class DeliveryOnboardingController {
         },
       });
     } catch (err) {
+      if (err.code === 11000) {
+        let duplicateField = 'identity document';
+        if (err.keyPattern) {
+          if (err.keyPattern['vehicleInfo.drivingLicenseNumber']) {
+            duplicateField = 'Driving License number';
+          } else if (err.keyPattern['vehicleInfo.registrationNumber']) {
+            duplicateField = 'Vehicle Registration number';
+          } else if (err.keyPattern['documents.idProof.idNumber']) {
+            duplicateField = 'Government ID number';
+          }
+        }
+        return res.status(409).json({
+          success: false,
+          message: `A delivery partner application with this ${duplicateField} already exists or is under review.`,
+        });
+      }
       next(err);
     }
   }

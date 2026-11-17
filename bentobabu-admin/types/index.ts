@@ -48,6 +48,7 @@ export interface Product {
   imagesData?: ProductMediaImage[];
   video?: ProductVideo;
   isAvailable: boolean;
+  isActive?: boolean;
   isBestseller?: boolean;
   isDailyMenu?: boolean;
   stockQuantity: number;
@@ -185,6 +186,8 @@ export interface BusinessSettings {
   operatingHours: string;
   gstRatePercentage: number;
   freeDeliveryThreshold: number;
+  deliveryChargeEnabled?: boolean;
+  deliveryChargeAmount?: number;
   isOrderingEnabled: boolean;
 }
 

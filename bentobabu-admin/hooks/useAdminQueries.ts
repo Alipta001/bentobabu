@@ -142,13 +142,25 @@ export function useDeleteProduct() {
 export function useToggleProductAvailability() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (param: string | { id: string; isAvailable?: boolean }) => {
-      const id = typeof param === "string" ? param : param.id;
-      const isAvailable = typeof param === "string" ? undefined : param.isAvailable;
+    mutationFn: ({ id, isAvailable }: { id: string; isAvailable: boolean }) => {
       return productService.toggleAvailability(id, isAvailable);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "menu"] });
+    },
+  });
+}
+
+export function useToggleProductStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => {
+      return productService.toggleStatus(id, isActive);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "menu"] });
     },
   });
 }
@@ -210,22 +222,81 @@ export function useInventoryHistory(productId: string) {
 }
 
 // ==========================================
-// DAILY MENU
+// ==========================================
+// DAILY & WEEKLY MENU SCHEDULING
 // ==========================================
 
-export function useDailyMenu() {
+export function useDailyMenu(date?: string) {
   return useQuery({
-    queryKey: ["admin", "dailyMenu"],
-    queryFn: () => menuService.getDailyMenu(),
+    queryKey: ["admin", "dailyMenu", date],
+    queryFn: () => menuService.getDailyMenu(date),
   });
 }
 
-export function useToggleDailyMenu() {
+export function useSaveDailyMenu() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => menuService.toggleItem(id),
+    mutationFn: (payload: {
+      date: string;
+      items: Array<{ product: string; isAvailable: boolean }>;
+      isPublished?: boolean;
+      notes?: string;
+    }) => menuService.saveDailyMenu(payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "dailyMenu"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "dailyMenu", variables.date] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "weeklyMenu"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+}
+
+export function useContinueYesterday() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (targetDate: string) => menuService.continueYesterday(targetDate),
+    onSuccess: (_, targetDate) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "dailyMenu"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "dailyMenu", targetDate] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "weeklyMenu"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+}
+
+export function useWeeklyMenu(startDate?: string) {
+  return useQuery({
+    queryKey: ["admin", "weeklyMenu", startDate],
+    queryFn: () => menuService.getWeeklyMenu(startDate),
+  });
+}
+
+export function useSaveWeeklyMenu() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      days: Array<{
+        date: string;
+        items: Array<{ product: string; isAvailable: boolean }>;
+        isPublished?: boolean;
+      }>;
+    }) => menuService.saveWeeklyMenu(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "dailyMenu"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "weeklyMenu"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+}
+
+export function useApplyWeekAll() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { sourceDate: string; targetDates: string[] }) =>
+      menuService.applyWeekAll(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "dailyMenu"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "weeklyMenu"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
     },
   });

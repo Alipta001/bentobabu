@@ -11,6 +11,11 @@ const documentItemSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    storageType: {
+      type: String,
+      enum: ['authenticated', 'upload', 'local'],
+      default: 'authenticated',
+    },
     fileName: {
       type: String,
       trim: true,
@@ -157,6 +162,12 @@ const deliveryApplicationSchema = new mongoose.Schema(
           enum: ['AADHAAR', 'PAN', 'VOTER_ID'],
           default: 'AADHAAR',
         },
+        idNumber: {
+          type: String,
+          trim: true,
+          uppercase: true,
+          default: '',
+        },
         document: {
           type: documentItemSchema,
           required: [true, 'Government ID proof is required'],
@@ -254,6 +265,40 @@ const deliveryApplicationSchema = new mongoose.Schema(
         delete ret.__v;
         return ret;
       },
+    },
+  }
+);
+
+// Database-level uniqueness constraints for KYC identity documents
+// Using partialFilterExpression ensures uniqueness across all active/under-review applications
+// while allowing empty strings / nulls for bicycles and allowing rejected applicants to re-apply.
+deliveryApplicationSchema.index(
+  { 'vehicleInfo.drivingLicenseNumber': 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      'vehicleInfo.drivingLicenseNumber': { $type: 'string', $gt: '' },
+      status: { $in: ['APPROVED', 'PENDING_APPROVAL', 'PENDING_VERIFICATION'] },
+    },
+  }
+);
+deliveryApplicationSchema.index(
+  { 'vehicleInfo.registrationNumber': 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      'vehicleInfo.registrationNumber': { $type: 'string', $gt: '' },
+      status: { $in: ['APPROVED', 'PENDING_APPROVAL', 'PENDING_VERIFICATION'] },
+    },
+  }
+);
+deliveryApplicationSchema.index(
+  { 'documents.idProof.idNumber': 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      'documents.idProof.idNumber': { $type: 'string', $gt: '' },
+      status: { $in: ['APPROVED', 'PENDING_APPROVAL', 'PENDING_VERIFICATION'] },
     },
   }
 );

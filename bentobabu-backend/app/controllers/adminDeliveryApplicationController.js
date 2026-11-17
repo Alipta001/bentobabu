@@ -1,5 +1,6 @@
 const { DeliveryApplication, User } = require('../models');
 const NotificationDispatcher = require('../utils/notificationDispatcher');
+const { generateSignedDocumentUrl } = require('../config/cloudinary');
 
 class AdminDeliveryApplicationController {
   /**
@@ -99,7 +100,7 @@ class AdminDeliveryApplicationController {
 
   /**
    * GET /api/v1/admin/delivery-applications/:id
-   * Retrieves full single application details
+   * Retrieves full single application details with short-lived signed URLs for documents
    */
   static async getApplicationById(req, res, next) {
     try {
@@ -117,9 +118,118 @@ class AdminDeliveryApplicationController {
         });
       }
 
+      const appObj = application.toObject();
+
+      const signDoc = (doc) => {
+        if (!doc) return doc;
+        if (doc.publicId) {
+          const isPdf = doc.mimeType === 'application/pdf';
+          const signedUrl = generateSignedDocumentUrl(doc.publicId, {
+            resourceType: isPdf ? 'auto' : 'image',
+            type: doc.storageType || 'authenticated',
+            expiresInSeconds: 900, // 15 minutes
+          });
+          return {
+            ...doc,
+            secureUrl: signedUrl || doc.secureUrl,
+            signedUrl: signedUrl || doc.secureUrl,
+          };
+        }
+        return doc;
+      };
+
+      if (appObj.documents) {
+        if (appObj.documents.profilePhoto) {
+          appObj.documents.profilePhoto = signDoc(appObj.documents.profilePhoto);
+        }
+        if (appObj.documents.idProof?.document) {
+          appObj.documents.idProof.document = signDoc(appObj.documents.idProof.document);
+        }
+        if (appObj.documents.drivingLicense) {
+          appObj.documents.drivingLicense = signDoc(appObj.documents.drivingLicense);
+        }
+        if (appObj.documents.registrationCertificate) {
+          appObj.documents.registrationCertificate = signDoc(appObj.documents.registrationCertificate);
+        }
+        if (appObj.documents.insurance) {
+          appObj.documents.insurance = signDoc(appObj.documents.insurance);
+        }
+      }
+
       return res.status(200).json({
         success: true,
-        data: application,
+        data: appObj,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/admin/delivery-applications/:id/documents/:documentKey
+   * Admin-only endpoint to access a short-lived signed URL for a specific document
+   */
+  static async getDocumentSignedUrl(req, res, next) {
+    try {
+      const { id, documentKey } = req.params;
+      const allowedKeys = [
+        'profilePhoto',
+        'idProof',
+        'drivingLicense',
+        'registrationCertificate',
+        'insurance',
+      ];
+      if (!allowedKeys.includes(documentKey)) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid document key. Allowed keys: ${allowedKeys.join(', ')}`,
+        });
+      }
+
+      const application = await DeliveryApplication.findById(id);
+      if (!application) {
+        return res.status(404).json({
+          success: false,
+          message: 'Delivery partner application not found.',
+        });
+      }
+
+      let targetDoc = null;
+      if (documentKey === 'idProof') {
+        targetDoc = application.documents?.idProof?.document;
+      } else {
+        targetDoc = application.documents?.[documentKey];
+      }
+
+      if (!targetDoc || (!targetDoc.publicId && !targetDoc.secureUrl)) {
+        return res.status(404).json({
+          success: false,
+          message: 'Requested document has not been uploaded for this application.',
+        });
+      }
+
+      const isPdf = targetDoc.mimeType === 'application/pdf';
+      const signedUrl = targetDoc.publicId
+        ? generateSignedDocumentUrl(targetDoc.publicId, {
+            resourceType: isPdf ? 'auto' : 'image',
+            type: targetDoc.storageType || 'authenticated',
+            expiresInSeconds: 900,
+          })
+        : targetDoc.secureUrl;
+
+      if (req.query.redirect === 'true') {
+        return res.redirect(302, signedUrl);
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          documentKey,
+          fileName: targetDoc.fileName,
+          mimeType: targetDoc.mimeType,
+          expiresInSeconds: 900,
+          signedUrl,
+        },
       });
     } catch (err) {
       next(err);

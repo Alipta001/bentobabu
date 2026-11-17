@@ -23,6 +23,7 @@
     "test:media": "node test/media_management.test.js",
     "test:video": "node test/video_content.test.js",
     "test:onboarding": "node test/delivery_onboarding.test.js",
+    "test:phase1-critical-fixes": "node test/phase1_critical_delivery_fixes.test.js",
     "test:all": "npm test"
   },
   "author": "Alipta Ghosh",

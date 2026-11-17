@@ -64,6 +64,7 @@ export const mapBackendProduct = (p: BackendProduct): Product => {
     imagesData: p.imagesData || [],
     video: p.video || undefined,
     isAvailable: p.isAvailable ?? true,
+    isActive: p.isActive ?? true,
     isBestseller: p.isFeatured ?? false,
     isDailyMenu: p.mealTypes?.includes("DAILY_MENU") ?? false,
     stockQuantity: p.stockQuantity ?? 0,
@@ -224,12 +225,22 @@ export const productService = {
     await adminApiClient.delete(ADMIN_API_ENDPOINTS.PRODUCTS.DELETE(id));
   },
 
-  async toggleAvailability(id: string, isAvailable?: boolean): Promise<Product> {
+  async toggleAvailability(id: string, isAvailable: boolean): Promise<Product> {
     const res = await adminApiClient.patch<{
       success: boolean;
       data: BackendProduct;
     }>(ADMIN_API_ENDPOINTS.PRODUCTS.TOGGLE_AVAILABILITY(id), {
-      isAvailable: isAvailable !== undefined ? isAvailable : true,
+      isAvailable: Boolean(isAvailable),
+    });
+    return mapBackendProduct(res.data?.data || (res.data as unknown as BackendProduct));
+  },
+
+  async toggleStatus(id: string, isActive: boolean): Promise<Product> {
+    const res = await adminApiClient.patch<{
+      success: boolean;
+      data: BackendProduct;
+    }>(ADMIN_API_ENDPOINTS.PRODUCTS.TOGGLE_STATUS(id), {
+      isActive: Boolean(isActive),
     });
     return mapBackendProduct(res.data?.data || (res.data as unknown as BackendProduct));
   },

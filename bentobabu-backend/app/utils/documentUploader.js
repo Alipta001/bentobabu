@@ -14,13 +14,54 @@ const ALLOWED_MIME_TYPES = new Set([
 
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024; // 10 MB
 
+const SENSITIVE_KYC_CATEGORIES = new Set([
+  'idProof',
+  'drivingLicense',
+  'registrationCertificate',
+  'insurance',
+  'pan',
+  'aadhaar',
+]);
+
+/**
+ * Validates actual binary magic bytes against declared MIME type to prevent file-extension spoofing
+ */
+const validateMagicBytes = (buffer, mime) => {
+  if (!buffer || buffer.length < 4) return false;
+  const lowerMime = (mime || '').toLowerCase();
+
+  if (lowerMime === 'image/jpeg' || lowerMime === 'image/jpg') {
+    return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (lowerMime === 'image/png') {
+    return (
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47
+    );
+  }
+  if (lowerMime === 'application/pdf') {
+    return buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+  }
+  if (lowerMime === 'image/webp') {
+    return (
+      buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buffer.length >= 12 &&
+      buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+    );
+  }
+  return false;
+};
+
 const fileFilter = (req, file, cb) => {
   const mime = file.mimetype.toLowerCase();
   if (!ALLOWED_MIME_TYPES.has(mime)) {
-    return cb(
-      new Error(`Unsupported file format: ${file.mimetype}. Allowed formats: JPG, PNG, WEBP, PDF (max 10MB).`),
-      false
+    const err = new Error(
+      `Unsupported file format: ${file.mimetype}. Allowed formats: JPG, PNG, WEBP, PDF (max 10MB).`
     );
+    err.statusCode = 400;
+    return cb(err, false);
   }
   cb(null, true);
 };
@@ -44,15 +85,26 @@ const uploadDocumentToCloudinary = async (file, documentCategory = 'general') =>
     throw new Error('No document file buffer provided for upload.');
   }
 
+  // Validate actual binary magic bytes
+  if (!validateMagicBytes(file.buffer, file.mimetype)) {
+    const err = new Error(
+      `File content verification failed: the file signature does not match the declared MIME type ${file.mimetype}.`
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+
   const env = validateEnv();
   const isPdf = file.mimetype.toLowerCase() === 'application/pdf';
   const cleanName = (file.originalname || 'document')
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .toLowerCase();
 
+  const isSensitiveKyc = SENSITIVE_KYC_CATEGORIES.has(documentCategory);
   const options = {
     folder: 'bentobabu/delivery-documents',
     resource_type: isPdf ? 'auto' : 'image',
+    type: isSensitiveKyc ? 'authenticated' : 'upload',
     tags: ['delivery-partner-document', documentCategory],
     unique_filename: true,
   };
@@ -63,6 +115,7 @@ const uploadDocumentToCloudinary = async (file, documentCategory = 'general') =>
     return {
       secureUrl: result.secure_url || result.url,
       publicId: result.public_id,
+      storageType: isSensitiveKyc ? 'authenticated' : 'upload',
       fileName: cleanName,
       mimeType: file.mimetype,
       sizeBytes: file.size || file.buffer.length,

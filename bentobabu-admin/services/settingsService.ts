@@ -8,6 +8,8 @@ export interface BackendSystemSettings {
   SUPPORT_PHONE?: string;
   MINIMUM_ORDER_AMOUNT?: number;
   DEFAULT_DELIVERY_FEE?: number;
+  DELIVERY_CHARGE_ENABLED?: boolean;
+  DELIVERY_CHARGE_AMOUNT?: number;
   DEFAULT_PREPARATION_TIME?: number;
   OPERATING_DAYS?: string[];
   OPENING_TIME?: string;
@@ -25,6 +27,8 @@ const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
   operatingHours: `${s.OPENING_TIME || "10:00"} - ${s.CLOSING_TIME || "22:00"}`,
   gstRatePercentage: 5,
   freeDeliveryThreshold: 500,
+  deliveryChargeEnabled: s.DELIVERY_CHARGE_ENABLED ?? true,
+  deliveryChargeAmount: s.DELIVERY_CHARGE_AMOUNT ?? s.DEFAULT_DELIVERY_FEE ?? 30,
   isOrderingEnabled: s.ORDER_ACCEPTANCE_ENABLED ?? true,
 });
 
@@ -48,6 +52,11 @@ export const settingsService = {
     if (data.supportEmail !== undefined) backendPayload.SUPPORT_EMAIL = data.supportEmail;
     if (data.supportPhone !== undefined) backendPayload.SUPPORT_PHONE = data.supportPhone;
     if (data.isOrderingEnabled !== undefined) backendPayload.ORDER_ACCEPTANCE_ENABLED = data.isOrderingEnabled;
+    if (data.deliveryChargeEnabled !== undefined) backendPayload.DELIVERY_CHARGE_ENABLED = data.deliveryChargeEnabled;
+    if (data.deliveryChargeAmount !== undefined) {
+      backendPayload.DELIVERY_CHARGE_AMOUNT = data.deliveryChargeAmount;
+      backendPayload.DEFAULT_DELIVERY_FEE = data.deliveryChargeAmount;
+    }
     if (data.operatingHours && data.operatingHours.includes("-")) {
       const parts = data.operatingHours.split("-").map((p) => p.trim());
       if (parts[0]) backendPayload.OPENING_TIME = parts[0];

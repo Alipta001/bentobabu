@@ -323,15 +323,17 @@ export function ProductDetailView({
               <button
                 onClick={handleAddToCart}
                 disabled={!product.isAvailable}
-                className={`flex-1 flex items-center justify-center gap-2 py-3.5 px-6 rounded-full text-sm font-bold shadow-md transition-all duration-200 cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-2 py-3.5 px-6 rounded-full text-sm font-bold shadow-md transition-all duration-200 ${
                   !product.isAvailable
-                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    ? "bg-gray-200 text-gray-500 cursor-not-allowed border border-gray-300"
                     : addedSuccess
-                    ? "bg-emerald-700 text-white"
-                    : "bg-[#354B35] text-[#F7F3EA] hover:bg-[#253525]"
+                    ? "bg-emerald-700 text-white cursor-pointer"
+                    : "bg-[#354B35] text-[#F7F3EA] hover:bg-[#253525] cursor-pointer"
                 }`}
               >
-                {addedSuccess ? (
+                {!product.isAvailable ? (
+                  <span>Unavailable on Today&apos;s Menu</span>
+                ) : addedSuccess ? (
                   <>
                     <Check className="w-4 h-4" />
                     <span>Added {quantity} to Bento Cart!</span>

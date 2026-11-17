@@ -41,13 +41,16 @@ const errorHandler = (err, req, res, next) => {
     message = `Invalid format for resource identifier`;
   }
 
-  // 5. Handle Multer Errors (e.g. LIMIT_FILE_SIZE)
-  if (err.name === 'MulterError') {
+  // 5. Handle Multer Errors (e.g. LIMIT_FILE_SIZE) and Unsupported File Formats
+  if (
+    err.name === 'MulterError' ||
+    (err.message && (err.message.includes('Unsupported file format') || err.message.includes('File content verification failed')))
+  ) {
     statusCode = 400;
     if (err.code === 'LIMIT_FILE_SIZE') {
-      message = 'File size exceeds maximum allowed limit (8 MB).';
+      message = 'File size exceeds maximum allowed limit (10 MB).';
     } else if (err.code === 'LIMIT_FILE_COUNT') {
-      message = 'Too many files uploaded at once (maximum 4).';
+      message = 'Too many files uploaded at once.';
     } else {
       message = err.message;
     }

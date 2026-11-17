@@ -52,22 +52,10 @@ export function useCategory(slug: string) {
 }
 
 export function useProducts(filters?: ProductFilterOptions) {
-  const hasFilters = Boolean(
-    filters?.search ||
-    filters?.categoryId ||
-    filters?.category ||
-    (filters?.dietary && filters.dietary.length > 0) ||
-    filters?.dietaryTags ||
-    (typeof filters?.maxPrice === "number" && filters.maxPrice < 500) ||
-    (filters?.sortBy && filters.sortBy !== "popularity") ||
-    filters?.page
-  );
-
   return useQuery({
     queryKey: QUERY_KEYS.PRODUCTS(filters),
     queryFn: ({ signal }) => productService.getAll(filters, signal),
-    initialData: hasFilters ? undefined : () => INITIAL_PRODUCTS,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
   });
 }
 

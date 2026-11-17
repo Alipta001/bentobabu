@@ -1,4 +1,4 @@
-const { DeliveryZone, DeliverySlot } = require('../models');
+const { DeliveryZone, DeliverySlot, SystemSetting } = require('../models');
 
 class DeliveryController {
   /**
@@ -32,14 +32,42 @@ class DeliveryController {
         });
       }
 
+      // Check admin-configured delivery charge settings
+      const [chargeEnabledSetting, chargeAmountSetting] = await Promise.all([
+        SystemSetting.findOne({ key: 'DELIVERY_CHARGE_ENABLED' }).lean(),
+        SystemSetting.findOne({ key: 'DELIVERY_CHARGE_AMOUNT' }).lean(),
+      ]);
+
+      let finalDeliveryCharge = 0;
+      const isChargeEnabled = chargeEnabledSetting ? chargeEnabledSetting.value !== false : true;
+
+      if (isChargeEnabled) {
+        if (typeof zone.deliveryCharge === 'number' && zone.deliveryCharge >= 0) {
+          finalDeliveryCharge = zone.deliveryCharge;
+        } else if (chargeAmountSetting && typeof chargeAmountSetting.value === 'number') {
+          finalDeliveryCharge = chargeAmountSetting.value;
+        } else {
+          finalDeliveryCharge = 30;
+        }
+      }
+
       res.status(200).json({
         success: true,
         serviceable: true,
         data: {
           zoneName: zone.name,
-          deliveryCharge: zone.deliveryCharge,
+          deliveryCharge: finalDeliveryCharge,
+          deliveryFee: finalDeliveryCharge,
           minimumOrderAmount: zone.minimumOrderAmount,
           estimatedDeliveryMinutes: zone.estimatedDeliveryMinutes,
+          zone: {
+            id: zone._id.toString(),
+            name: zone.name,
+            deliveryCharge: finalDeliveryCharge,
+            deliveryFee: finalDeliveryCharge,
+            minimumOrderAmount: zone.minimumOrderAmount,
+            estimatedDeliveryMinutes: zone.estimatedDeliveryMinutes,
+          },
         },
       });
     } catch (error) {

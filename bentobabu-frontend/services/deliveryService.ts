@@ -27,8 +27,8 @@ export const deliveryService = {
       return {
         serviceable: false,
         message: "Please enter a valid 6-digit PIN code.",
-        deliveryFee: 40,
-        minimumOrderAmount: 99,
+        deliveryFee: 0,
+        minimumOrderAmount: 0,
       };
     }
 
@@ -36,6 +36,7 @@ export const deliveryService = {
       const response = await apiClient.get<
         ApiResponse<{
           zone?: any;
+          deliveryCharge?: number;
           deliveryFee?: number;
           minimumOrderAmount?: number;
           freeDeliveryThreshold?: number;
@@ -46,12 +47,21 @@ export const deliveryService = {
       const raw = response.data;
       const data = raw && "data" in raw ? raw.data : (raw as any);
 
+      const fee =
+        typeof data.deliveryCharge === "number"
+          ? data.deliveryCharge
+          : typeof data.deliveryFee === "number"
+          ? data.deliveryFee
+          : typeof data.zone?.deliveryCharge === "number"
+          ? data.zone.deliveryCharge
+          : 0;
+
       return {
         serviceable: true,
         message: raw.message || "Delivery is available to your location!",
         zone: data.zone,
-        deliveryFee: typeof data.deliveryFee === "number" ? data.deliveryFee : 40,
-        minimumOrderAmount: typeof data.minimumOrderAmount === "number" ? data.minimumOrderAmount : 99,
+        deliveryFee: fee,
+        minimumOrderAmount: typeof data.minimumOrderAmount === "number" ? data.minimumOrderAmount : 0,
         freeDeliveryThreshold: data.freeDeliveryThreshold,
         estimatedDeliveryTime: data.estimatedDeliveryTime || data.zone?.estimatedDeliveryTime || "35 - 45 mins",
       };
@@ -60,8 +70,8 @@ export const deliveryService = {
       return {
         serviceable: false,
         message: msg,
-        deliveryFee: 40,
-        minimumOrderAmount: 99,
+        deliveryFee: 0,
+        minimumOrderAmount: 0,
       };
     }
   },

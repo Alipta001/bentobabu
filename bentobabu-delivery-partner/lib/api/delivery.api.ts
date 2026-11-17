@@ -89,6 +89,18 @@ export const deliveryApi = {
   },
 
   /**
+   * POST /api/v1/operations/delivery/orders/:id/collect-cash
+   * Records cash collection for Cash on Delivery (COD) order.
+   */
+  async collectCash(id: string, note?: string): Promise<{ success: boolean; message: string; data: any }> {
+    const response = await apiClient.post<{ success: boolean; message: string; data: any }>(
+      `/operations/delivery/orders/${id}/collect-cash`,
+      { note: note || "Cash collected from customer at doorstep" }
+    );
+    return response.data;
+  },
+
+  /**
    * GET /api/v1/delivery/presence/me
    * Fetches current rider presence, active order and timeout configurations
    */
