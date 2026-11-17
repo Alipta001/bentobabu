@@ -64,19 +64,20 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-[#354B35]/60">
           {/* Brand Info */}
           <div className="lg:col-span-2 space-y-4">
-            <Link href="/" className="inline-flex items-center gap-3 group">
-              <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-[#354B35] flex items-center justify-center border border-[#4A654A] group-hover:scale-105 transition-transform">
+            <Link
+              href="/"
+              className="inline-flex items-center group py-1"
+              aria-label={brandConfig.name}
+            >
+              <div className="relative h-13 sm:h-14 px-3.5 py-1.5 rounded-2xl bg-[#F7F3EA] shadow-xs flex items-center group-hover:scale-102 transition-transform duration-200">
                 <Image
                   src={brandConfig.logo.imagePath}
                   alt={brandConfig.name}
-                  width={40}
-                  height={40}
-                  className="w-full h-full object-contain p-0.5"
+                  width={220}
+                  height={110}
+                  className="h-full w-auto max-w-[200px] object-contain"
                 />
               </div>
-              <span className="font-serif text-2xl font-bold tracking-tight text-white group-hover:text-[#DFC89B] transition-colors">
-                {brandConfig.name}
-              </span>
             </Link>
             <p className="text-xs leading-relaxed text-[#B5C4B1] max-w-sm">
               {brandConfig.description}

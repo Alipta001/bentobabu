@@ -119,24 +119,20 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-18 sm:h-20 gap-4">
           {/* Brand Identity */}
-          <Link href="/" className="flex items-center gap-3 group shrink-0">
-            <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-2xl overflow-hidden bg-gradient-to-br from-[#354B35] to-[#1F2C1F] flex items-center justify-center shadow-md border border-[#DFC89B]/30 group-hover:scale-105 group-hover:shadow-lg transition-all duration-300">
+          <Link
+            href="/"
+            className="flex items-center group shrink-0 py-1"
+            aria-label={brandConfig.name}
+          >
+            <div className="relative h-12 sm:h-14 md:h-15 w-auto flex items-center group-hover:scale-102 transition-transform duration-200">
               <Image
                 src={brandConfig.logo.imagePath}
                 alt={brandConfig.name}
-                width={44}
-                height={44}
-                className="w-full h-full object-contain p-0.5"
+                width={220}
+                height={110}
+                className="h-12 sm:h-14 md:h-15 w-auto max-w-[220px] object-contain drop-shadow-xs"
                 priority
               />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-[#222922] group-hover:text-[#354B35] transition-colors leading-none">
-                {brandConfig.name}
-              </span>
-              <span className="text-[9px] sm:text-[10px] tracking-[0.22em] uppercase font-semibold text-[#8C713B] mt-1 select-none">
-                {brandConfig.logo.subtext}
-              </span>
             </div>
           </Link>
 

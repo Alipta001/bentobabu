@@ -62,25 +62,20 @@ export function AdminSidebar({ mobileOpen, onCloseMobile }: AdminSidebarProps) {
   const sidebarContent = (
     <div className="flex flex-col h-full bg-[#1E2B1E] text-[#EDE8DE] border-r border-[#2C3E2C]">
       {/* Brand Header */}
-      <div className="p-6 border-b border-[#2C3E2C] flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-[#354B35] flex items-center justify-center shadow-sm border border-[#4A654A] group-hover:scale-105 transition-transform">
+      <div className="p-4 sm:p-5 border-b border-[#2C3E2C] flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2.5 group" aria-label="Bento Babu Kitchen Admin">
+          <div className="relative h-10 px-2.5 py-1 rounded-xl bg-[#F7F3EA] shadow-xs flex items-center group-hover:scale-102 transition-transform">
             <Image
               src="/bentobabu_logo.png"
               alt="Bento Babu"
-              width={40}
-              height={40}
-              className="w-full h-full object-contain p-0.5"
+              width={160}
+              height={80}
+              className="h-full w-auto max-w-[140px] object-contain"
               priority
             />
           </div>
-          <div>
-            <div className="font-serif text-lg font-bold tracking-tight text-white leading-none">
-              Bento Babu
-            </div>
-            <div className="text-[10px] tracking-widest uppercase font-semibold text-[#B99A60] mt-0.5">
-              Kitchen Admin
-            </div>
+          <div className="px-2 py-0.5 rounded-md bg-[#354B35] text-[10px] tracking-widest uppercase font-semibold text-[#DFC89B] border border-[#4A654A]">
+            Admin
           </div>
         </Link>
         <button

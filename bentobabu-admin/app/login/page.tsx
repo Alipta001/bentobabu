@@ -40,21 +40,18 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-[#F7F3EA] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Brand Card */}
-        <div className="text-center mb-8">
-          <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-[#354B35] flex items-center justify-center mx-auto mb-4 shadow-md border border-[#4A654A]">
+        <div className="text-center mb-8 flex flex-col items-center">
+          <div className="relative h-20 sm:h-24 w-auto flex items-center justify-center mb-3">
             <Image
               src="/bentobabu_logo.png"
               alt="Bento Babu"
-              width={80}
-              height={80}
-              className="w-full h-full object-contain p-1"
+              width={260}
+              height={130}
+              className="h-20 sm:h-24 w-auto max-w-[280px] object-contain drop-shadow-xs"
               priority
             />
           </div>
-          <h1 className="font-serif text-3xl font-bold text-[#1E2B1E] tracking-tight">
-            Bento Babu
-          </h1>
-          <p className="text-xs uppercase tracking-widest font-semibold text-[#B99A60] mt-1">
+          <p className="text-xs uppercase tracking-widest font-semibold text-[#8C713B]">
             Kitchen & Executive Admin Portal
           </p>
         </div>
