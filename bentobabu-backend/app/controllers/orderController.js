@@ -232,9 +232,9 @@ class OrderController {
           adminDeliveryCharge = zone.deliveryCharge;
         } else if (chargeAmountSetting && typeof chargeAmountSetting.value === 'number') {
           adminDeliveryCharge = chargeAmountSetting.value;
-        } else {
-          adminDeliveryCharge = 30;
         }
+        // If neither zone nor system setting specifies a charge, default to 0 (free delivery)
+        // so admin retains full control — no silent hardcoded charge.
       }
 
       const deliveryChargePaise = Math.round(adminDeliveryCharge * 100);
@@ -649,9 +649,9 @@ class OrderController {
           adminDeliveryCharge = zone.deliveryCharge;
         } else if (chargeAmountSetting && typeof chargeAmountSetting.value === 'number') {
           adminDeliveryCharge = chargeAmountSetting.value;
-        } else {
-          adminDeliveryCharge = 30;
         }
+        // If neither zone nor system setting specifies a charge, default to 0 (free delivery)
+        // so admin retains full control — no silent hardcoded charge.
       }
 
       const deliveryChargePaise = Math.round(adminDeliveryCharge * 100);

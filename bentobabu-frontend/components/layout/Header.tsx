@@ -251,6 +251,17 @@ export function Header() {
             >
               FAQ
             </Link>
+
+            <Link
+              href="/support"
+              className={`px-4 py-2 rounded-full text-xs font-semibold tracking-wide transition-all ${
+                pathname.startsWith("/support")
+                  ? "bg-[#354B35] text-[#F7F3EA] shadow-xs"
+                  : "text-[#354B35] hover:bg-[#354B35]/8 hover:text-[#222922]"
+              }`}
+            >
+              Support
+            </Link>
           </nav>
 
           {/* Action Area: Account, Notifications, Cart */}
@@ -315,6 +326,14 @@ export function Header() {
                       >
                         <MapPin className="w-4 h-4 text-[#8A9A86]" />
                         <span>Saved Addresses</span>
+                      </Link>
+                      <Link
+                        href="/support"
+                        onClick={() => setAccountMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-[#222922] hover:bg-[#F7F3EA] hover:text-[#354B35] transition-colors"
+                      >
+                        <HelpCircle className="w-4 h-4 text-[#8A9A86]" />
+                        <span>Customer Support</span>
                       </Link>
                     </div>
                     <div className="pt-1.5 mt-1.5 border-t border-[#F0ECE1]">
@@ -442,6 +461,18 @@ export function Header() {
               <HelpCircle className="w-4 h-4" />
               <span>FAQ & Delivery Info</span>
             </Link>
+            <Link
+              href="/support"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                pathname.startsWith("/support")
+                  ? "bg-[#354B35] text-[#F7F3EA]"
+                  : "text-[#354B35] hover:bg-[#354B35]/8"
+              }`}
+            >
+              <HelpCircle className="w-4 h-4" />
+              <span>Customer Support</span>
+            </Link>
           </div>
 
           {/* Quick Collections Section */}
@@ -482,7 +513,7 @@ export function Header() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-4 gap-2">
                   <Link
                     href="/account"
                     onClick={() => setMobileMenuOpen(false)}
@@ -503,6 +534,13 @@ export function Header() {
                     className="p-2 text-center rounded-xl bg-white border border-[#E8E2D2] text-[11px] font-semibold text-[#354B35] hover:bg-[#F7F3EA]"
                   >
                     Addresses
+                  </Link>
+                  <Link
+                    href="/support"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="p-2 text-center rounded-xl bg-white border border-[#E8E2D2] text-[11px] font-semibold text-[#354B35] hover:bg-[#F7F3EA]"
+                  >
+                    Support
                   </Link>
                 </div>
 

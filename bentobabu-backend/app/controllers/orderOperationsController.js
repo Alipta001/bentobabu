@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const { Order } = require('../models');
+const { isDeliveryOtpRequired } = require('../config/env');
 const NotificationDispatcher = require('../utils/notificationDispatcher');
 const { redisDelPattern } = require('../config/redis');
 
@@ -552,53 +553,57 @@ class OrderOperationsController {
           });
         }
 
-        // Verify Delivery OTP
-        if (!otp || (typeof otp !== 'string' && typeof otp !== 'number')) {
-          return res.status(400).json({
-            success: false,
-            message: 'Delivery OTP is required to complete delivery',
-          });
+        const otpRequired = isDeliveryOtpRequired();
+
+        if (otpRequired) {
+          // Verify Delivery OTP
+          if (!otp || (typeof otp !== 'string' && typeof otp !== 'number')) {
+            return res.status(400).json({
+              success: false,
+              message: 'Delivery OTP is required to complete delivery',
+            });
+          }
+
+          if (!order.deliveryOTP) {
+            return res.status(400).json({
+              success: false,
+              message: 'No active delivery OTP found for this order',
+            });
+          }
+
+          if ((order.failedOtpAttempts || 0) >= 5) {
+            return res.status(429).json({
+              success: false,
+              message:
+                'Maximum delivery OTP verification attempts exceeded (5/5). Order delivery verification locked. Contact support.',
+            });
+          }
+
+          // Verify OTP Expiry
+          if (order.deliveryOtpExpiresAt && new Date() > new Date(order.deliveryOtpExpiresAt)) {
+            return res.status(400).json({
+              success: false,
+              message: 'Delivery OTP has expired. Contact support or admin to refresh verification.',
+            });
+          }
+
+          const providedOtpString = otp.toString().trim();
+          const calculatedOtpHash = crypto
+            .createHash('sha256')
+            .update(providedOtpString)
+            .digest('hex');
+
+          if (calculatedOtpHash !== order.deliveryOTP) {
+            order.failedOtpAttempts = (order.failedOtpAttempts || 0) + 1;
+            await order.save();
+            return res.status(400).json({
+              success: false,
+              message: `Invalid delivery OTP. Verification failed. (${5 - order.failedOtpAttempts} attempts remaining)`,
+            });
+          }
         }
 
-        if (!order.deliveryOTP) {
-          return res.status(400).json({
-            success: false,
-            message: 'No active delivery OTP found for this order',
-          });
-        }
-
-        if ((order.failedOtpAttempts || 0) >= 5) {
-          return res.status(429).json({
-            success: false,
-            message:
-              'Maximum delivery OTP verification attempts exceeded (5/5). Order delivery verification locked. Contact support.',
-          });
-        }
-
-        // Verify OTP Expiry
-        if (order.deliveryOtpExpiresAt && new Date() > new Date(order.deliveryOtpExpiresAt)) {
-          return res.status(400).json({
-            success: false,
-            message: 'Delivery OTP has expired. Contact support or admin to refresh verification.',
-          });
-        }
-
-        const providedOtpString = otp.toString().trim();
-        const calculatedOtpHash = crypto
-          .createHash('sha256')
-          .update(providedOtpString)
-          .digest('hex');
-
-        if (calculatedOtpHash !== order.deliveryOTP) {
-          order.failedOtpAttempts = (order.failedOtpAttempts || 0) + 1;
-          await order.save();
-          return res.status(400).json({
-            success: false,
-            message: `Invalid delivery OTP. Verification failed. (${5 - order.failedOtpAttempts} attempts remaining)`,
-          });
-        }
-
-        // OTP verified successfully: mark DELIVERED and invalidate OTP
+        // OTP verified successfully or OTP verification skipped: mark DELIVERED and clear OTP
         order.orderStatus = 'DELIVERED';
         order.deliveryOTP = null;
         order.deliveryOtpCode = null;
@@ -615,7 +620,9 @@ class OrderOperationsController {
           status: 'DELIVERED',
           changedBy: req.user.id,
           changedAt: new Date(),
-          note: note || 'Order successfully delivered and verified with OTP',
+          note: otpRequired
+            ? (note || 'Order successfully delivered and verified with OTP')
+            : (note || 'Order successfully delivered (OTP verification disabled)'),
         });
 
         await order.save();
@@ -646,7 +653,9 @@ class OrderOperationsController {
         const responseOrder = order.toJSON();
         return res.status(200).json({
           success: true,
-          message: 'Order successfully delivered and OTP invalidated',
+          message: otpRequired
+            ? 'Order successfully delivered and OTP invalidated'
+            : 'Order successfully delivered',
           data: responseOrder,
         });
       }

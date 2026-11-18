@@ -18,7 +18,7 @@ import {
 import { Order } from "@/types";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CENTRAL_KITCHEN_DETAILS } from "@/lib/api/delivery.api";
-import { useAcceptAndPickupOrder } from "@/hooks/useDeliveryQueries";
+import { useAcceptAndPickupOrder, useDeliveryConfig } from "@/hooks/useDeliveryQueries";
 import { toast } from "sonner";
 
 interface DeliveryCardProps {
@@ -34,6 +34,9 @@ export function DeliveryCard({
 }: DeliveryCardProps) {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const acceptMutation = useAcceptAndPickupOrder();
+  const { data: deliveryConfig } = useDeliveryConfig();
+
+  const otpRequired = deliveryConfig?.otpRequired !== false;
 
   const orderId = order.id || order._id;
   const isCod = order.paymentMethod === "COD";
@@ -221,7 +224,7 @@ export function DeliveryCard({
                   className="flex-2 py-3 rounded-2xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  <span>Deliver & Verify OTP</span>
+                  <span>{otpRequired ? "Deliver & Verify OTP" : "Complete Delivery"}</span>
                 </button>
               </div>
             </div>

@@ -162,6 +162,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/support" className="hover:text-white transition-colors">
+                  Customer Support & Help
+                </Link>
+              </li>
+              <li>
                 <Link href="/#why-choose-us" className="hover:text-white transition-colors">
                   Our Philosophy
                 </Link>

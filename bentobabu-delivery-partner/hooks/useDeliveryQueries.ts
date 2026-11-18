@@ -86,11 +86,19 @@ export function useAcceptAndPickupOrder() {
   });
 }
 
+export function useDeliveryConfig() {
+  return useQuery({
+    queryKey: ["delivery-config"],
+    queryFn: () => deliveryApi.getDeliveryConfig(),
+    staleTime: 60000,
+  });
+}
+
 export function useVerifyDeliveryOtp() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, otp, note }: { id: string; otp: string; note?: string }) =>
+    mutationFn: ({ id, otp, note }: { id: string; otp?: string; note?: string }) =>
       deliveryApi.verifyDeliveryOtp(id, otp, note),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["delivery-orders"] });

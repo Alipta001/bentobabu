@@ -181,6 +181,11 @@ const getEmailTemplate = (eventType, data = {}) => {
     items = [],
     deliveryAddress = null,
     reason = '',
+    ticketNumber = '',
+    subject: ticketSubject = '',
+    messagePreview = '',
+    status = '',
+    resolutionNote = '',
   } = data;
 
   const itemsHtml = renderItemsTable(items);
@@ -336,6 +341,51 @@ const getEmailTemplate = (eventType, data = {}) => {
         <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
           Please open your delivery partner dashboard to review order details and proceed with the delivery.
         </p>`;
+      break;
+
+    case 'SUPPORT_TICKET_CREATED':
+      title = 'Support Request Received';
+      preheader = `We have received your ticket #${ticketNumber || orderNumber}.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          Thank you for reaching out to BentoBabu Support. Your request <strong>#${ticketNumber || orderNumber}</strong> (${ticketSubject || 'Support Ticket'}) has been safely logged.
+        </p>
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          Our customer happiness team will review your inquiry and get back to you shortly. You can track this ticket anytime from your support dashboard.
+        </p>`;
+      break;
+
+    case 'SUPPORT_TICKET_REPLIED':
+      title = 'New Message on Your Support Ticket';
+      preheader = `Support staff replied to ticket #${ticketNumber || orderNumber}.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          A support executive has replied to your ticket <strong>#${ticketNumber || orderNumber}</strong>:
+        </p>
+        <div style="background-color: #f9fafb; border-left: 4px solid #C86D51; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">
+          <p style="margin: 0; font-size: 14px; color: #1f2937; line-height: 1.5;">${messagePreview || 'New message received.'}</p>
+        </div>
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          To respond, simply visit your BentoBabu Support Centre.
+        </p>`;
+      break;
+
+    case 'SUPPORT_TICKET_STATUS_UPDATED':
+      title = `Ticket #${ticketNumber || orderNumber} Status Update`;
+      preheader = `Your ticket status is now ${status || 'Updated'}.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          The status of your support ticket <strong>#${ticketNumber || orderNumber}</strong> has been updated to:
+          <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; background: #e5e7eb; font-weight: bold; font-size: 12px; margin-left: 4px;">${status || 'Updated'}</span>
+        </p>
+        ${
+          resolutionNote
+            ? `<div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 12px; margin: 16px 0;">
+                <p style="margin: 0 0 4px 0; font-size: 12px; color: #166534; font-weight: 600;">Resolution Note</p>
+                <p style="margin: 0; font-size: 14px; color: #1f2937;">${resolutionNote}</p>
+              </div>`
+            : ''
+        }`;
       break;
 
     default:

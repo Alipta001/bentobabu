@@ -1,4 +1,5 @@
 const { DeliveryZone, DeliverySlot, SystemSetting } = require('../models');
+const { isDeliveryOtpRequired } = require('../config/env');
 
 class DeliveryController {
   /**
@@ -48,9 +49,9 @@ class DeliveryController {
           finalDeliveryCharge = zone.deliveryCharge;
         } else if (chargeAmountSetting && typeof chargeAmountSetting.value === 'number') {
           finalDeliveryCharge = chargeAmountSetting.value;
-        } else {
-          finalDeliveryCharge = 30;
         }
+        // If neither zone nor system setting specifies a charge, default to 0 (free delivery)
+        // so the admin remains the authoritative source — no silent hardcoded ₹30.
       }
 
       // Determine authoritative minimum order amount
@@ -113,6 +114,7 @@ class DeliveryController {
           minimumOrderAmount: minimumOrderValue,
           deliveryChargeEnabled,
           deliveryChargeAmount,
+          otpRequired: isDeliveryOtpRequired(),
         },
       });
     } catch (error) {

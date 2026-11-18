@@ -21,6 +21,8 @@ const DeliveryApplication = require('./DeliveryApplication');
 const DeliveryPartnerPresence = require('./DeliveryPartnerPresence');
 const DailyMenu = require('./DailyMenu');
 const DeviceToken = require('./DeviceToken');
+const SupportTicket = require('./SupportTicket');
+const SupportFaq = require('./SupportFaq');
 
 module.exports = {
   User,
@@ -46,5 +48,7 @@ module.exports = {
   DeliveryPartnerPresence,
   DailyMenu,
   DeviceToken,
+  SupportTicket,
+  SupportFaq,
 };
 

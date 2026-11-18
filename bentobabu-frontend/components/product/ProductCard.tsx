@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Plus, Minus, Check, Clock, Flame, Video } from "lucide-react";
+import { Plus, Minus, Check, Clock, Flame, Video, Star } from "lucide-react";
 import { Product } from "@/types";
 import { DietaryBadge } from "@/components/ui/DietaryBadge";
 import { useAppSelector } from "@/store/hooks";
@@ -125,6 +125,17 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
               {product.name}
             </h3>
           </Link>
+
+          {/* Customer Rating if real reviews exist */}
+          {Boolean(product.totalReviews && product.totalReviews > 0) && (
+            <div className="flex items-center gap-1.5 text-xs text-[#222922]">
+              <div className="flex items-center text-amber-500">
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+              </div>
+              <span className="font-bold text-xs">{product.averageRating?.toFixed(1)}</span>
+              <span className="text-[11px] text-[#6B776A]">({product.totalReviews})</span>
+            </div>
+          )}
 
           <p className="text-xs text-[#4F5B4F] line-clamp-2 leading-relaxed">
             {product.description}

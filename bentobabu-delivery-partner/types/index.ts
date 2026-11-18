@@ -128,6 +128,14 @@ export interface DeliveryOrderListResponse {
   data: Order[];
 }
 
+export interface DeliveryConfig {
+  minimumOrderValue: number;
+  minimumOrderAmount: number;
+  deliveryChargeEnabled: boolean;
+  deliveryChargeAmount: number;
+  otpRequired: boolean;
+}
+
 export interface NotificationItem {
   _id: string;
   id?: string;

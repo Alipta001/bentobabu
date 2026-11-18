@@ -521,17 +521,60 @@ export function useToggleDeliverySlot() {
 // REVIEWS
 // ==========================================
 
-export function useAdminReviews() {
+export function useAdminReviews(params?: {
+  page?: number;
+  limit?: number;
+  rating?: string;
+  status?: string;
+  search?: string;
+  productId?: string;
+}) {
   return useQuery({
-    queryKey: ["admin", "reviews"],
-    queryFn: () => reviewService.getAll(),
+    queryKey: ["admin", "reviews", params],
+    queryFn: () => reviewService.getAll(params),
+  });
+}
+
+export function useAdminReviewStats() {
+  return useQuery({
+    queryKey: ["admin", "reviews", "stats"],
+    queryFn: () => reviewService.getStats(),
+  });
+}
+
+export function useUpdateReviewStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      status,
+      moderationNote,
+    }: {
+      id: string;
+      status: import("@/types").ReviewStatus;
+      moderationNote?: string;
+    }) => reviewService.updateStatus(id, status, moderationNote),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "reviews"] });
+    },
   });
 }
 
 export function useToggleReviewApproval() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => reviewService.toggleApproval(id),
+    mutationFn: ({ id, isApproved }: { id: string; isApproved: boolean }) =>
+      reviewService.toggleApproval(id, isApproved),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "reviews"] });
+    },
+  });
+}
+
+export function useDeleteReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => reviewService.deleteReview(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "reviews"] });
     },

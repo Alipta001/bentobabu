@@ -233,6 +233,16 @@ export default function CheckoutPage() {
     useServiceability(activePincode);
   const { data: deliveryConfig } = useDeliveryConfig();
 
+  // Stable cart fingerprint: re-fetch checkout summary whenever items or quantities change
+  const cartFingerprint = useMemo(
+    () =>
+      cartItems
+        .map((it) => `${it.product.id ?? it.product._id}:${it.quantity}`)
+        .sort()
+        .join(","),
+    [cartItems]
+  );
+
   // Step 7: Live Authoritative Checkout Summary (only when cart is hydrated and has items, and address is selected)
   useEffect(() => {
     let isCancelled = false;
@@ -269,7 +279,7 @@ export default function CheckoutPage() {
     return () => {
       isCancelled = true;
     };
-  }, [isCartHydrated, isCartSyncing, cartItems.length, selectedAddressId, selectedSlot, appliedCoupon]);
+  }, [isCartHydrated, isCartSyncing, cartFingerprint, selectedAddressId, selectedSlot, appliedCoupon]);
 
   // Fallback calculation if backend summary pending
   const clientSubtotal = cartItems.reduce(

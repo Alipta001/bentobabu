@@ -167,14 +167,72 @@ export interface DeliveryZone {
   isServiceable: boolean;
 }
 
+export interface ReviewImage {
+  url: string;
+  publicId?: string | null;
+}
+
+export type ReviewStatus = "APPROVED" | "PENDING" | "REJECTED" | "HIDDEN";
+
 export interface Review {
   id: string;
-  productName: string;
-  customerName: string;
   rating: number; // 1-5
+  title?: string;
   comment: string;
-  createdAt: string;
+  images?: ReviewImage[];
+  isVerifiedPurchase?: boolean;
+  status?: ReviewStatus;
   isApproved: boolean;
+  customer?: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+  } | null;
+  product?: {
+    id: string;
+    name: string;
+    slug: string;
+    image?: string;
+    price: number;
+  } | null;
+  order?: {
+    id: string;
+    orderNumber: string;
+    grandTotal: number;
+    orderDate?: string;
+  } | null;
+  moderation?: {
+    moderatedBy?: {
+      id: string;
+      name: string;
+      email: string;
+    } | null;
+    moderatedAt?: string | null;
+    moderationNote?: string;
+  };
+  createdAt: string;
+  updatedAt?: string;
+
+  // Compatibility getters/fallbacks
+  productName?: string;
+  customerName?: string;
+}
+
+export interface AdminReviewStats {
+  totalCount: number;
+  approvedCount: number;
+  hiddenCount: number;
+  rejectedCount: number;
+  pendingCount: number;
+  averageRating: number;
+  ratingBreakdown: {
+    5: number;
+    4: number;
+    3: number;
+    2: number;
+    1: number;
+  };
 }
 
 export interface BusinessSettings {
@@ -273,4 +331,144 @@ export interface VideoContent {
   createdAt: string;
   updatedAt?: string;
 }
+
+export type TicketCategory =
+  | "ORDER_ISSUE"
+  | "PAYMENT_ISSUE"
+  | "DELIVERY_ISSUE"
+  | "MISSING_INCORRECT_ITEM"
+  | "FOOD_QUALITY"
+  | "REFUND_REQUEST"
+  | "ACCOUNT_ISSUE"
+  | "OTHER";
+
+export type TicketStatus =
+  | "OPEN"
+  | "IN_PROGRESS"
+  | "WAITING_FOR_CUSTOMER"
+  | "RESOLVED"
+  | "CLOSED";
+
+export type TicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+
+export interface TicketAttachment {
+  url: string;
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+}
+
+export interface AdminTicketMessage {
+  id?: string;
+  senderId?: string;
+  senderName?: string;
+  senderRole: "CUSTOMER" | "ADMIN" | "SYSTEM";
+  message: string;
+  attachments?: TicketAttachment[];
+  isInternalNote: boolean;
+  createdAt: string;
+}
+
+export interface AdminTicketListItem {
+  id: string;
+  ticketNumber: string;
+  category: TicketCategory;
+  subject: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  customer: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+  } | null;
+  assignedTo: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+  order: {
+    id: string;
+    orderNumber: string;
+    orderStatus: string;
+    grandTotal: number;
+  } | null;
+  messageCount: number;
+  internalNotesCount: number;
+  lastMessageSnippet: string;
+  lastMessageAt: string;
+  createdAt: string;
+}
+
+export interface AdminTicketDetail {
+  id: string;
+  ticketNumber: string;
+  category: TicketCategory;
+  subject: string;
+  description: string;
+  attachments: TicketAttachment[];
+  status: TicketStatus;
+  priority: TicketPriority;
+  customer: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    isActive?: boolean;
+    createdAt?: string;
+  } | null;
+  assignedTo: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+  order: {
+    id: string;
+    orderNumber: string;
+    orderStatus: string;
+    paymentStatus?: string;
+    paymentMethod?: string;
+    grandTotal: number;
+    createdAt: string;
+    deliveryAddress?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+    };
+    items?: Array<{
+      productName: string;
+      quantity: number;
+      price: number;
+      subtotal: number;
+    }>;
+  } | null;
+  messages: AdminTicketMessage[];
+  resolutionNote?: string | null;
+  resolvedAt?: string | null;
+  closedAt?: string | null;
+  createdAt: string;
+  lastMessageAt: string;
+}
+
+export interface SupportStats {
+  total: number;
+  open: number;
+  inProgress: number;
+  waitingForCustomer: number;
+  resolved: number;
+  closed: number;
+}
+
+export interface AdminFaqItem {
+  id: string;
+  question: string;
+  answer: string;
+  category: string;
+  isPublished: boolean;
+  orderIndex: number;
+  helpfulCount?: number;
+  createdAt: string;
+}
+
 

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { X, ShieldCheck, AlertCircle, CheckCircle, Lock } from "lucide-react";
 import { Order } from "@/types";
 import { OtpInput } from "./OtpInput";
-import { useVerifyDeliveryOtp } from "@/hooks/useDeliveryQueries";
+import { useVerifyDeliveryOtp, useDeliveryConfig } from "@/hooks/useDeliveryQueries";
 import { deliveryApi } from "@/lib/api/delivery.api";
 import { toast } from "sonner";
 
@@ -24,15 +24,22 @@ export function OtpVerificationModal({
   const [otp, setOtp] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const verifyMutation = useVerifyDeliveryOtp();
+  const { data: config } = useDeliveryConfig();
 
   if (!isOpen || !order) return null;
+
+  // Defaults to true if config is loading or unset
+  const otpRequired = config?.otpRequired !== false;
 
   const orderId = order.id || order._id;
   const isCod = order.paymentMethod === "COD";
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.length !== 6) {
+
+    if (verifyMutation.isPending) return;
+
+    if (otpRequired && otp.length !== 6) {
       setErrorMsg("Please enter the complete 6-digit delivery OTP.");
       return;
     }
@@ -42,26 +49,39 @@ export function OtpVerificationModal({
     try {
       const delivered = await verifyMutation.mutateAsync({
         id: orderId,
-        otp: otp.trim(),
-        note: "Delivery verified via partner app with customer OTP",
+        ...(otpRequired ? { otp: otp.trim() } : {}),
+        note: otpRequired
+          ? "Delivery verified via partner app with customer OTP"
+          : "Delivery completed by partner upon doorstep handover",
       });
 
       if (isCod) {
         try {
-          await deliveryApi.collectCash(orderId, "Cash collected by partner upon OTP delivery");
+          await deliveryApi.collectCash(
+            orderId,
+            otpRequired
+              ? "Cash collected by partner upon OTP delivery"
+              : "Cash collected by partner upon delivery handover"
+          );
         } catch (cashErr: any) {
           console.warn("[CashCollection] Note:", cashErr?.response?.data?.message || cashErr?.message);
         }
       }
 
-      toast.success("Delivery verified and completed successfully!");
+      toast.success(
+        otpRequired
+          ? "Delivery verified and completed successfully!"
+          : "Delivery completed successfully!"
+      );
       setOtp("");
       onSuccess(delivered);
     } catch (err: any) {
       const message =
         err?.response?.data?.message ||
         err?.message ||
-        "Invalid OTP. Please check with the customer and try again.";
+        (otpRequired
+          ? "Invalid OTP. Please check with the customer and try again."
+          : "Failed to complete delivery. Please try again.");
       setErrorMsg(message);
     }
   };
@@ -77,7 +97,7 @@ export function OtpVerificationModal({
             </div>
             <div>
               <h2 className="font-bold text-base sm:text-lg text-[#241C1A]">
-                Customer Delivery Verification
+                {otpRequired ? "Customer Delivery Verification" : "Complete Order Delivery"}
               </h2>
               <div className="text-xs text-gray-500">
                 Order #{order.orderNumber}
@@ -96,13 +116,27 @@ export function OtpVerificationModal({
 
         {/* Verification Message */}
         <div className="bg-[#FBF9F6] rounded-2xl p-4 border border-[#EFECE6] space-y-2">
-          <p className="text-xs font-semibold text-[#241C1A] leading-relaxed">
-            Ask the customer for their <span className="text-[#C86D51] font-bold">6-digit delivery OTP</span> sent to their phone or app.
-          </p>
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
-            <Lock className="w-3.5 h-3.5 text-gray-400" />
-            <span>Never share or complete delivery without customer OTP confirmation.</span>
-          </div>
+          {otpRequired ? (
+            <>
+              <p className="text-xs font-semibold text-[#241C1A] leading-relaxed">
+                Ask the customer for their <span className="text-[#C86D51] font-bold">6-digit delivery OTP</span> sent to their phone or app.
+              </p>
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                <Lock className="w-3.5 h-3.5 text-gray-400" />
+                <span>Never share or complete delivery without customer OTP confirmation.</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-[#241C1A] leading-relaxed">
+                Customer OTP verification is <span className="text-emerald-700 font-bold">disabled</span> for this environment. Ensure the package is handed over to the customer before confirming.
+              </p>
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Package delivery can be confirmed directly by the assigned delivery partner.</span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Cash Collection Alert if COD */}
@@ -113,7 +147,9 @@ export function OtpVerificationModal({
                 Cash on Delivery (COD) Order
               </span>
               <span className="text-amber-700 text-[11px]">
-                Collect physical cash before entering OTP.
+                {otpRequired
+                  ? "Collect physical cash before entering OTP."
+                  : "Collect physical cash before confirming delivery."}
               </span>
             </div>
             <div className="text-base font-extrabold text-amber-950 font-mono">
@@ -122,22 +158,24 @@ export function OtpVerificationModal({
           </div>
         )}
 
-        {/* OTP Input Form */}
+        {/* Form */}
         <form onSubmit={handleVerify} className="space-y-5">
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-700 block text-center uppercase tracking-wider">
-              Enter 6-Digit Code
-            </label>
-            <OtpInput
-              length={6}
-              value={otp}
-              onChange={(val) => {
-                setOtp(val);
-                if (errorMsg) setErrorMsg(null);
-              }}
-              disabled={verifyMutation.isPending}
-            />
-          </div>
+          {otpRequired && (
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-700 block text-center uppercase tracking-wider">
+                Enter 6-Digit Code
+              </label>
+              <OtpInput
+                length={6}
+                value={otp}
+                onChange={(val) => {
+                  setOtp(val);
+                  if (errorMsg) setErrorMsg(null);
+                }}
+                disabled={verifyMutation.isPending}
+              />
+            </div>
+          )}
 
           {/* Error Message Alert */}
           {errorMsg && (
@@ -159,13 +197,13 @@ export function OtpVerificationModal({
             </button>
             <button
               type="submit"
-              disabled={otp.length !== 6 || verifyMutation.isPending}
+              disabled={verifyMutation.isPending || (otpRequired && otp.length !== 6)}
               className="py-3.5 rounded-2xl bg-[#C86D51] text-white text-xs font-bold hover:bg-[#B35D42] disabled:opacity-50 shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
             >
               {verifyMutation.isPending ? (
                 <>
                   <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Verifying...</span>
+                  <span>{otpRequired ? "Verifying..." : "Completing..."}</span>
                 </>
               ) : (
                 <>

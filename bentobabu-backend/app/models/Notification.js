@@ -14,6 +14,12 @@ const notificationSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    supportTicket: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SupportTicket',
+      default: null,
+      index: true,
+    },
     channel: {
       type: String,
       enum: {
@@ -46,6 +52,9 @@ const notificationSchema = new mongoose.Schema(
           'DELIVERY_APPLICATION_SUSPENDED',
           'ORDER_REASSIGNED',
           'DELIVERY_ASSIGNMENT',
+          'SUPPORT_TICKET_CREATED',
+          'SUPPORT_TICKET_REPLIED',
+          'SUPPORT_TICKET_STATUS_UPDATED',
         ],
         message: '{VALUE} is not a valid notification event type',
       },

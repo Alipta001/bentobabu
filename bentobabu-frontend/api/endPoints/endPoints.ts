@@ -72,4 +72,20 @@ export const API_ENDPOINTS = {
     FEATURED: "/videos/featured",
     DETAIL: (slug: string) => `/videos/${slug}`,
   },
+  SUPPORT: {
+    CONFIG: "/support/config",
+    FAQS: (category?: string) => (category ? `/support/faqs?category=${encodeURIComponent(category)}` : "/support/faqs"),
+    TICKETS: "/support/tickets",
+    TICKET_DETAIL: (id: string) => `/support/tickets/${id}`,
+    TICKET_REPLY: (id: string) => `/support/tickets/${id}/messages`,
+    UPLOAD: "/support/upload",
+  },
+  REVIEWS: {
+    PRODUCT: (productId: string) => `/reviews/product/${productId}`,
+    ELIGIBILITY: (productId: string) => `/reviews/eligibility/${productId}`,
+    SUBMIT: "/reviews",
+    UPDATE: (id: string) => `/reviews/${id}`,
+    MY_REVIEWS: "/reviews/my",
+    UPLOAD_IMAGE: "/reviews/upload-image",
+  },
 } as const;

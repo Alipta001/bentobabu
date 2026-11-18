@@ -131,4 +131,20 @@ export const ADMIN_API_ENDPOINTS = {
     PARTNER_DETAIL: (id: string) => `/admin/delivery-operations/partners/${id}`,
     UPDATE_STATUS: (id: string) => `/admin/delivery-operations/partners/${id}/status`,
   },
+  SUPPORT: {
+    STATS: "/admin/support/stats",
+    TICKETS: "/admin/support/tickets",
+    TICKET_DETAIL: (id: string) => `/admin/support/tickets/${id}`,
+    ADD_MESSAGE: (id: string) => `/admin/support/tickets/${id}/messages`,
+    UPDATE_STATUS: (id: string) => `/admin/support/tickets/${id}/status`,
+    ASSIGN: (id: string) => `/admin/support/tickets/${id}/assign`,
+    FAQS: "/admin/support/faqs",
+    FAQ_DETAIL: (id: string) => `/admin/support/faqs/${id}`,
+  },
+  REVIEWS: {
+    LIST: "/admin/reviews",
+    STATS: "/admin/reviews/stats",
+    UPDATE_STATUS: (id: string) => `/admin/reviews/${id}/status`,
+    DELETE: (id: string) => `/admin/reviews/${id}`,
+  },
 } as const;

@@ -179,10 +179,15 @@ const adminDeliveryApplicationRoutes = require('./app/routes/adminDeliveryApplic
 const deliveryPresenceRoutes = require('./app/routes/deliveryPresenceRoutes');
 const adminDeliveryOperationsRoutes = require('./app/routes/adminDeliveryOperationsRoutes');
 const dailyMenuRoutes = require('./app/routes/dailyMenuRoutes');
+const supportRoutes = require('./app/routes/supportRoutes');
+const adminSupportRoutes = require('./app/routes/adminSupportRoutes');
+const reviewRoutes = require('./app/routes/reviewRoutes');
+const adminReviewRoutes = require('./app/routes/adminReviewRoutes');
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/categories', categoryRoutes);
 app.use('/api/v1/products', productRoutes);
+app.use('/api/v1/reviews', reviewRoutes);
 app.use('/api/v1/menu', dailyMenuRoutes);
 app.use('/api/v1/videos', videoRoutes);
 app.use('/api/v1/addresses', addressRoutes);
@@ -206,6 +211,9 @@ app.use('/api/v1/admin/settings', adminSettingsRoutes);
 app.use('/api/v1/admin/notifications', adminNotificationRoutes);
 app.use('/api/v1/admin/media', adminMediaRoutes);
 app.use('/api/v1/admin/videos', adminVideoRoutes);
+app.use('/api/v1/admin/reviews', adminReviewRoutes);
+app.use('/api/v1/support', supportRoutes);
+app.use('/api/v1/admin/support', adminSupportRoutes);
 
 // 8. 404 Handler for Unknown Routes
 app.use(notFoundHandler);

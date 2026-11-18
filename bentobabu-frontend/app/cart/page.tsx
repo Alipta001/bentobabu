@@ -332,10 +332,12 @@ export default function CartPage() {
                     </span>
                   </div>
 
-                  <div className="flex justify-between">
-                    <span>GST (5% Food Services)</span>
-                    <span className="font-medium text-[#222922]">₹{tax}</span>
-                  </div>
+                  {tax > 0 && (
+                    <div className="flex justify-between">
+                      <span>GST / Taxes</span>
+                      <span className="font-medium text-[#222922]">₹{tax}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3 border-t border-[#F0ECE1] flex items-baseline justify-between">

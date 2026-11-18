@@ -203,6 +203,7 @@ export const cartService = {
 
   /**
    * Fetch authoritative checkout summary (/orders/checkout-summary)
+   * Backend returns: { success: true, data: { itemTotal, deliveryCharge, couponDiscount, taxAmount, grandTotal, ... } }
    */
   async getCheckoutSummary(payload: {
     addressId: string;
@@ -210,24 +211,38 @@ export const cartService = {
     couponCode?: string;
   }): Promise<CheckoutSummary> {
     const response = await apiClient.post<
-      ApiResponse<{ summary: CheckoutSummary }> | { summary: CheckoutSummary }
+      ApiResponse<{
+        itemTotal: number;
+        deliveryCharge: number;
+        couponDiscount: number;
+        taxAmount: number;
+        grandTotal: number;
+        minimumOrderValue?: number;
+        coupon?: Coupon;
+        deliveryZone?: any;
+        deliverySlot?: any;
+      }>
     >(API_ENDPOINTS.ORDERS.CHECKOUT_SUMMARY, payload);
 
     const raw = response.data;
-    const summary = (raw && "data" in raw && raw.data?.summary)
-      ? raw.data.summary
-      : (raw as any)?.summary || raw;
+
+    // Backend returns { success, data: { itemTotal, deliveryCharge, ... } }
+    // The pricing fields live directly in raw.data, NOT in raw.data.summary
+    const data =
+      raw && "data" in raw && raw.data && typeof raw.data === "object"
+        ? raw.data
+        : (raw as any);
 
     return {
-      itemTotal: summary.itemTotal || 0,
-      deliveryCharge: summary.deliveryCharge || 0,
-      couponDiscount: summary.couponDiscount || 0,
-      taxAmount: summary.taxAmount || 0,
-      grandTotal: summary.grandTotal || 0,
-      deliveryZone: summary.deliveryZone,
-      deliverySlot: summary.deliverySlot,
-      coupon: summary.coupon,
-      minimumOrderValue: summary.minimumOrderValue,
+      itemTotal: typeof data.itemTotal === "number" ? data.itemTotal : 0,
+      deliveryCharge: typeof data.deliveryCharge === "number" ? data.deliveryCharge : 0,
+      couponDiscount: typeof data.couponDiscount === "number" ? data.couponDiscount : 0,
+      taxAmount: typeof data.taxAmount === "number" ? data.taxAmount : 0,
+      grandTotal: typeof data.grandTotal === "number" ? data.grandTotal : 0,
+      deliveryZone: data.deliveryZone,
+      deliverySlot: data.deliverySlot,
+      coupon: data.coupon,
+      minimumOrderValue: typeof data.minimumOrderValue === "number" ? data.minimumOrderValue : undefined,
     };
   },
 };

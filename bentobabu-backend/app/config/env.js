@@ -138,7 +138,22 @@ const validateEnv = () => {
     deliveryHeartbeatIntervalMs: parseInt(process.env.DELIVERY_HEARTBEAT_INTERVAL_MS, 10) || 25000,
     deliveryConnectionTimeoutMs: parseInt(process.env.DELIVERY_CONNECTION_TIMEOUT_MS, 10) || 60000,
     deliveryLocationFreshMs: parseInt(process.env.DELIVERY_LOCATION_FRESH_MS, 10) || 120000,
+    // Customer Delivery OTP Configuration
+    deliveryOtpRequired: isDeliveryOtpRequired(),
   };
 };
 
-module.exports = { validateEnv };
+/**
+ * Safely parse DELIVERY_OTP_REQUIRED env variable.
+ * Defaults to true if missing, empty, or invalid.
+ * Only explicit 'false' (case-insensitive, trimmed) disables OTP verification.
+ */
+const isDeliveryOtpRequired = () => {
+  const raw = process.env.DELIVERY_OTP_REQUIRED;
+  if (typeof raw !== 'string') return true;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'false') return false;
+  return true;
+};
+
+module.exports = { validateEnv, isDeliveryOtpRequired };

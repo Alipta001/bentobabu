@@ -195,6 +195,23 @@ const pushTestRateLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+/**
+ * Rate limiter for support ticket creation and customer replies
+ */
+const supportTicketRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: isDevOrTest ? 1000 : 20, // 20 actions per 15 min
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new ResilientStore('rl:support:'),
+  passOnStoreError: false,
+  message: {
+    success: false,
+    message: 'Too many support actions. Please wait a few minutes before submitting another request.',
+  },
+  validate: { trustProxy: false },
+});
+
 module.exports = {
   globalRateLimiter,
   authRateLimiter,
@@ -202,4 +219,5 @@ module.exports = {
   otpRateLimiter,
   mediaUploadRateLimiter,
   pushTestRateLimiter,
+  supportTicketRateLimiter,
 };

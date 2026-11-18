@@ -8,9 +8,38 @@ const { getMessaging, isFirebaseConfigured } = require('../config/firebase');
  */
 const getInAppMessage = (
   eventType,
-  { orderNumber = '', grandTotal = 0, reason = '', partnerName = '', isOutForDelivery = false } = {}
+  {
+    orderNumber = '',
+    grandTotal = 0,
+    reason = '',
+    partnerName = '',
+    isOutForDelivery = false,
+    ticketNumber = '',
+    subject = '',
+    replyAuthor = '',
+    messagePreview = '',
+    status = '',
+    resolutionNote = '',
+  } = {}
 ) => {
   switch (eventType) {
+    case 'SUPPORT_TICKET_CREATED':
+      return {
+        subject: `Support Ticket Received (#${ticketNumber || orderNumber})`,
+        message: `Your support ticket #${ticketNumber || orderNumber} (${subject || 'Support Request'}) has been received. Our team will review and reply shortly.`,
+      };
+    case 'SUPPORT_TICKET_REPLIED':
+      return {
+        subject: `New Reply on Ticket (#${ticketNumber || orderNumber})`,
+        message: replyAuthor === 'ADMIN'
+          ? `BentoBabu Support replied to your ticket #${ticketNumber || orderNumber}: "${(messagePreview || '').slice(0, 80)}..."`
+          : `Customer has replied to support ticket #${ticketNumber || orderNumber}.`,
+      };
+    case 'SUPPORT_TICKET_STATUS_UPDATED':
+      return {
+        subject: `Ticket #${ticketNumber || orderNumber} Status: ${status || 'Updated'}`,
+        message: `Your support ticket #${ticketNumber || orderNumber} status has been updated to ${status || 'Updated'}.${resolutionNote ? ` Note: ${resolutionNote}` : ''}`,
+      };
     case 'ORDER_CREATED':
       return {
         subject: `New Order Received (#${orderNumber})`,
@@ -165,6 +194,12 @@ class NotificationDispatcher {
         reason,
         partnerName: metadata.partnerName || '',
         isOutForDelivery: metadata.isOutForDelivery || false,
+        ticketNumber: metadata.ticketNumber || '',
+        subject: metadata.subject || '',
+        replyAuthor: metadata.replyAuthor || '',
+        messagePreview: metadata.messagePreview || '',
+        status: metadata.status || '',
+        resolutionNote: metadata.resolutionNote || '',
       };
 
       const createdNotifications = [];

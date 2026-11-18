@@ -1,5 +1,5 @@
 import apiClient from "./axios";
-import { Order, DeliveryOrderListResponse } from "@/types";
+import { Order, DeliveryOrderListResponse, DeliveryConfig } from "@/types";
 
 export interface GetOrdersParams {
   status?: string;
@@ -66,26 +66,44 @@ export const deliveryApi = {
   },
 
   /**
+   * GET /api/v1/delivery/config
+   * Fetches public delivery configuration including otpRequired flag
+   */
+  async getDeliveryConfig(): Promise<DeliveryConfig> {
+    const response = await apiClient.get<{ success: boolean; data: DeliveryConfig }>(
+      "/delivery/config"
+    );
+    return response.data.data;
+  },
+
+  /**
    * PATCH /api/v1/operations/delivery/orders/:id/status
    * Transitions order from OUT_FOR_DELIVERY -> DELIVERED.
-   * Requires customer OTP. On successful verification, marks DELIVERED and clears OTP.
+   * When OTP is enabled, requires customer OTP. When disabled, completes delivery without OTP.
    */
-  async verifyDeliveryOtp(id: string, otp: string, note?: string): Promise<Order> {
-    const cleanOtp = otp.toString().trim();
-    if (!cleanOtp) {
-      throw new Error("Delivery OTP is required.");
+  async verifyDeliveryOtp(id: string, otp?: string, note?: string): Promise<Order> {
+    const cleanOtp = otp ? otp.toString().trim() : undefined;
+    const payload: { status: string; note?: string; otp?: string } = {
+      status: "DELIVERED",
+      note: note || (cleanOtp ? "Order delivered and verified with customer OTP" : "Order delivered (OTP verification skipped)"),
+    };
+    if (cleanOtp) {
+      payload.otp = cleanOtp;
     }
 
     const response = await apiClient.patch<{ success: boolean; message: string; data: Order }>(
       `/operations/delivery/orders/${id}/status`,
-      {
-        status: "DELIVERED",
-        otp: cleanOtp,
-        note: note || "Order delivered and verified with customer OTP",
-      }
+      payload
     );
 
     return response.data.data;
+  },
+
+  /**
+   * Alias for verifyDeliveryOtp to cleanly support both OTP and OTP-less completion
+   */
+  async completeDelivery(id: string, otp?: string, note?: string): Promise<Order> {
+    return this.verifyDeliveryOtp(id, otp, note);
   },
 
   /**

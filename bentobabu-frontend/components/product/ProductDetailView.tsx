@@ -15,10 +15,12 @@ import {
   Share2,
   Video as VideoIcon,
   Image as ImageIcon,
+  Star,
 } from "lucide-react";
 import { Product } from "@/types";
 import { DietaryBadge } from "@/components/ui/DietaryBadge";
 import { ProductCard } from "@/components/product/ProductCard";
+import { ProductReviewsSection } from "@/components/product/ProductReviewsSection";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useToast } from "@/context/ToastContext";
 import { getOptimizedImageUrl } from "@/utils/mediaUrl";
@@ -202,6 +204,19 @@ export function ProductDetailView({
               {product.name}
             </h1>
 
+            {product.totalReviews && product.totalReviews > 0 ? (
+              <a
+                href="#reviews-section"
+                className="inline-flex items-center gap-1.5 text-xs text-[#354B35] hover:underline"
+              >
+                <div className="flex items-center text-amber-500">
+                  <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
+                </div>
+                <span className="font-bold text-[#222922]">{product.averageRating?.toFixed(1)}</span>
+                <span className="text-[#8A9A86]">({product.totalReviews} verified reviews)</span>
+              </a>
+            ) : null}
+
             <div className="flex items-baseline gap-3">
               <span className="font-serif text-3xl font-bold text-[#354B35]">
                 ₹{product.price}
@@ -358,6 +373,12 @@ export function ProductDetailView({
           </div>
         </div>
       </div>
+
+      {/* Verified Customer Reviews Section */}
+      <ProductReviewsSection
+        productId={product.id || (product as any)._id}
+        productName={product.name}
+      />
 
       {/* Related Products Section */}
       {relatedProducts.length > 0 && (

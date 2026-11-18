@@ -71,6 +71,8 @@ export interface Product {
   isBestseller?: boolean;
   isFeatured?: boolean;
   isChefSpecial?: boolean;
+  averageRating?: number;
+  totalReviews?: number;
   preparationTimeMinutes?: number;
   preparationTime?: number;
   stockQuantity?: number;
@@ -337,3 +339,139 @@ export interface VideoFilterOptions {
   page?: number;
   limit?: number;
 }
+
+export type TicketCategory =
+  | "ORDER_ISSUE"
+  | "PAYMENT_ISSUE"
+  | "DELIVERY_ISSUE"
+  | "MISSING_INCORRECT_ITEM"
+  | "FOOD_QUALITY"
+  | "REFUND_REQUEST"
+  | "ACCOUNT_ISSUE"
+  | "OTHER";
+
+export type TicketStatus = "OPEN" | "IN_PROGRESS" | "WAITING_FOR_CUSTOMER" | "RESOLVED" | "CLOSED";
+
+export interface TicketAttachment {
+  url: string;
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+}
+
+export interface TicketMessage {
+  id?: string;
+  _id?: string;
+  senderName?: string;
+  senderRole: "CUSTOMER" | "ADMIN" | "SYSTEM";
+  message: string;
+  attachments?: TicketAttachment[];
+  createdAt: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  _id?: string;
+  ticketNumber: string;
+  category: TicketCategory;
+  subject: string;
+  description: string;
+  attachments?: TicketAttachment[];
+  status: TicketStatus;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+  order?: {
+    id: string;
+    orderNumber: string;
+    orderStatus: string;
+    grandTotal: number;
+    createdAt?: string;
+    itemCount?: number;
+  } | null;
+  messages?: TicketMessage[];
+  messageCount?: number;
+  lastMessageSnippet?: string;
+  lastMessageAt?: string;
+  createdAt: string;
+}
+
+export interface SupportFaq {
+  id: string;
+  _id?: string;
+  question: string;
+  answer: string;
+  category: string;
+  helpfulCount?: number;
+}
+
+export interface SupportConfig {
+  email: string;
+  phone: string;
+  whatsapp: string | null;
+  isWhatsAppConfigured: boolean;
+  address: string;
+  operatingHours: string;
+  categories: Array<{ key: TicketCategory; label: string; description: string }>;
+}
+
+export interface ReviewImage {
+  url: string;
+  publicId?: string | null;
+}
+
+export interface CustomerReview {
+  id: string;
+  authorName: string;
+  rating: number;
+  title?: string;
+  comment: string;
+  images: ReviewImage[];
+  isVerifiedPurchase: boolean;
+  createdAt: string;
+}
+
+export interface ReviewDistribution {
+  5: number;
+  4: number;
+  3: number;
+  2: number;
+  1: number;
+}
+
+export interface ReviewSummary {
+  productId: string;
+  totalReviews: number;
+  averageRating: number;
+  distribution: ReviewDistribution;
+}
+
+export interface ReviewEligibilityResponse {
+  productId: string;
+  productName: string;
+  productSlug: string;
+  isEligible: boolean;
+  canReview: boolean;
+  eligibleOrders: Array<{
+    id: string;
+    orderNumber: string;
+    deliveredAt: string;
+  }>;
+  existingReviews: Array<{
+    id: string;
+    orderId: string;
+    rating: number;
+    title?: string;
+    comment: string;
+    images: ReviewImage[];
+    createdAt: string;
+  }>;
+}
+
+export interface SubmitReviewPayload {
+  productId: string;
+  orderId: string;
+  rating: number;
+  title?: string;
+  comment: string;
+  images?: ReviewImage[];
+}
+

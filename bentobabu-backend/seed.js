@@ -15,6 +15,7 @@ const {
   DeliverySlot,
   Coupon,
   SystemSetting,
+  SupportFaq,
 } = require('./app/models');
 
 const env = validateEnv();
@@ -671,6 +672,80 @@ async function seedDatabase() {
       } catch (userErr) {
         console.warn(`[Seeder] Skipped upserting user ${userData.email}: ${userErr.message}`);
       }
+    }
+
+    // 8. Support FAQs
+    console.log('[Seeder] Seeding Support FAQs...');
+    const faqCount = await SupportFaq.countDocuments();
+    if (faqCount === 0) {
+      const initialFaqs = [
+        {
+          category: 'ORDERING',
+          question: 'How do I place an order on BentoBabu?',
+          answer: 'Browse our menu of gourmet, balanced bento boxes, choose your desired meal and portion size, add items to cart, select your delivery slot, and complete checkout with online payment or Cash on Delivery.',
+          orderIndex: 1,
+          isPublished: true,
+        },
+        {
+          category: 'ORDERING',
+          question: 'Can I customize dietary preferences for my bento?',
+          answer: 'Yes! Our menu features specific dietary tags including High-Protein, Low-Carb, Vegan, Gluten-Free, and Jain Friendly. You can also add special cooking notes during checkout.',
+          orderIndex: 2,
+          isPublished: true,
+        },
+        {
+          category: 'DELIVERY',
+          question: 'What are your operational delivery hours?',
+          answer: 'We deliver fresh meals daily from 7:00 AM to 10:30 PM across Indiranagar, Koramangala, Whitefield, HSR Layout, and surrounding Bengaluru zones.',
+          orderIndex: 1,
+          isPublished: true,
+        },
+        {
+          category: 'DELIVERY',
+          question: 'How does the contactless delivery OTP work?',
+          answer: 'When your order is out for delivery, a 6-digit delivery OTP appears on your live order tracking page. Simply share this OTP with our delivery partner upon arrival to confirm receipt.',
+          orderIndex: 2,
+          isPublished: true,
+        },
+        {
+          category: 'PAYMENTS',
+          question: 'What payment options are accepted?',
+          answer: 'We accept all major UPI apps (Google Pay, PhonePe, Paytm), Credit/Debit cards, Net Banking through Razorpay, as well as Cash on Delivery (COD).',
+          orderIndex: 1,
+          isPublished: true,
+        },
+        {
+          category: 'CANCELLATIONS',
+          question: 'How do I cancel my order?',
+          answer: 'You can cancel an order free of charge before the kitchen begins preparing your meal. Go to My Orders, select the active order, and click Cancel Order.',
+          orderIndex: 1,
+          isPublished: true,
+        },
+        {
+          category: 'REFUNDS',
+          question: 'When will I receive my refund?',
+          answer: 'Online payment refunds are automatically credited back to your original payment method within 3 to 5 business days after cancellation confirmation.',
+          orderIndex: 1,
+          isPublished: true,
+        },
+        {
+          category: 'FOOD_AND_INGREDIENTS',
+          question: 'Are your meals prepared fresh daily?',
+          answer: 'Every bento box is prepared from scratch each morning in our sanitized cloud kitchen using farm-fresh seasonal produce, cold-pressed oils, and zero artificial preservatives.',
+          orderIndex: 1,
+          isPublished: true,
+        },
+        {
+          category: 'ACCOUNT_MANAGEMENT',
+          question: 'How do I update my delivery address or phone number?',
+          answer: 'Navigate to your Account section from the top navigation bar to manage saved delivery addresses and update profile information.',
+          orderIndex: 1,
+          isPublished: true,
+        },
+      ];
+
+      await SupportFaq.insertMany(initialFaqs);
+      console.log(`[Seeder] Seeded ${initialFaqs.length} initial FAQs.`);
     }
 
     console.log('[Seeder] ✅ Database seeded successfully!');

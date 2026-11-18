@@ -20,6 +20,7 @@ import {
   FileBarChart,
   Settings,
   Bell,
+  Headphones,
   UserCheck,
   Video,
   Bike,
@@ -36,6 +37,7 @@ interface AdminSidebarProps {
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Orders", href: "/orders", icon: ShoppingBag, badgeKey: "pendingOrders" },
+  { label: "Customer Support", href: "/support", icon: Headphones },
   { label: "Push Alerts", href: "/notifications", icon: Bell },
   { label: "Products", href: "/products", icon: UtensilsCrossed },
   { label: "Categories", href: "/categories", icon: Tags },
