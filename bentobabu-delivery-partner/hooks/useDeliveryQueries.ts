@@ -17,58 +17,69 @@ export const QUERY_KEYS = {
 
 export function useDeliveryOrders(params?: GetOrdersParams) {
   const isOnline = useAppSelector((state) => state.delivery.isOnline);
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
 
   return useQuery({
     queryKey: QUERY_KEYS.ORDERS(params),
     queryFn: () => deliveryApi.getDeliveryOrders(params),
-    enabled: isOnline,
-    refetchInterval: isOnline ? 15000 : false, // Poll every 15s when online
+    enabled: isAuthenticated && isOnline,
+    refetchInterval: isAuthenticated && isOnline ? 15000 : false, // Poll every 15s when online
   });
 }
 
 export function useNewRequests() {
   const isOnline = useAppSelector((state) => state.delivery.isOnline);
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
 
   return useQuery({
     queryKey: QUERY_KEYS.NEW_REQUESTS,
     queryFn: () => deliveryApi.getDeliveryOrders({ status: "READY_FOR_PICKUP", limit: 30 }),
-    enabled: isOnline,
-    refetchInterval: isOnline ? 10000 : false, // Frequent polling for incoming assignments
+    enabled: isAuthenticated && isOnline,
+    refetchInterval: isAuthenticated && isOnline ? 10000 : false, // Frequent polling for incoming assignments
   });
 }
 
 export function useActiveDeliveries() {
   const isOnline = useAppSelector((state) => state.delivery.isOnline);
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
 
   return useQuery({
     queryKey: QUERY_KEYS.ACTIVE_DELIVERIES,
     queryFn: () => deliveryApi.getDeliveryOrders({ status: "OUT_FOR_DELIVERY", limit: 20 }),
-    enabled: isOnline,
-    refetchInterval: isOnline ? 12000 : false,
+    enabled: isAuthenticated && isOnline,
+    refetchInterval: isAuthenticated && isOnline ? 12000 : false,
   });
 }
 
 export function useDeliveryHistory(params?: GetOrdersParams) {
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+
   return useQuery({
     queryKey: QUERY_KEYS.DELIVERY_HISTORY(params),
     queryFn: () => deliveryApi.getDeliveryOrders({ status: "DELIVERED", ...params }),
+    enabled: isAuthenticated,
     staleTime: 30000,
   });
 }
 
 export function useOrderDetails(id: string) {
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+
   return useQuery({
     queryKey: QUERY_KEYS.ORDER_DETAIL(id),
     queryFn: () => deliveryApi.getOrderById(id),
-    enabled: !!id,
+    enabled: isAuthenticated && !!id,
     staleTime: 5000,
   });
 }
 
 export function useEarnings() {
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+
   return useQuery({
     queryKey: QUERY_KEYS.EARNINGS,
     queryFn: () => earningsApi.getEarningsStats(),
+    enabled: isAuthenticated,
     staleTime: 30000,
   });
 }
@@ -87,9 +98,12 @@ export function useAcceptAndPickupOrder() {
 }
 
 export function useDeliveryConfig() {
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+
   return useQuery({
     queryKey: ["delivery-config"],
     queryFn: () => deliveryApi.getDeliveryConfig(),
+    enabled: isAuthenticated,
     staleTime: 60000,
   });
 }
@@ -109,18 +123,24 @@ export function useVerifyDeliveryOtp() {
 }
 
 export function useNotifications(params?: { isRead?: boolean; page?: number }) {
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+
   return useQuery({
     queryKey: QUERY_KEYS.NOTIFICATIONS(params),
     queryFn: () => notificationApi.getNotifications(params),
-    refetchInterval: 30000,
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? 30000 : false,
   });
 }
 
 export function useUnreadNotificationsCount() {
+  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+
   return useQuery({
     queryKey: QUERY_KEYS.UNREAD_NOTIFICATIONS_COUNT,
     queryFn: () => notificationApi.getUnreadCount(),
-    refetchInterval: 20000,
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? 20000 : false,
   });
 }
 

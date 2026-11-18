@@ -16,6 +16,15 @@ function AuthSync() {
     let isMounted = true;
 
     async function syncSession() {
+      // Do not probe /auth/me on unauthenticated entry pages when no stored session exists
+      if (typeof window !== "undefined") {
+        const path = window.location.pathname;
+        const hasStoredUser = !!localStorage.getItem("bb_delivery_user");
+        if ((path.startsWith("/login") || path.startsWith("/register")) && !hasStoredUser) {
+          return;
+        }
+      }
+
       try {
         const user = await authApi.getMe();
         if (isMounted) {
@@ -27,7 +36,12 @@ function AuthSync() {
         }
       } catch {
         if (isMounted) {
-          dispatch(clearCredentials());
+          if (typeof window !== "undefined") {
+            const path = window.location.pathname;
+            if (!path.startsWith("/login") && !path.startsWith("/register")) {
+              dispatch(clearCredentials());
+            }
+          }
         }
       }
     }

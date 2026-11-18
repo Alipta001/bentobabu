@@ -13,7 +13,6 @@ export interface NotificationsResponse {
     };
   };
 }
-
 export const notificationApi = {
   async getNotifications(params?: {
     isRead?: boolean;

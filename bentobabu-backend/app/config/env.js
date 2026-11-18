@@ -82,6 +82,7 @@ const validateEnv = () => {
     mongoUri: process.env.MONGODB_URI || process.env.MONGO_URI,
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
     adminFrontendUrl: process.env.ADMIN_FRONTEND_URL || 'http://localhost:3001',
+    deliveryFrontendUrl: process.env.DELIVERY_FRONTEND_URL || 'http://localhost:3002',
     jwtAccessSecret: process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'dev_jwt_secret',
     jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'dev_refresh_secret',
     accessTokenExpiresIn: process.env.ACCESS_TOKEN_EXPIRES_IN || '30s',

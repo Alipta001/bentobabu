@@ -38,8 +38,10 @@ const productionOrigins = [
   'https://bentobabu.com',
   'https://www.bentobabu.com',
   'https://admin.bentobabu.com',
+  'https://delivery.bentobabu.com',
   ...(env.frontendUrl && env.frontendUrl.startsWith('https://') ? [env.frontendUrl] : []),
   ...(env.adminFrontendUrl && env.adminFrontendUrl.startsWith('https://') ? [env.adminFrontendUrl] : []),
+  ...(env.deliveryFrontendUrl && env.deliveryFrontendUrl.startsWith('https://') ? [env.deliveryFrontendUrl] : []),
   ...(process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter((o) => o.startsWith('https://'))
     : []),
@@ -56,6 +58,7 @@ const developmentOrigins = [
   'http://127.0.0.1:3005',
   ...(env.frontendUrl && !env.frontendUrl.startsWith('https://') ? [env.frontendUrl] : []),
   ...(env.adminFrontendUrl && !env.adminFrontendUrl.startsWith('https://') ? [env.adminFrontendUrl] : []),
+  ...(env.deliveryFrontendUrl && !env.deliveryFrontendUrl.startsWith('https://') ? [env.deliveryFrontendUrl] : []),
   ...(process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter((o) => !o.startsWith('https://'))
     : []),

@@ -742,9 +742,12 @@ class AuthController {
         expiresAt,
       });
 
-      // Clear any legacy cookie lingering at /api/v1/auth/refresh to prevent multi-path collisions
-      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
-      res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
+      // Clear any legacy cookie lingering at /api/v1/auth/refresh only if present in request
+      const rawCookies = req.headers?.cookie || '';
+      if (rawCookies.includes(activeEnv.refreshTokenCookieName) || rawCookies.includes('refreshToken')) {
+        res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
+        res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
+      }
 
       // 8. Set HttpOnly cookies (No raw JWTs in response body)
       res.cookie(activeEnv.accessTokenCookieName, accessToken, getAccessTokenCookieOptions());

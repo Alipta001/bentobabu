@@ -126,6 +126,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       if (
         originalRequest.url?.includes("/auth/login") ||
+        originalRequest.url?.includes("/auth/register") ||
         originalRequest.url?.includes("/auth/refresh")
       ) {
         clearCsrfToken();
@@ -150,7 +151,7 @@ apiClient.interceptors.response.use(
         }
 
         return apiClient(originalRequest);
-      } catch {
+      } catch (refreshErr: any) {
         clearCsrfToken();
         if (typeof window !== "undefined") {
           localStorage.removeItem("bb_delivery_user");
@@ -159,7 +160,11 @@ apiClient.interceptors.response.use(
             window.location.replace("/login");
           }
         }
-        return Promise.reject(new Error("Delivery partner session expired. Please sign in again."));
+        const message =
+          refreshErr?.response?.data?.message ||
+          error.response?.data?.message ||
+          "Delivery partner session expired. Please sign in again.";
+        return Promise.reject(new Error(message));
       }
     }
 
