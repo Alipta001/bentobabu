@@ -10,7 +10,18 @@ export type OrderStatus =
   | "cancelled"
   | "failed";
 
-export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+export type PaymentStatus =
+  | "pending"
+  | "paid"
+  | "failed"
+  | "refunded"
+  | "PENDING"
+  | "PAID"
+  | "FAILED"
+  | "REFUNDED"
+  | "REFUND_PENDING"
+  | "REFUND_FAILED"
+  | "COD_PENDING";
 
 export interface NutritionalInfo {
   calories: number;

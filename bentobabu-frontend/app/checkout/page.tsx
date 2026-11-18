@@ -1017,7 +1017,7 @@ export default function CheckoutPage() {
                   {/* Place Order CTA */}
                   <button
                     type="submit"
-                    disabled={isSubmitting || isBelowMinimum || (serviceability && !serviceability.serviceable)}
+                    disabled={isSubmitting || isBelowMinimum || !!summaryError || (serviceability && !serviceability.serviceable)}
                     className="w-full flex items-center justify-center gap-2 py-4 rounded-full bg-[#354B35] text-[#F7F3EA] text-sm font-bold shadow-md hover:bg-[#253525] disabled:opacity-50 cursor-pointer transition-all"
                   >
                     {isSubmitting ? (

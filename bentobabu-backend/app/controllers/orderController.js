@@ -144,9 +144,16 @@ class OrderController {
           });
         }
 
-        const isAvailableToday = dailyMap.has(prod._id.toString())
-          ? dailyMap.get(prod._id.toString())
-          : prod.isAvailable;
+        if (!prod.isAvailable) {
+          return res.status(400).json({
+            success: false,
+            message: `"${prod.name}" is currently unavailable and cannot be ordered. Please remove it from your cart.`,
+          });
+        }
+
+        const isAvailableToday =
+          Boolean(prod.isAvailable) &&
+          (!dailyMap.has(prod._id.toString()) || dailyMap.get(prod._id.toString()) === true);
 
         if (!isAvailableToday) {
           return res.status(400).json({
@@ -550,9 +557,12 @@ class OrderController {
         if (!prod) {
           throw new Error('One or more products in your cart are no longer active');
         }
-        const isAvailableToday = dailyMap.has(prod._id.toString())
-          ? dailyMap.get(prod._id.toString())
-          : prod.isAvailable;
+        if (!prod.isAvailable) {
+          throw new Error(`"${prod.name}" is currently unavailable and cannot be ordered. Please remove it from your cart.`);
+        }
+        const isAvailableToday =
+          Boolean(prod.isAvailable) &&
+          (!dailyMap.has(prod._id.toString()) || dailyMap.get(prod._id.toString()) === true);
         if (!isAvailableToday) {
           throw new Error(`"${prod.name}" is not available on today's menu`);
         }

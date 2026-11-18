@@ -171,6 +171,8 @@ export type PaymentStatus =
   | "PAID"
   | "FAILED"
   | "REFUNDED"
+  | "REFUND_PENDING"
+  | "REFUND_FAILED"
   | "COD_PENDING";
 
 export interface OrderItem {

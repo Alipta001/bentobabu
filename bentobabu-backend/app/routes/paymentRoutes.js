@@ -40,5 +40,13 @@ router.get(
   PaymentController.getPaymentInfo
 );
 
+// Admin: Retry failed refund
+router.post(
+  '/:orderId/retry-refund',
+  authenticate,
+  authorize('ADMIN'),
+  PaymentController.retryRefund
+);
+
 module.exports = router;
 

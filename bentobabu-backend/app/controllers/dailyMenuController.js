@@ -35,10 +35,12 @@ class DailyMenuController {
 
     const items = allActiveProducts.map((p) => {
       const pId = p._id.toString();
-      // If configured in dailyMenu, use that. Otherwise fallback to product's default isAvailable
-      const isAvailable = availabilityMap.has(pId)
-        ? availabilityMap.get(pId)
-        : Boolean(p.isAvailable);
+      // Master availability rule: if product master is unavailable, it cannot be available on daily menu.
+      // If master is available, respect dailyMenu's specific availability override.
+      let isAvailable = Boolean(p.isAvailable);
+      if (isAvailable && availabilityMap.has(pId)) {
+        isAvailable = Boolean(availabilityMap.get(pId));
+      }
 
       return {
         product: {
@@ -139,7 +141,7 @@ class DailyMenuController {
           items: cleanItems,
           isPublished: Boolean(isPublished),
           notes: typeof notes === 'string' ? notes.trim() : '',
-          lastUpdatedBy: req.user?.id || null,
+          lastUpdatedBy: (req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id)) ? req.user.id : null,
         },
         { upsert: true, returnDocument: 'after', runValidators: true }
       );
@@ -194,7 +196,7 @@ class DailyMenuController {
           items: targetItems,
           isPublished: true,
           notes: `Copied from yesterday's menu (${yesterday})`,
-          lastUpdatedBy: req.user?.id || null,
+          lastUpdatedBy: (req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id)) ? req.user.id : null,
         },
         { upsert: true, returnDocument: 'after', runValidators: true }
       );
@@ -342,7 +344,7 @@ class DailyMenuController {
             items: cleanItems,
             isPublished: Boolean(isPublished),
             notes: typeof notes === 'string' ? notes.trim() : '',
-            lastUpdatedBy: req.user?.id || null,
+            lastUpdatedBy: (req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id)) ? req.user.id : null,
           },
           { upsert: true, returnDocument: 'after', runValidators: true }
         );
@@ -400,7 +402,7 @@ class DailyMenuController {
             items: itemsToApply,
             isPublished: true,
             notes: `Applied from ${sourceDate}`,
-            lastUpdatedBy: req.user?.id || null,
+            lastUpdatedBy: (req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id)) ? req.user.id : null,
           },
           { upsert: true, returnDocument: 'after', runValidators: true }
         );

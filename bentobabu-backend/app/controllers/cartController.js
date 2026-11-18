@@ -7,6 +7,14 @@ class CartController {
    * Helper to check whether a product is available on today's business date
    */
   static async checkProductAvailabilityToday(productId, masterProduct = null) {
+    let prod = masterProduct;
+    if (!prod) {
+      prod = await Product.findById(productId).select('isAvailable isActive name').lean();
+    }
+    if (!prod || !prod.isActive || !prod.isAvailable) {
+      return false;
+    }
+
     const todayStr = getKolkataDateString();
     const dailyMenu = await DailyMenu.findOne({ date: todayStr, isPublished: true }).lean();
 
@@ -20,12 +28,7 @@ class CartController {
       }
     }
 
-    if (masterProduct) {
-      return Boolean(masterProduct.isAvailable);
-    }
-
-    const prod = await Product.findById(productId).select('isAvailable isActive').lean();
-    return prod ? Boolean(prod.isAvailable) : false;
+    return true;
   }
 
   /**
@@ -76,9 +79,9 @@ class CartController {
       if (!item.product) continue;
 
       const p = item.product;
-      const isAvailableToday = dailyMap.has(p._id.toString())
-        ? dailyMap.get(p._id.toString())
-        : Boolean(p.isAvailable);
+      const isAvailableToday =
+        Boolean(p.isAvailable) &&
+        (!dailyMap.has(p._id.toString()) || dailyMap.get(p._id.toString()) === true);
 
       const isSufficientStock = p.stockQuantity >= item.quantity;
       const isOrderable = p.isActive && isAvailableToday && isSufficientStock;
@@ -114,8 +117,10 @@ class CartController {
         isOrderable,
         orderableReason: !p.isActive
           ? 'Product is no longer available'
+          : !p.isAvailable
+          ? 'Product is currently unavailable'
           : !isAvailableToday
-          ? 'Product is not available on today\'s menu'
+          ? "Product is not available on today's menu"
           : !isSufficientStock
           ? `Only ${p.stockQuantity} item(s) in stock`
           : null,
@@ -250,6 +255,13 @@ class CartController {
         });
       }
 
+      if (!product.isAvailable) {
+        return res.status(400).json({
+          success: false,
+          message: `"${product.name}" is currently unavailable and cannot be ordered`,
+        });
+      }
+
       const isAvailableToday = await CartController.checkProductAvailabilityToday(productId, product);
       if (!isAvailableToday) {
         return res.status(400).json({
@@ -332,6 +344,13 @@ class CartController {
         return res.status(404).json({
           success: false,
           message: 'Product not found or inactive',
+        });
+      }
+
+      if (!product.isAvailable) {
+        return res.status(400).json({
+          success: false,
+          message: `"${product.name}" is currently unavailable and cannot be ordered`,
         });
       }
 

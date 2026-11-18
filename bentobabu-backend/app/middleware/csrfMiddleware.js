@@ -74,8 +74,14 @@ const csrfProtect = (req, res, next) => {
     return next();
   }
 
-  // 2. Webhooks with independent cryptographic signature validation are exempt
-  if (req.path.includes('/payments/webhook')) {
+  // 2. Only the exact Razorpay webhook route with independent HMAC-SHA256 signature validation is exempt
+  const normalizedPath = req.originalUrl ? req.originalUrl.split('?')[0] : req.path;
+  if (
+    normalizedPath === '/api/v1/payments/razorpay/webhook' ||
+    normalizedPath === '/payments/razorpay/webhook' ||
+    req.path === '/api/v1/payments/razorpay/webhook' ||
+    req.path === '/razorpay/webhook'
+  ) {
     return next();
   }
 

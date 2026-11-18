@@ -32,39 +32,36 @@ class ProductController {
           : getKolkataDateString();
 
       const dailyMenu = await DailyMenu.findOne({ date: businessDate, isPublished: true }).lean();
+      const dailyMap = new Map();
+      const dailyUnavailableIds = [];
 
-      if (dailyMenu && Array.isArray(dailyMenu.items) && dailyMenu.items.length > 0) {
-        const unavailableProductIds = [];
-        const availableProductIds = [];
-
+      if (dailyMenu && Array.isArray(dailyMenu.items)) {
         dailyMenu.items.forEach((it) => {
           const prodId = it.product?._id ? it.product._id.toString() : it.product?.toString();
           if (prodId && mongoose.Types.ObjectId.isValid(prodId)) {
+            dailyMap.set(prodId, Boolean(it.isAvailable));
             if (it.isAvailable === false) {
-              unavailableProductIds.push(new mongoose.Types.ObjectId(prodId));
-            } else if (it.isAvailable === true) {
-              availableProductIds.push(new mongoose.Types.ObjectId(prodId));
+              dailyUnavailableIds.push(new mongoose.Types.ObjectId(prodId));
             }
           }
         });
+      }
 
-        // If customer explicitly requests unavailable items (e.g. for admin previews)
-        if (req.query.isAvailable === 'false') {
-          filter._id = { $in: unavailableProductIds };
-        } else {
-          // Normal customer browsing: exclude explicitly unavailable products
-          if (unavailableProductIds.length > 0) {
-            filter._id = { $nin: unavailableProductIds };
-          }
+      // Explicit availability filter if requested by caller
+      if (req.query.isAvailable === 'true') {
+        filter.isAvailable = true;
+        if (dailyUnavailableIds.length > 0) {
+          filter._id = { $nin: dailyUnavailableIds };
         }
-      } else {
-        // Fallback: Exclude unavailable products from normal customer browsing unless specified
-        if (req.query.isAvailable !== undefined) {
-          filter.isAvailable = req.query.isAvailable === 'true';
+      } else if (req.query.isAvailable === 'false') {
+        if (dailyUnavailableIds.length > 0) {
+          filter.$or = [{ isAvailable: false }, { _id: { $in: dailyUnavailableIds } }];
         } else {
-          filter.isAvailable = true;
+          filter.isAvailable = false;
         }
       }
+      // If req.query.isAvailable is not specified, all active products are returned so unavailable products
+      // remain visible with a clear "Currently Unavailable" badge in the customer menu.
 
       // Keyword Search: Sanitize string to prevent ReDoS / NoSQL injection
       if (req.query.search && typeof req.query.search === 'string') {
@@ -150,14 +147,26 @@ class ProductController {
         sort = { isFeatured: -1, isBestseller: -1, createdAt: -1 };
       }
 
-      const [products, total] = await Promise.all([
+      const [rawProducts, total] = await Promise.all([
         Product.find(filter)
           .sort(sort)
           .skip(skip)
           .limit(limit)
-          .populate('category', 'name slug'),
+          .populate('category', 'name slug')
+          .lean(),
         Product.countDocuments(filter),
       ]);
+
+      const products = rawProducts.map((p) => {
+        const pIdStr = p._id ? p._id.toString() : '';
+        const isAvailableToday =
+          Boolean(p.isAvailable) &&
+          (!dailyMap.has(pIdStr) || dailyMap.get(pIdStr) === true);
+        return {
+          ...p,
+          isAvailable: isAvailableToday,
+        };
+      });
 
       const responsePayload = {
         success: true,
@@ -186,17 +195,42 @@ class ProductController {
     try {
       const limit = Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 8));
 
-      const featuredProducts = await Product.find({
+      const todayStr = getKolkataDateString();
+      const dailyMenu = await DailyMenu.findOne({ date: todayStr, isPublished: true }).lean();
+      const unavailableIds = [];
+      if (dailyMenu && Array.isArray(dailyMenu.items)) {
+        dailyMenu.items.forEach((it) => {
+          if (it.isAvailable === false && it.product) {
+            const pid = it.product?._id ? it.product._id.toString() : it.product?.toString();
+            if (mongoose.Types.ObjectId.isValid(pid)) {
+              unavailableIds.push(new mongoose.Types.ObjectId(pid));
+            }
+          }
+        });
+      }
+
+      const filter = {
         isActive: true,
         isAvailable: true,
         $or: [{ isFeatured: true }, { isBestseller: true }],
-      })
+      };
+      if (unavailableIds.length > 0) {
+        filter._id = { $nin: unavailableIds };
+      }
+
+      const featuredProducts = await Product.find(filter)
         .limit(limit)
-        .populate('category', 'name slug');
+        .populate('category', 'name slug')
+        .lean();
+
+      const mapped = featuredProducts.map((p) => ({
+        ...p,
+        isAvailable: true,
+      }));
 
       res.status(200).json({
         success: true,
-        data: featuredProducts,
+        data: mapped,
       });
     } catch (error) {
       next(error);
@@ -242,8 +276,8 @@ class ProductController {
       // Check today's daily menu availability
       const todayStr = getKolkataDateString();
       const dailyMenu = await DailyMenu.findOne({ date: todayStr, isPublished: true }).lean();
-      let isAvailableToday = product.isAvailable;
-      if (dailyMenu && Array.isArray(dailyMenu.items)) {
+      let isAvailableToday = Boolean(product.isAvailable);
+      if (isAvailableToday && dailyMenu && Array.isArray(dailyMenu.items)) {
         const itemEntry = dailyMenu.items.find((it) => {
           const idStr = it.product?._id ? it.product._id.toString() : it.product?.toString();
           return idStr === product._id.toString();
@@ -643,6 +677,13 @@ class ProductController {
       product.isAvailable = isAvailable;
       await product.save();
 
+      // Sync with today's DailyMenu if one exists
+      const todayStr = getKolkataDateString();
+      await DailyMenu.updateMany(
+        { date: todayStr, 'items.product': product._id },
+        { $set: { 'items.$.isAvailable': isAvailable } }
+      );
+
       await redisDelPattern('cache:products:*');
       await redisDelPattern('cache:admin:dashboard:*');
 
@@ -691,6 +732,11 @@ class ProductController {
       // If stock reaches 0, automatically mark as unavailable
       if (stockQuantity === 0) {
         product.isAvailable = false;
+        const todayStr = getKolkataDateString();
+        await DailyMenu.updateMany(
+          { date: todayStr, 'items.product': product._id },
+          { $set: { 'items.$.isAvailable': false } }
+        );
       }
       await product.save();
 

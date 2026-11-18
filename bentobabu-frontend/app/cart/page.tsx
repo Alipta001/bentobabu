@@ -43,6 +43,7 @@ export default function CartPage() {
   const minimumOrderValue = deliveryConfig?.minimumOrderValue ?? 0;
   const isBelowMinimum = minimumOrderValue > 0 && subtotal < minimumOrderValue;
   const shortfall = isBelowMinimum ? minimumOrderValue - subtotal : 0;
+  const hasUnavailableItems = cartItems.some((item) => item.product.isAvailable === false);
 
   const discount = appliedCoupon
     ? appliedCoupon.discountType === "PERCENTAGE"
@@ -164,7 +165,14 @@ export default function CartPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <DietaryBadge type={item.product.dietary} showText={false} />
+                        <div className="flex items-center gap-2">
+                          <DietaryBadge type={item.product.dietary} showText={false} />
+                          {item.product.isAvailable === false && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-700 text-white shadow-xs">
+                              Currently Unavailable
+                            </span>
+                          )}
+                        </div>
                         <h3 className="font-serif font-bold text-base text-[#222922] hover:text-[#354B35] transition-colors">
                           <Link href={`/product/${item.product.slug}`}>
                             {item.product.name}
@@ -193,7 +201,8 @@ export default function CartPage() {
                         </span>
                         <button
                           onClick={() => setQuantity(item.product.id, item.quantity + 1)}
-                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5"
+                          disabled={item.product.isAvailable === false}
+                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed"
                           aria-label="Increase quantity"
                         >
                           <Plus className="w-3.5 h-3.5 text-[#222922]" />
@@ -349,6 +358,16 @@ export default function CartPage() {
                   </span>
                 </div>
 
+                {hasUnavailableItems && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5 text-xs text-rose-900">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold block">One or more items in your cart are currently unavailable.</span>
+                      <span className="text-[11px] text-rose-800">Please remove unavailable items to continue.</span>
+                    </div>
+                  </div>
+                )}
+
                 {isBelowMinimum && (
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-xs text-amber-900">
                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -365,6 +384,13 @@ export default function CartPage() {
                     className="w-full flex items-center justify-center gap-2 py-4 rounded-full bg-gray-200 text-gray-400 text-sm font-bold shadow-none cursor-not-allowed opacity-80"
                   >
                     <span>Minimum Order ₹{minimumOrderValue} (Add ₹{shortfall})</span>
+                  </button>
+                ) : hasUnavailableItems ? (
+                  <button
+                    disabled
+                    className="w-full flex items-center justify-center gap-2 py-4 rounded-full bg-gray-200 text-gray-500 text-sm font-bold shadow-none cursor-not-allowed opacity-80"
+                  >
+                    <span>Remove Unavailable Items to Checkout</span>
                   </button>
                 ) : (
                   <Link

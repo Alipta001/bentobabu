@@ -107,6 +107,16 @@ const paymentDetailsSchema = new mongoose.Schema(
     razorpayOrderId: { type: String, default: null },
     razorpayPaymentId: { type: String, default: null },
     razorpaySignature: { type: String, default: null },
+    razorpayRefundId: { type: String, default: null },
+    refundStatus: {
+      type: String,
+      enum: ['NONE', 'PENDING', 'PROCESSED', 'FAILED'],
+      default: 'NONE',
+    },
+    refundAmount: { type: Number, default: null },
+    refundInitiatedAt: { type: Date, default: null },
+    refundProcessedAt: { type: Date, default: null },
+    refundError: { type: String, default: null },
     collectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     collectedAt: { type: Date, default: null },
     method: { type: String, default: null },
@@ -202,7 +212,16 @@ const orderSchema = new mongoose.Schema(
     paymentStatus: {
       type: String,
       enum: {
-        values: ['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'COD_PENDING', 'COLLECTED_BY_RIDER'],
+        values: [
+          'PENDING',
+          'PAID',
+          'FAILED',
+          'REFUNDED',
+          'REFUND_PENDING',
+          'REFUND_FAILED',
+          'COD_PENDING',
+          'COLLECTED_BY_RIDER',
+        ],
         message: '{VALUE} is not a valid payment status',
       },
       default: 'PENDING',
@@ -245,6 +264,11 @@ const orderSchema = new mongoose.Schema(
         note: { type: String, default: '' },
       },
     ],
+    cancellationRecovery: {
+      stockRestored: { type: Boolean, default: false },
+      slotRestored: { type: Boolean, default: false },
+      couponRestored: { type: Boolean, default: false },
+    },
     deliveryOTP: {
       type: String,
       select: false, // OTP hash never exposed in queries

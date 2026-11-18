@@ -55,7 +55,8 @@ export function useProducts(filters?: ProductFilterOptions) {
   return useQuery({
     queryKey: QUERY_KEYS.PRODUCTS(filters),
     queryFn: ({ signal }) => productService.getAll(filters, signal),
-    staleTime: 30 * 1000,
+    staleTime: 5 * 1000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -64,6 +65,8 @@ export function useProduct(slug: string) {
     queryKey: QUERY_KEYS.PRODUCT(slug),
     queryFn: () => productService.getBySlug(slug),
     enabled: !!slug,
+    staleTime: 5 * 1000,
+    refetchOnWindowFocus: true,
   });
 }
 

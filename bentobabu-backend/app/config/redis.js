@@ -182,21 +182,18 @@ const redisDel = async (...keys) => {
 const redisDelPattern = async (pattern) => {
   if (!isRedisReady()) return 0;
   try {
-    let cursor = '0';
-    let totalDeleted = 0;
-    do {
-      const reply = await redisClient.scan(cursor, {
-        MATCH: pattern,
-        COUNT: 100,
-      });
-      cursor = reply.cursor.toString();
-      const keys = reply.keys;
-      if (keys.length > 0) {
-        const deleted = await redisClient.del(keys);
-        totalDeleted += deleted;
+    const keys = [];
+    for await (const chunk of redisClient.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      if (Array.isArray(chunk)) {
+        keys.push(...chunk);
+      } else if (typeof chunk === 'string') {
+        keys.push(chunk);
       }
-    } while (cursor !== '0');
-    return totalDeleted;
+    }
+    if (keys.length > 0) {
+      return await redisClient.del(keys);
+    }
+    return 0;
   } catch (err) {
     console.error(`[Redis] DelPattern failed for "${pattern}":`, err.message);
     return 0;
