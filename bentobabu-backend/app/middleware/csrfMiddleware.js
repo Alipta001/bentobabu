@@ -85,8 +85,14 @@ const csrfProtect = (req, res, next) => {
     return next();
   }
 
-  // 3. Ambient cookie credentials check
+  // 3. Ambient cookie credentials check (supporting separated customer/admin/delivery cookies)
   const hasAuthCookie = Boolean(
+    req.cookies?.['bb_customer_access_token'] ||
+    req.cookies?.['bb_customer_refresh_token'] ||
+    req.cookies?.['bb_admin_access_token'] ||
+    req.cookies?.['bb_admin_refresh_token'] ||
+    req.cookies?.['bb_delivery_access_token'] ||
+    req.cookies?.['bb_delivery_refresh_token'] ||
     req.cookies?.[env.accessTokenCookieName] ||
     req.cookies?.[env.refreshTokenCookieName] ||
     req.cookies?.refreshToken ||

@@ -1,4 +1,4 @@
-import apiClient, { clearCsrfToken } from "./axios";
+import apiClient, { clearCsrfToken, bumpAuthGeneration } from "./axios";
 import { User } from "@/types";
 
 export interface LoginPayload {
@@ -38,6 +38,8 @@ export const authApi = {
       localStorage.setItem("bb_delivery_user", JSON.stringify(user));
     }
 
+    bumpAuthGeneration();
+
     return user;
   },
 
@@ -66,6 +68,7 @@ export const authApi = {
   },
 
   async logout(): Promise<void> {
+    bumpAuthGeneration();
     try {
       await apiClient.post("/auth/logout");
     } finally {

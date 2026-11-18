@@ -26,6 +26,10 @@ const env = validateEnv();
 
 const app = express();
 
+// 0. Trust single reverse proxy hop (Render / Cloudflare) before registering rate limiters
+// This ensures correct client IP identification via X-Forwarded-For and prevents ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+app.set('trust proxy', 1);
+
 // 1. Secure HTTP Headers
 app.use(
   helmet({
@@ -85,8 +89,8 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token', 'X-XSRF-Token'],
-  exposedHeaders: ['Set-Cookie', 'X-CSRF-Token'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token', 'X-XSRF-Token', 'X-Auth-Context'],
+  exposedHeaders: ['Set-Cookie', 'X-CSRF-Token', 'X-Auth-Context'],
   maxAge: 86400, // 24 hours
 };
 
@@ -285,7 +289,11 @@ const startServer = async (port = env.port, host = env.host) => {
       server = app.listen(port, host, (err) => {
         if (err) return reject(err);
         const actualPort = server.address().port;
-        console.log(`[Server] Bento Babu backend running on http://${host}:${actualPort} in ${process.env.NODE_ENV || 'development'} mode.`);
+        const currentMode = process.env.NODE_ENV || 'development';
+        console.log(`[Server] Bento Babu backend running on http://${host}:${actualPort} in ${currentMode} mode.`);
+        if (currentMode !== 'production' && (process.env.RENDER || !['localhost', '127.0.0.1'].includes(host))) {
+          console.warn(`[Server] WARNING: NODE_ENV is set to '${currentMode}'. Configure NODE_ENV=production in Render environment variables to enforce production security.`);
+        }
         resolve(server);
       });
       server.on('error', reject);

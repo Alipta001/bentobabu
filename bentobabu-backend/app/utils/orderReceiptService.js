@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const AdminSettingsController = require('../controllers/adminSettingsController');
+const { validateEnv } = require('../config/env');
 const { generateOrderReceiptPdf } = require('./receiptGenerator');
 const b2Storage = require('./b2Storage');
 
@@ -433,10 +434,22 @@ async function getReceiptForDownload(orderOrId) {
         fromStorage: true,
       };
     } catch (b2Err) {
+      let targetBucket = 'unconfigured';
+      try {
+        const env = validateEnv();
+        targetBucket = env.b2BucketName || 'unconfigured';
+      } catch {}
+
       logReceiptEvent('B2_STREAM_FAILED_FALLBACK_RECOVERY', {
         orderId: order._id,
+        orderNumber: order.orderNumber,
         objectKey: order.receipt.objectKey,
-        error: b2Err.message,
+        targetBucket,
+        recordedBucket: order.receipt.bucket || null,
+        recordedUploadedAt: order.receipt.uploadedAt || null,
+        errorCode: b2Err.name || b2Err.code || 'UNKNOWN_STORAGE_ERROR',
+        errorMessage: b2Err.message,
+        recoveryAction: 'AUTO_REGENERATE_AND_PERSIST',
       });
       // Controlled recovery: object missing from B2 or damaged -> force regenerate to restore to B2
       const recovered = await generateAndStoreReceipt(order, { forceRegenerate: true });

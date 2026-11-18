@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { User, OtpChallenge, DeliveryApplication, RefreshSession } = require('../models');
 const {
+  AUTH_COOKIE_NAMES,
+  getCookieNamesForRole,
   generateAccessToken,
   generateRefreshToken,
   verifyRefreshToken,
@@ -749,9 +751,10 @@ class AuthController {
         res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
       }
 
-      // 8. Set HttpOnly cookies (No raw JWTs in response body)
-      res.cookie(activeEnv.accessTokenCookieName, accessToken, getAccessTokenCookieOptions());
-      res.cookie(activeEnv.refreshTokenCookieName, refreshToken, getRefreshCookieOptions('/api/v1/auth'));
+      // 8. Set HttpOnly cookies with isolated names based on role (Customer vs Admin vs Delivery)
+      const cookieNames = getCookieNamesForRole(user.role);
+      res.cookie(cookieNames.access, accessToken, getAccessTokenCookieOptions());
+      res.cookie(cookieNames.refresh, refreshToken, getRefreshCookieOptions('/api/v1/auth'));
 
       return res.status(200).json({
         success: true,
@@ -767,7 +770,7 @@ class AuthController {
 
   /**
    * Helper: Extracts all candidate refresh tokens from cookies, headers, and body
-   * Resolves duplicate cookie collisions across paths (/api/v1/auth/refresh vs /api/v1/auth)
+   * Supports isolated cookie namespaces per role (customer, admin, delivery)
    */
   static extractCandidateRefreshTokens(req, cookieName) {
     const tokens = [];
@@ -777,10 +780,29 @@ class AuthController {
       tokens.push(req.body.refreshToken.trim());
     }
 
+    const requestedContext = (req.headers?.['x-auth-context'] || '').toLowerCase();
+    const prioritizedNames = [];
+    if (requestedContext === 'admin') {
+      prioritizedNames.push('bb_admin_refresh_token');
+    } else if (requestedContext === 'delivery') {
+      prioritizedNames.push('bb_delivery_refresh_token');
+    } else if (requestedContext === 'customer') {
+      prioritizedNames.push('bb_customer_refresh_token');
+    }
+
+    const allNamesToCheck = Array.from(new Set([
+      ...prioritizedNames,
+      'bb_customer_refresh_token',
+      'bb_admin_refresh_token',
+      'bb_delivery_refresh_token',
+      cookieName,
+      'bb_refresh_token',
+      'refreshToken',
+    ])).filter(Boolean);
+
     // 2. From parsed cookies (cookie-parser)
     if (req.cookies) {
-      const namesToCheck = [cookieName, 'bb_refresh_token', 'refreshToken'];
-      for (const name of namesToCheck) {
+      for (const name of allNamesToCheck) {
         if (req.cookies[name] && typeof req.cookies[name] === 'string') {
           tokens.push(req.cookies[name].trim());
         }
@@ -796,7 +818,7 @@ class AuthController {
         if (equalIndex > 0) {
           const key = part.slice(0, equalIndex).trim();
           const val = part.slice(equalIndex + 1).trim();
-          if (key === cookieName || key === 'bb_refresh_token' || key === 'refreshToken') {
+          if (allNamesToCheck.includes(key)) {
             if (val && !tokens.includes(val)) {
               tokens.push(val);
             }
@@ -865,10 +887,35 @@ class AuthController {
         const userId = decoded.userId || decoded.id;
         if (!userId) continue;
 
+        // Role & context isolation: check token claims upfront
+        const requestedContext = (req.headers?.['x-auth-context'] || '').toLowerCase();
+        if (decoded.role) {
+          if (requestedContext === 'admin' && decoded.role !== 'ADMIN' && decoded.role !== 'KITCHEN') {
+            continue;
+          }
+          if (requestedContext === 'delivery' && decoded.role !== 'DELIVERY' && decoded.role !== 'ADMIN') {
+            continue;
+          }
+          if (requestedContext === 'customer' && decoded.role !== 'CUSTOMER') {
+            continue;
+          }
+        }
+
         const user = await User.findById(userId);
         if (!user) continue;
         if (!user.isActive) {
           inactiveUserFound = true;
+          continue;
+        }
+
+        // Role & context isolation: database verification fallback
+        if (requestedContext === 'admin' && user.role !== 'ADMIN' && user.role !== 'KITCHEN') {
+          continue;
+        }
+        if (requestedContext === 'delivery' && user.role !== 'DELIVERY' && user.role !== 'ADMIN') {
+          continue;
+        }
+        if (requestedContext === 'customer' && user.role !== 'CUSTOMER') {
           continue;
         }
 
@@ -988,14 +1035,15 @@ class AuthController {
 
             if (isWithinGraceWindow) {
               console.warn('[RefreshDiagnostics][concurrency_in_flight]', {
-                message: 'In-flight concurrent refresh presented previous token within grace window. Rejecting token without revoking active session.',
+                message: 'In-flight concurrent refresh presented previous token within grace window. Returning 409 concurrent status without revoking active session.',
                 dbName,
                 collectionName,
               });
-              // Return 401 without destroying active session, so parallel requests with rotated token succeed
-              return res.status(401).json({
+              // Return 409 Conflict with code CONCURRENT_REFRESH_IN_PROGRESS so secondary tabs/requests do NOT terminate the session
+              return res.status(409).json({
                 success: false,
-                message: 'Refresh token has already been used and rotated. Please use your active session.',
+                code: 'CONCURRENT_REFRESH_IN_PROGRESS',
+                message: 'Refresh token has already been rotated by a concurrent request. Please retry with active session.',
               });
             }
 
@@ -1008,6 +1056,7 @@ class AuthController {
             await selectedSession.save();
             return res.status(401).json({
               success: false,
+              code: 'SESSION_REVOKED_REUSE_DETECTED',
               message: 'Refresh token has already been used and rotated. Session revoked for security.',
             });
           }
@@ -1019,6 +1068,7 @@ class AuthController {
           });
           return res.status(401).json({
             success: false,
+            code: 'INVALID_REFRESH_TOKEN',
             message: 'Invalid refresh token.',
           });
         }
@@ -1039,9 +1089,10 @@ class AuthController {
         res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
         res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
 
-        // Set rotated cookies
-        res.cookie(activeEnv.accessTokenCookieName, newAccessToken, getAccessTokenCookieOptions());
-        res.cookie(activeEnv.refreshTokenCookieName, newRefreshToken, getRefreshCookieOptions('/api/v1/auth'));
+        // Set rotated cookies with isolated role namespace
+        const cookieNames = getCookieNamesForRole(selectedUser.role);
+        res.cookie(cookieNames.access, newAccessToken, getAccessTokenCookieOptions());
+        res.cookie(cookieNames.refresh, newRefreshToken, getRefreshCookieOptions('/api/v1/auth'));
 
         return res.status(200).json({
           success: true,
@@ -1079,8 +1130,10 @@ class AuthController {
         res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
         res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
 
-        res.cookie(activeEnv.accessTokenCookieName, newAccessToken, getAccessTokenCookieOptions());
-        res.cookie(activeEnv.refreshTokenCookieName, newRefreshToken, getRefreshCookieOptions('/api/v1/auth'));
+        // Set rotated cookies with isolated role namespace
+        const cookieNames = getCookieNamesForRole(selectedUser.role);
+        res.cookie(cookieNames.access, newAccessToken, getAccessTokenCookieOptions());
+        res.cookie(cookieNames.refresh, newRefreshToken, getRefreshCookieOptions('/api/v1/auth'));
 
         return res.status(200).json({
           success: true,
@@ -1113,11 +1166,28 @@ class AuthController {
   static async logout(req, res, next) {
     try {
       const activeEnv = validateEnv();
-      const rawRefreshToken =
-        req.cookies?.[activeEnv.refreshTokenCookieName] ||
-        req.cookies?.refreshToken ||
-        req.cookies?.['bb_refresh_token'] ||
-        req.body?.refreshToken;
+      const requestedContext = (req.headers?.['x-auth-context'] || '').toLowerCase();
+
+      // Prioritize extracting the refresh token belonging to the logging-out context
+      let rawRefreshToken = null;
+      if (requestedContext === 'admin') {
+        rawRefreshToken = req.cookies?.bb_admin_refresh_token;
+      } else if (requestedContext === 'delivery') {
+        rawRefreshToken = req.cookies?.bb_delivery_refresh_token;
+      } else if (requestedContext === 'customer') {
+        rawRefreshToken = req.cookies?.bb_customer_refresh_token;
+      }
+
+      if (!rawRefreshToken) {
+        rawRefreshToken =
+          req.cookies?.bb_customer_refresh_token ||
+          req.cookies?.bb_admin_refresh_token ||
+          req.cookies?.bb_delivery_refresh_token ||
+          req.cookies?.[activeEnv.refreshTokenCookieName] ||
+          req.cookies?.refreshToken ||
+          req.cookies?.['bb_refresh_token'] ||
+          req.body?.refreshToken;
+      }
 
       if (rawRefreshToken && typeof rawRefreshToken === 'string') {
         try {
@@ -1146,14 +1216,49 @@ class AuthController {
         }
       }
 
-      res.clearCookie(activeEnv.accessTokenCookieName, getClearCookieOptions('/'));
-      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
-      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/'));
-      res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth'));
-      res.clearCookie('accessToken', getClearCookieOptions('/'));
-      res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
-      res.clearCookie('refreshToken', getClearCookieOptions('/'));
-      res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth'));
+      // Clear isolated cookies based on requested context
+      const cookiesToClear = [];
+      if (requestedContext === 'admin') {
+        cookiesToClear.push(AUTH_COOKIE_NAMES.ADMIN);
+      } else if (requestedContext === 'delivery') {
+        cookiesToClear.push(AUTH_COOKIE_NAMES.DELIVERY);
+      } else if (requestedContext === 'customer') {
+        cookiesToClear.push(AUTH_COOKIE_NAMES.CUSTOMER);
+      } else {
+        // Fallback: clear whatever specific cookies are present
+        if (req.cookies?.bb_admin_refresh_token || req.cookies?.bb_admin_access_token) {
+          cookiesToClear.push(AUTH_COOKIE_NAMES.ADMIN);
+        }
+        if (req.cookies?.bb_delivery_refresh_token || req.cookies?.bb_delivery_access_token) {
+          cookiesToClear.push(AUTH_COOKIE_NAMES.DELIVERY);
+        }
+        if (req.cookies?.bb_customer_refresh_token || req.cookies?.bb_customer_access_token) {
+          cookiesToClear.push(AUTH_COOKIE_NAMES.CUSTOMER);
+        }
+        if (cookiesToClear.length === 0) {
+          cookiesToClear.push(AUTH_COOKIE_NAMES.CUSTOMER);
+        }
+      }
+
+      for (const pair of cookiesToClear) {
+        res.clearCookie(pair.access, getClearCookieOptions('/'));
+        res.clearCookie(pair.refresh, getClearCookieOptions('/api/v1/auth/refresh'));
+        res.clearCookie(pair.refresh, getClearCookieOptions('/api/v1/auth'));
+        res.clearCookie(pair.refresh, getClearCookieOptions('/'));
+      }
+
+      // Clear legacy cookie names if present in request
+      const rawCookieHeader = req.headers?.cookie || '';
+      if (rawCookieHeader.includes(activeEnv.refreshTokenCookieName) || rawCookieHeader.includes('refreshToken')) {
+        res.clearCookie(activeEnv.accessTokenCookieName, getClearCookieOptions('/'));
+        res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
+        res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/'));
+        res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth'));
+        res.clearCookie('accessToken', getClearCookieOptions('/'));
+        res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
+        res.clearCookie('refreshToken', getClearCookieOptions('/'));
+        res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth'));
+      }
       res.clearCookie('bb_csrf_token', getClearCookieOptions('/'));
 
       return res.status(200).json({

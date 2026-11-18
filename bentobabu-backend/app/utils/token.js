@@ -5,6 +5,41 @@ const { validateEnv } = require('../config/env');
 const env = validateEnv();
 
 /**
+ * Isolated authentication cookie names per application context / role
+ */
+const AUTH_COOKIE_NAMES = {
+  CUSTOMER: {
+    access: 'bb_customer_access_token',
+    refresh: 'bb_customer_refresh_token',
+  },
+  ADMIN: {
+    access: 'bb_admin_access_token',
+    refresh: 'bb_admin_refresh_token',
+  },
+  KITCHEN: {
+    access: 'bb_admin_access_token',
+    refresh: 'bb_admin_refresh_token',
+  },
+  DELIVERY: {
+    access: 'bb_delivery_access_token',
+    refresh: 'bb_delivery_refresh_token',
+  },
+};
+
+const resolveAuthContext = (contextOrRole) => {
+  if (!contextOrRole || typeof contextOrRole !== 'string') return 'CUSTOMER';
+  const upper = contextOrRole.trim().toUpperCase();
+  if (upper === 'ADMIN' || upper === 'KITCHEN') return 'ADMIN';
+  if (upper === 'DELIVERY') return 'DELIVERY';
+  return 'CUSTOMER';
+};
+
+const getCookieNamesForRole = (roleOrContext) => {
+  const resolved = resolveAuthContext(roleOrContext);
+  return AUTH_COOKIE_NAMES[resolved] || AUTH_COOKIE_NAMES.CUSTOMER;
+};
+
+/**
  * Computes SHA-256 hash of a string (e.g. refresh token)
  * Raw refresh tokens are never stored in MongoDB
  */
@@ -35,7 +70,7 @@ const generateAccessToken = (user) => {
 
 /**
  * Generates long-lived Refresh Token (7d default) - Completely Stateless
- * Claims: userId, id, type: 'refresh', jti, iat, exp, plus optional extraClaims (e.g. sessionId)
+ * Claims: userId, id, role, type: 'refresh', jti, iat, exp, plus optional extraClaims (e.g. sessionId)
  */
 const generateRefreshToken = (user, extraClaims = {}) => {
   const userId = user.id || user._id.toString();
@@ -43,6 +78,7 @@ const generateRefreshToken = (user, extraClaims = {}) => {
     {
       userId,
       id: userId,
+      role: user.role,
       type: 'refresh',
       jti: crypto.randomBytes(16).toString('hex'),
       ...extraClaims,
@@ -170,6 +206,9 @@ const getClearCookieOptions = (path = '/') => {
 };
 
 module.exports = {
+  AUTH_COOKIE_NAMES,
+  resolveAuthContext,
+  getCookieNamesForRole,
   hashToken,
   generateAccessToken,
   generateRefreshToken,

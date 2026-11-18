@@ -1,4 +1,4 @@
-import apiClient, { clearCsrfToken } from "@/api/axios/axios";
+import apiClient, { clearCsrfToken, bumpAuthGeneration } from "@/api/axios/axios";
 import { API_ENDPOINTS } from "@/api/endPoints/endPoints";
 import { User } from "@/types";
 
@@ -123,6 +123,7 @@ export const authService = {
     if (authData.user && typeof window !== "undefined") {
       localStorage.setItem("bb_user", JSON.stringify(authData.user));
     }
+    bumpAuthGeneration();
     return authData;
   },
 
@@ -323,6 +324,7 @@ export const authService = {
    * Logs out user, invalidating backend session and clearing cookies.
    */
   async logout(): Promise<void> {
+    bumpAuthGeneration();
     try {
       await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
     } catch {
@@ -336,6 +338,7 @@ export const authService = {
    * Logs out from all active devices
    */
   async logoutAll(): Promise<void> {
+    bumpAuthGeneration();
     try {
       await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT_ALL);
     } catch {
@@ -346,6 +349,7 @@ export const authService = {
   },
 
   clearSession(): void {
+    bumpAuthGeneration();
     clearCsrfToken();
     if (typeof window !== "undefined") {
       localStorage.removeItem("bb_user");

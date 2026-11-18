@@ -107,7 +107,6 @@ const globalRateLimiter = rateLimit({
     success: false,
     message: 'Too many requests from this IP, please try again after 15 minutes',
   },
-  validate: { trustProxy: false },
 });
 
 /**
@@ -124,7 +123,6 @@ const authRateLimiter = rateLimit({
     success: false,
     message: 'Too many authentication attempts from this IP, please try again after 15 minutes',
   },
-  validate: { trustProxy: false },
 });
 
 /**
@@ -141,7 +139,6 @@ const refreshRateLimiter = rateLimit({
     success: false,
     message: 'Too many token refresh attempts from this IP, please try again after 15 minutes',
   },
-  validate: { trustProxy: false },
 });
 
 /**
@@ -158,7 +155,6 @@ const otpRateLimiter = rateLimit({
     success: false,
     message: 'Too many OTP verification attempts. Please wait 10 minutes.',
   },
-  validate: { trustProxy: false },
 });
 
 /**
@@ -175,7 +171,6 @@ const mediaUploadRateLimiter = rateLimit({
     success: false,
     message: 'Too many media upload attempts. Please wait 15 minutes.',
   },
-  validate: { trustProxy: false },
 });
 
 /**
@@ -192,7 +187,6 @@ const pushTestRateLimiter = rateLimit({
     success: false,
     message: 'Too many test push attempts. Please wait 15 minutes.',
   },
-  validate: { trustProxy: false },
 });
 
 /**
@@ -209,7 +203,6 @@ const supportTicketRateLimiter = rateLimit({
     success: false,
     message: 'Too many support actions. Please wait a few minutes before submitting another request.',
   },
-  validate: { trustProxy: false },
 });
 
 module.exports = {

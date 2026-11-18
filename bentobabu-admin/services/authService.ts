@@ -1,4 +1,4 @@
-import adminApiClient, { clearCsrfToken } from "@/api/axios/axios";
+import adminApiClient, { clearCsrfToken, bumpAuthGeneration } from "@/api/axios/axios";
 import { ADMIN_API_ENDPOINTS } from "@/api/endPoints/endPoints";
 
 export interface AdminUser {
@@ -46,6 +46,8 @@ export const adminAuthService = {
       localStorage.setItem("bb_admin_user", JSON.stringify(userData));
     }
 
+    bumpAuthGeneration();
+
     return { admin: userData };
   },
 
@@ -90,6 +92,7 @@ export const adminAuthService = {
   },
 
   async logout(): Promise<void> {
+    bumpAuthGeneration();
     try {
       await adminApiClient.post(ADMIN_API_ENDPOINTS.AUTH.LOGOUT);
     } catch {
