@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { DownloadReceiptButton } from "@/components/order/DownloadReceiptButton";
 import { useOrder, useCancelOrder, useUserProfile } from "@/hooks/useQueries";
 import { OrderStatus } from "@/types";
 import { buildLoginUrl } from "@/lib/authRedirect";
@@ -245,13 +246,11 @@ export default function OrderTrackingPage() {
                   {order.status.replace(/_/g, " ")}
                 </span>
 
-                <Link
-                  href={`/order-success/${order.id}`}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-[#E5DFC5] text-xs font-semibold text-[#354B35] hover:bg-[#F7F3EA]"
-                >
-                  <FileText className="w-3.5 h-3.5 text-[#B99A60]" />
-                  <span>Receipt</span>
-                </Link>
+                <DownloadReceiptButton
+                  orderId={order.id}
+                  orderNumber={order.orderNumber}
+                  variant="pill"
+                />
               </div>
             </div>
 

@@ -82,6 +82,21 @@ export interface OrderItem {
   dietary?: DietaryType;
 }
 
+export type ReceiptStatus = "PENDING" | "GENERATING" | "STORED" | "FAILED";
+
+export interface OrderReceiptMetadata {
+  status: ReceiptStatus;
+  storageProvider?: string;
+  bucket?: string;
+  objectKey?: string;
+  fileName?: string;
+  contentType?: string;
+  fileSize?: number;
+  generatedAt?: string;
+  uploadedAt?: string;
+  lastError?: string;
+}
+
 export interface Order {
   id: string;
   createdAt: string;
@@ -109,6 +124,7 @@ export interface Order {
   deliverySlot?: string;
   deliveryNotes?: string;
   cancellationReason?: string;
+  receipt?: OrderReceiptMetadata;
 }
 
 export interface Customer {
@@ -246,6 +262,8 @@ export interface AdminReviewStats {
   };
 }
 
+export type FssaiStatus = "NOT_APPLIED" | "APPLICATION_SUBMITTED" | "APPROVED" | "EXPIRED" | "SUSPENDED";
+
 export interface BusinessSettings {
   businessName: string;
   tagline: string;
@@ -264,6 +282,13 @@ export interface BusinessSettings {
   deliveryChargeAmount?: number;
   minimumOrderValue?: number;
   isOrderingEnabled: boolean;
+  fssaiStatus?: FssaiStatus;
+  fssaiNumber?: string;
+  fssaiCertificateUrl?: string;
+  gstin?: string;
+  gstCertificateUrl?: string;
+  websiteUrl?: string;
+  businessAddress?: string;
 }
 
 export interface ProductMediaImage {

@@ -14,6 +14,8 @@ const NotificationDispatcher = require('../utils/notificationDispatcher');
 const { validateEnv } = require('../config/env');
 const { redisDelPattern } = require('../config/redis');
 const { getKolkataDateString } = require('../utils/businessDate');
+const orderReceiptService = require('../utils/orderReceiptService');
+const receiptQueue = require('../utils/receiptQueue');
 
 const env = validateEnv();
 
@@ -564,6 +566,11 @@ class PaymentController {
       // Invalidate admin dashboard KPI and revenue caches
       await redisDelPattern('cache:admin:dashboard:*');
 
+      // Asynchronously enqueue receipt generation and Backblaze B2 persistence (non-blocking)
+      receiptQueue
+        .enqueueReceipt(confirmedOrder._id, { forceRegenerate: true })
+        .catch((e) => console.error('[PaymentController] B2 receipt queue error:', e.message));
+
       return res.status(200).json({
         success: true,
         message: 'Payment verified and order confirmed successfully',
@@ -743,6 +750,10 @@ class PaymentController {
                   order: confirmedOrder,
                   eventType: 'ORDER_CONFIRMED',
                 }).catch((e) => console.error('[Notification] Webhook ORDER_CONFIRMED dispatch error:', e.message));
+
+                receiptQueue
+                  .enqueueReceipt(confirmedOrder._id, { forceRegenerate: true })
+                  .catch((e) => console.error('[PaymentController] Webhook B2 receipt queue error:', e.message));
               }
             }
           }
@@ -938,6 +949,11 @@ class PaymentController {
 
       // Invalidate admin dashboard KPI and revenue caches
       await redisDelPattern('cache:admin:dashboard:*');
+
+      // Asynchronously enqueue receipt generation and Backblaze B2 persistence (non-blocking)
+      receiptQueue
+        .enqueueReceipt(confirmedOrder._id, { forceRegenerate: true })
+        .catch((e) => console.error('[PaymentController] B2 receipt queue error:', e.message));
 
       return res.status(200).json({
         success: true,

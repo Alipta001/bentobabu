@@ -10,9 +10,15 @@ import {
   Phone,
   Mail,
   MapPin,
+  FileText,
+  Download,
+  RefreshCw,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { useAdminOrders, useUpdateOrderStatus } from "@/hooks/useAdminQueries";
+import { orderService } from "@/services/orderService";
 import { OrderStatus } from "@/types";
 
 const STATUS_FILTERS: { label: string; value: string }[] = [
@@ -36,8 +42,11 @@ function OrdersContent() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(() => urlId || null);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
+  const [regeneratingReceipt, setRegeneratingReceipt] = useState(false);
+  const [receiptFeedback, setReceiptFeedback] = useState<string | null>(null);
 
-  const { data: orders = [], isLoading } = useAdminOrders({
+  const { data: orders = [], isLoading, refetch } = useAdminOrders({
     status: activeStatus,
     search: searchQuery,
   });
@@ -45,6 +54,44 @@ function OrdersContent() {
   const selectedOrder = orders.find((o) => o.id === selectedOrderId) || null;
 
   const updateStatusMutation = useUpdateOrderStatus();
+
+  const handleAdminDownloadReceipt = async (order: any) => {
+    const orderId = order._backendId || order.id;
+    setDownloadingReceipt(true);
+    setReceiptFeedback(null);
+    try {
+      const blob = await orderService.downloadReceipt(orderId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `BentoBabu-Receipt-${order.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setReceiptFeedback(err?.message || "Failed to download receipt.");
+    } finally {
+      setDownloadingReceipt(false);
+    }
+  };
+
+  const handleAdminRegenerateReceipt = async (order: any) => {
+    const orderId = order._backendId || order.id;
+    setRegeneratingReceipt(true);
+    setReceiptFeedback(null);
+    try {
+      await orderService.regenerateReceipt(orderId);
+      setReceiptFeedback("Receipt regenerated and stored in Backblaze B2.");
+      if (typeof refetch === "function") {
+        refetch();
+      }
+    } catch (err: any) {
+      setReceiptFeedback(err?.message || "Failed to regenerate receipt.");
+    } finally {
+      setRegeneratingReceipt(false);
+    }
+  };
 
   const handleStatusChange = async (orderId: string, nextStatus: OrderStatus) => {
     try {
@@ -502,6 +549,101 @@ function OrdersContent() {
                 <div className="pt-2 border-t border-[#E5DFC5] flex justify-between font-bold text-base text-[#1F271F]">
                   <span>Total Amount</span>
                   <span className="text-[#354B35]">₹{selectedOrder.total}</span>
+                </div>
+              </div>
+
+              {/* Official PDF Receipt (Backblaze B2) Card */}
+              <div className="p-4 bg-white rounded-2xl border border-[#E5DFC5] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#354B35]" />
+                    <h4 className="font-bold text-xs uppercase tracking-wider text-[#667266]">
+                      Official PDF Receipt (Backblaze B2)
+                    </h4>
+                  </div>
+                  {/* Status Badge */}
+                  {selectedOrder.receipt?.status === "STORED" ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      Stored in B2
+                    </span>
+                  ) : selectedOrder.receipt?.status === "FAILED" ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                      <AlertTriangle className="w-3 h-3 text-rose-600" />
+                      Storage Failed
+                    </span>
+                  ) : selectedOrder.receipt?.status === "GENERATING" ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                      Generating...
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      <Clock className="w-3 h-3 text-amber-600" />
+                      Pending Generation
+                    </span>
+                  )}
+                </div>
+
+                {/* Storage Metadata Details */}
+                <div className="space-y-1 text-xs text-[#667266] bg-[#F7F3EA] p-3 rounded-xl border border-[#EAE4D6]">
+                  {selectedOrder.receipt?.objectKey && (
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="font-semibold text-[#1F271F]">Storage Key:</span>
+                      <span className="font-mono truncate max-w-[200px]" title={selectedOrder.receipt.objectKey}>
+                        {selectedOrder.receipt.objectKey}
+                      </span>
+                    </div>
+                  )}
+                  {selectedOrder.receipt?.fileSize && (
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="font-semibold text-[#1F271F]">File Size:</span>
+                      <span>{(selectedOrder.receipt.fileSize / 1024).toFixed(1)} KB</span>
+                    </div>
+                  )}
+                  {selectedOrder.receipt?.uploadedAt && (
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="font-semibold text-[#1F271F]">Last Synced:</span>
+                      <span>{new Date(selectedOrder.receipt.uploadedAt).toLocaleString("en-IN")}</span>
+                    </div>
+                  )}
+                  {selectedOrder.receipt?.lastError && (
+                    <div className="mt-1 pt-1 border-t border-[#E0D8C8] text-rose-700 text-[10px]">
+                      <strong>Storage Error:</strong> {selectedOrder.receipt.lastError}
+                    </div>
+                  )}
+                </div>
+
+                {receiptFeedback && (
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900">
+                    {receiptFeedback}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => handleAdminDownloadReceipt(selectedOrder)}
+                    disabled={downloadingReceipt}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[#354B35] text-white text-xs font-semibold hover:bg-[#253525] transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {downloadingReceipt ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
+                    <span>{downloadingReceipt ? "Downloading..." : "Download Receipt"}</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleAdminRegenerateReceipt(selectedOrder)}
+                    disabled={regeneratingReceipt}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-[#D5CDBE] bg-white text-[#1F271F] text-xs font-semibold hover:bg-gray-50 transition-colors disabled:opacity-50 cursor-pointer"
+                    title="Force regeneration and re-upload to Backblaze B2"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 text-[#B99A60] ${regeneratingReceipt ? "animate-spin" : ""}`} />
+                    <span>{regeneratingReceipt ? "Regenerating..." : "Regenerate"}</span>
+                  </button>
                 </div>
               </div>
             </div>

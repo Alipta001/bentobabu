@@ -29,6 +29,13 @@ const DEFAULT_SETTINGS = {
   KITCHEN_PINCODE: '700120',
   KITCHEN_LATITUDE: 22.7666909,
   KITCHEN_LONGITUDE: 88.3788318,
+  FSSAI_STATUS: 'APPLICATION_SUBMITTED',
+  FSSAI_NUMBER: '',
+  FSSAI_CERTIFICATE_URL: '',
+  GSTIN: '',
+  GST_CERTIFICATE_URL: '',
+  WEBSITE_URL: 'https://bentobabu.in',
+  BUSINESS_ADDRESS: 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700120, India',
 };
 
 const ALLOWED_SETTING_KEYS = Object.keys(DEFAULT_SETTINGS);
@@ -257,6 +264,55 @@ class AdminSettingsController {
               });
             }
             updatesToApply[key] = lng;
+            break;
+          }
+
+          case 'FSSAI_STATUS': {
+            const allowed = ['NOT_APPLIED', 'APPLICATION_SUBMITTED', 'APPROVED', 'EXPIRED', 'SUSPENDED'];
+            const upper = String(val || '').toUpperCase().trim();
+            if (!allowed.includes(upper)) {
+              return res.status(400).json({
+                success: false,
+                message: `FSSAI_STATUS must be one of: ${allowed.join(', ')}`,
+              });
+            }
+            updatesToApply[key] = upper;
+            break;
+          }
+
+          case 'FSSAI_NUMBER': {
+            const fssai = String(val || '').trim();
+            if (fssai && !/^\d{14}$/.test(fssai)) {
+              return res.status(400).json({
+                success: false,
+                message: 'FSSAI_NUMBER must be a valid 14-digit registration or licence number, or left empty.',
+              });
+            }
+            updatesToApply[key] = fssai;
+            break;
+          }
+
+          case 'FSSAI_CERTIFICATE_URL':
+          case 'GST_CERTIFICATE_URL': {
+            updatesToApply[key] = String(val || '').trim();
+            break;
+          }
+
+          case 'GSTIN': {
+            const gstin = String(val || '').toUpperCase().trim();
+            if (gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(gstin)) {
+              return res.status(400).json({
+                success: false,
+                message: 'GSTIN must be a valid 15-character Indian Goods and Services Tax Identification Number, or left empty.',
+              });
+            }
+            updatesToApply[key] = gstin;
+            break;
+          }
+
+          case 'WEBSITE_URL':
+          case 'BUSINESS_ADDRESS': {
+            updatesToApply[key] = String(val || '').trim();
             break;
           }
 

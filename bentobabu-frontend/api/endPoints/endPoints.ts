@@ -53,6 +53,7 @@ export const API_ENDPOINTS = {
     CREATE: "/orders",
     LIST: "/orders",
     DETAIL: (id: string) => `/orders/${id}`,
+    RECEIPT: (id: string) => `/orders/${id}/receipt`,
     CANCEL: (id: string) => `/orders/${id}/cancel`,
   },
   PAYMENTS: {

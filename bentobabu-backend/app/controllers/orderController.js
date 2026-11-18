@@ -14,6 +14,10 @@ const {
 const NotificationDispatcher = require('../utils/notificationDispatcher');
 const { redisDelPattern } = require('../config/redis');
 const { getKolkataDateString } = require('../utils/businessDate');
+const AdminSettingsController = require('./adminSettingsController');
+const { generateOrderReceiptPdf } = require('../utils/receiptGenerator');
+const orderReceiptService = require('../utils/orderReceiptService');
+const receiptQueue = require('../utils/receiptQueue');
 
 /**
  * Class-based Controller for Checkout & Order Processing
@@ -866,6 +870,14 @@ class OrderController {
       await redisDelPattern('cache:products:*');
       await redisDelPattern('cache:admin:dashboard:*');
 
+      // Asynchronously enqueue receipt generation and Backblaze B2 persistence for COD orders.
+      // For ONLINE orders, receipt is enqueued upon authoritative payment confirmation.
+      if (order.paymentMethod === 'COD') {
+        receiptQueue
+          .enqueueReceipt(order._id)
+          .catch((e) => console.error('[OrderController] Initial receipt queue error:', e.message));
+      }
+
       return res.status(201).json({
         success: true,
         message: 'Order created successfully',
@@ -977,6 +989,90 @@ class OrderController {
       return res.status(200).json({
         success: true,
         data: orderData,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * CUSTOMER / ADMIN: Download official PDF order receipt
+   * Uses Backblaze B2 persistent storage, streaming the verified PDF buffer.
+   * GET /api/v1/orders/:id/receipt
+   */
+  static async downloadReceipt(req, res, next) {
+    try {
+      const orderId = req.params.id;
+
+      const order = await orderReceiptService.loadFullOrder(orderId);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found',
+        });
+      }
+
+      // Customer ownership validation: customers can strictly only download receipts for their own orders
+      const isOwner = req.user && order.user && order.user.toString() === req.user.id.toString();
+      const isAdminOrStaff = req.user && (req.user.role === 'ADMIN' || req.user.role === 'KITCHEN');
+
+      if (!isOwner && !isAdminOrStaff) {
+        return res.status(403).json({
+          success: false,
+          message: 'Unauthorized: You are not authorized to download receipts for this order.',
+        });
+      }
+
+      // Retrieve or generate persistent PDF receipt using Backblaze B2 storage service
+      const receiptData = await orderReceiptService.getReceiptForDownload(order);
+
+      if (!receiptData || !receiptData.buffer) {
+        return res.status(500).json({
+          success: false,
+          message: 'Unable to retrieve or generate receipt. Please try again shortly.',
+        });
+      }
+
+      const filename = receiptData.fileName || `BentoBabu-Receipt-${order.orderNumber || order._id}.pdf`;
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', receiptData.buffer.length);
+      res.setHeader('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+
+      return res.status(200).send(receiptData.buffer);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * ADMIN: Controlled regeneration and storage of an order receipt in Backblaze B2
+   * POST /api/v1/orders/:id/receipt/regenerate
+   */
+  static async regenerateReceipt(req, res, next) {
+    try {
+      const orderId = req.params.id;
+
+      const order = await orderReceiptService.loadFullOrder(orderId);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found',
+        });
+      }
+
+      const result = await orderReceiptService.generateAndStoreReceipt(order, { forceRegenerate: true });
+
+      return res.status(200).json({
+        success: true,
+        message:
+          result.status === 'STORED'
+            ? 'Receipt regenerated and successfully stored in Backblaze B2'
+            : 'Receipt regenerated but storage could not be completed. Marked as FAILED.',
+        data: {
+          receipt: result.order.receipt,
+        },
       });
     } catch (error) {
       next(error);

@@ -34,6 +34,19 @@ router.get(
 );
 
 router.get(
+  '/:id/receipt',
+  authenticate,
+  OrderController.downloadReceipt
+);
+
+router.post(
+  '/:id/receipt/regenerate',
+  authenticate,
+  authorize('ADMIN'),
+  OrderController.regenerateReceipt
+);
+
+router.get(
   '/:id',
   authenticate,
   OrderController.getOrderById

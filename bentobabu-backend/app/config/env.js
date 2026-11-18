@@ -131,6 +131,13 @@ const validateEnv = () => {
     r2PublicBaseUrl: (process.env.R2_PUBLIC_BASE_URL || 'https://media.bentobabu.com').trim(),
     r2Region: (process.env.R2_REGION || 'auto').trim(),
     r2UploadUrlExpirySeconds: parseInt(process.env.R2_UPLOAD_URL_EXPIRY_SECONDS, 10) || 600,
+    // Backblaze B2 PDF Receipt Storage Configuration (S3 Compatible)
+    b2Endpoint: (process.env.B2_ENDPOINT || '').trim(),
+    b2Region: (process.env.B2_REGION || 'us-east-005').trim(),
+    b2BucketName: (process.env.B2_BUCKET_NAME || 'bentobabu-receipts').trim(),
+    b2KeyId: (process.env.B2_KEY_ID || '').trim(),
+    b2ApplicationKey: (process.env.B2_APPLICATION_KEY || '').trim(),
+    b2PublicBaseUrl: (process.env.B2_PUBLIC_BASE_URL || '').trim(),
     smsProvider: process.env.SMS_PROVIDER || 'mock',
     smsApiKey: process.env.SMS_API_KEY || '',
     smsApiSecret: process.env.SMS_API_SECRET || '',

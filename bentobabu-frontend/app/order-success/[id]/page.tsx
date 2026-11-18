@@ -9,6 +9,7 @@ import {
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { orderService } from "@/services/orderService";
+import { DownloadReceiptButton } from "@/components/order/DownloadReceiptButton";
 
 interface OrderSuccessPageProps {
   params: Promise<{ id: string }>;
@@ -187,12 +188,12 @@ export default async function OrderSuccessPage({ params }: OrderSuccessPageProps
               <ArrowRight className="w-4 h-4 text-[#B99A60]" />
             </Link>
 
-            <Link
-              href="/account"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-full border border-[#354B35] text-[#354B35] text-xs font-bold hover:bg-white transition-colors"
-            >
-              <span>View in My Orders</span>
-            </Link>
+            <DownloadReceiptButton
+              orderId={id}
+              orderNumber={order?.orderNumber}
+              variant="outline"
+              className="w-full sm:w-auto px-6 py-3.5 rounded-full border border-[#354B35] text-[#354B35] bg-transparent hover:bg-white"
+            />
 
             <Link
               href="/menu"

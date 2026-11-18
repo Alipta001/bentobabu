@@ -199,4 +199,14 @@ export const orderService = {
 
     return normalizeOrder(orderData);
   },
+
+  /**
+   * Download branded PDF order receipt (/orders/:id/receipt)
+   */
+  async downloadReceipt(id: string): Promise<Blob> {
+    const response = await apiClient.get(API_ENDPOINTS.ORDERS.RECEIPT(id), {
+      responseType: "blob",
+    });
+    return response.data;
+  },
 };

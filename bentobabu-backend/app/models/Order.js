@@ -128,6 +128,53 @@ const paymentDetailsSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const orderReceiptSnapshotSchema = new mongoose.Schema(
+  {
+    businessName: { type: String, default: null },
+    businessAddress: { type: String, default: null },
+    supportEmail: { type: String, default: null },
+    supportPhone: { type: String, default: null },
+    websiteUrl: { type: String, default: null },
+    fssaiStatus: { type: String, default: null },
+    fssaiNumber: { type: String, default: null },
+    gstin: { type: String, default: null },
+  },
+  { _id: false }
+);
+
+const orderReceiptSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ['PENDING', 'GENERATING', 'STORED', 'FAILED'],
+      default: 'PENDING',
+      index: true,
+    },
+    storageProvider: {
+      type: String,
+      default: 'BACKBLAZE_B2',
+    },
+    bucket: { type: String, default: null },
+    objectKey: { type: String, default: null },
+    fileName: { type: String, default: null },
+    contentType: { type: String, default: 'application/pdf' },
+    fileSize: { type: Number, default: null },
+    generatedAt: { type: Date, default: null },
+    uploadedAt: { type: Date, default: null },
+    lastError: { type: String, default: null },
+    lockToken: { type: String, default: null },
+    lockExpiresAt: { type: Date, default: null, index: true },
+    retryCount: { type: Number, default: 0 },
+    nextRetryAt: { type: Date, default: null, index: true },
+    generationAttempts: { type: Number, default: 0 },
+    snapshot: {
+      type: orderReceiptSnapshotSchema,
+      default: null,
+    },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     orderNumber: {
@@ -288,6 +335,10 @@ const orderSchema = new mongoose.Schema(
       type: Date,
       select: false,
       default: null,
+    },
+    receipt: {
+      type: orderReceiptSchema,
+      default: () => ({ status: 'PENDING' }),
     },
     cancellationReason: {
       type: String,

@@ -60,6 +60,18 @@ export interface BackendOrder {
   }>;
   cancellationReason?: string;
   createdAt: string;
+  receipt?: {
+    status: "PENDING" | "GENERATING" | "STORED" | "FAILED";
+    storageProvider?: string;
+    bucket?: string;
+    objectKey?: string;
+    fileName?: string;
+    contentType?: string;
+    fileSize?: number;
+    generatedAt?: string;
+    uploadedAt?: string;
+    lastError?: string;
+  };
 }
 
 export const mapBackendOrder = (o: BackendOrder): Order & { _backendId: string; rawStatus: string } => {
@@ -114,6 +126,20 @@ export const mapBackendOrder = (o: BackendOrder): Order & { _backendId: string; 
     },
     deliverySlot: o.deliverySlot?.label || (o.deliverySlot ? `${o.deliverySlot.startTime || ""} - ${o.deliverySlot.endTime || ""}` : undefined),
     cancellationReason: o.cancellationReason,
+    receipt: o.receipt
+      ? {
+          status: o.receipt.status || "PENDING",
+          storageProvider: o.receipt.storageProvider,
+          bucket: o.receipt.bucket,
+          objectKey: o.receipt.objectKey,
+          fileName: o.receipt.fileName,
+          contentType: o.receipt.contentType,
+          fileSize: o.receipt.fileSize,
+          generatedAt: o.receipt.generatedAt,
+          uploadedAt: o.receipt.uploadedAt,
+          lastError: o.receipt.lastError,
+        }
+      : undefined,
   };
 };
 
@@ -211,5 +237,22 @@ export const orderService = {
 
   async cancelOrder(id: string, reason: string): Promise<Order> {
     return this.updateStatus(id, "cancelled", reason);
+  },
+
+  /**
+   * Download persistent order receipt PDF via backend streaming proxy
+   */
+  async downloadReceipt(orderId: string): Promise<Blob> {
+    const res = await adminApiClient.get(`/orders/${orderId}/receipt`, {
+      responseType: "blob",
+    });
+    return res.data;
+  },
+
+  /**
+   * Controlled regeneration and re-upload of receipt in Backblaze B2
+   */
+  async regenerateReceipt(orderId: string): Promise<void> {
+    await adminApiClient.post(`/admin/orders/${orderId}/receipt/regenerate`);
   },
 };

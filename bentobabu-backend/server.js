@@ -224,11 +224,19 @@ app.use(notFoundHandler);
 // 9. Centralized Error Handler
 app.use(errorHandler);
 
+const { startReceiptWorker, stopReceiptWorker } = require('./app/utils/receiptQueue');
+
 let server = null;
 
 // Graceful Shutdown Handler
 const gracefulShutdown = (signal) => {
   console.log(`\n[Server] Received ${signal}. Initiating graceful shutdown...`);
+
+  try {
+    stopReceiptWorker();
+  } catch (queueErr) {
+    console.error('[ReceiptQueue] Error stopping receipt worker:', queueErr.message);
+  }
 
   if (server) {
     server.close(async () => {
@@ -265,6 +273,13 @@ const startServer = async (port = env.port, host = env.host) => {
     await initRedis();
     const { OtpChallenge } = require('./app/models');
     await OtpChallenge.migrateSchema().catch(() => {});
+
+    // Start durable receipt queue background worker & reconciliation
+    try {
+      startReceiptWorker();
+    } catch (workerErr) {
+      console.error('[ReceiptWorker] Failed to start receipt worker:', workerErr.message);
+    }
 
     return new Promise((resolve, reject) => {
       server = app.listen(port, host, (err) => {

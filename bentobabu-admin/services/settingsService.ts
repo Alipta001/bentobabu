@@ -23,6 +23,13 @@ export interface BackendSystemSettings {
   KITCHEN_PINCODE?: string;
   KITCHEN_LATITUDE?: number;
   KITCHEN_LONGITUDE?: number;
+  FSSAI_STATUS?: import("@/types").FssaiStatus;
+  FSSAI_NUMBER?: string;
+  FSSAI_CERTIFICATE_URL?: string;
+  GSTIN?: string;
+  GST_CERTIFICATE_URL?: string;
+  WEBSITE_URL?: string;
+  BUSINESS_ADDRESS?: string;
 }
 
 const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
@@ -43,6 +50,13 @@ const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
   deliveryChargeAmount: s.DELIVERY_CHARGE_AMOUNT ?? s.DEFAULT_DELIVERY_FEE ?? 30,
   minimumOrderValue: s.MINIMUM_ORDER_VALUE ?? s.MINIMUM_ORDER_AMOUNT ?? 0,
   isOrderingEnabled: s.ORDER_ACCEPTANCE_ENABLED ?? true,
+  fssaiStatus: s.FSSAI_STATUS || "APPLICATION_SUBMITTED",
+  fssaiNumber: s.FSSAI_NUMBER || "",
+  fssaiCertificateUrl: s.FSSAI_CERTIFICATE_URL || "",
+  gstin: s.GSTIN || "",
+  gstCertificateUrl: s.GST_CERTIFICATE_URL || "",
+  websiteUrl: s.WEBSITE_URL || "https://bentobabu.in",
+  businessAddress: s.BUSINESS_ADDRESS || "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700120, India",
 });
 
 export const settingsService = {
@@ -70,6 +84,13 @@ export const settingsService = {
     if (data.kitchenPincode !== undefined) backendPayload.KITCHEN_PINCODE = data.kitchenPincode;
     if (data.kitchenLatitude !== undefined) backendPayload.KITCHEN_LATITUDE = Number(data.kitchenLatitude);
     if (data.kitchenLongitude !== undefined) backendPayload.KITCHEN_LONGITUDE = Number(data.kitchenLongitude);
+    if (data.fssaiStatus !== undefined) backendPayload.FSSAI_STATUS = data.fssaiStatus;
+    if (data.fssaiNumber !== undefined) backendPayload.FSSAI_NUMBER = data.fssaiNumber;
+    if (data.fssaiCertificateUrl !== undefined) backendPayload.FSSAI_CERTIFICATE_URL = data.fssaiCertificateUrl;
+    if (data.gstin !== undefined) backendPayload.GSTIN = data.gstin;
+    if (data.gstCertificateUrl !== undefined) backendPayload.GST_CERTIFICATE_URL = data.gstCertificateUrl;
+    if (data.websiteUrl !== undefined) backendPayload.WEBSITE_URL = data.websiteUrl;
+    if (data.businessAddress !== undefined) backendPayload.BUSINESS_ADDRESS = data.businessAddress;
     if (data.isOrderingEnabled !== undefined) backendPayload.ORDER_ACCEPTANCE_ENABLED = data.isOrderingEnabled;
     if (data.deliveryChargeEnabled !== undefined) backendPayload.DELIVERY_CHARGE_ENABLED = data.deliveryChargeEnabled;
     if (data.deliveryChargeAmount !== undefined) {
