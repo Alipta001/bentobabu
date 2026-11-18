@@ -54,7 +54,7 @@ export const brandConfig: BrandConfig = {
     email: "care@bentobabu.in",
     phone: "+91 98765 43210",
     whatsapp: "+91 98765 43210",
-    address: "Indiranagar 100ft Road, Bengaluru, Karnataka 560038",
+    address: "Chandanpukur Bazar, Barrackpore, West Bengal 700120",
     operatingHours: "7:00 AM – 10:30 PM (Daily)",
   },
   social: {

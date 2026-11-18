@@ -1,5 +1,5 @@
 import apiClient from "./axios";
-import { Order, DeliveryOrderListResponse, DeliveryConfig } from "@/types";
+import { Order, DeliveryOrderListResponse, DeliveryConfig, CentralKitchenDetails } from "@/types";
 
 export interface GetOrdersParams {
   status?: string;
@@ -7,17 +7,19 @@ export interface GetOrdersParams {
   limit?: number;
 }
 
-export const CENTRAL_KITCHEN_DETAILS = {
-  name: "BentoBabu Central Cloud Kitchen",
-  branch: "Indiranagar Hub #01",
-  address: "Plot 42, Mindful Nutrition Kitchen Complex, 12th Main Road, Indiranagar",
-  city: "Bengaluru",
-  state: "Karnataka",
-  pincode: "560038",
-  phone: "+91 80 4567 8900",
-  lat: 12.9716,
-  lng: 77.6412,
+export const VERIFIED_CENTRAL_KITCHEN: CentralKitchenDetails = {
+  name: "BentoBabu Central Kitchen",
+  landmark: "Apollo Pharmacy / Apollo 24|7",
+  address: "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India",
+  pincode: "700120",
+  latitude: 22.7666909,
+  longitude: 88.3788318,
+  phone: "+91 98765 43210",
+  googleMapsUrl: "https://www.google.com/maps?q=22.7666909,88.3788318",
+  googleMapsDirectionsUrl: "https://www.google.com/maps/dir/?api=1&destination=22.7666909%2C88.3788318",
 };
+
+export const CENTRAL_KITCHEN_DETAILS = VERIFIED_CENTRAL_KITCHEN;
 
 export const deliveryApi = {
   /**

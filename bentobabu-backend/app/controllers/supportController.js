@@ -11,17 +11,19 @@ class SupportController {
    */
   static async getSupportConfig(req, res, next) {
     try {
-      const [emailSetting, phoneSetting, whatsappSetting, hoursSetting] = await Promise.all([
+      const [emailSetting, phoneSetting, whatsappSetting, hoursSetting, addressSetting] = await Promise.all([
         SystemSetting.findOne({ key: 'SUPPORT_EMAIL' }).lean(),
         SystemSetting.findOne({ key: 'SUPPORT_PHONE' }).lean(),
         SystemSetting.findOne({ key: 'SUPPORT_WHATSAPP' }).lean(),
         SystemSetting.findOne({ key: 'SUPPORT_HOURS' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_ADDRESS' }).lean(),
       ]);
 
       const email = emailSetting?.value || process.env.SUPPORT_EMAIL || 'care@bentobabu.in';
       const phone = phoneSetting?.value || process.env.SUPPORT_PHONE || '+91 98765 43210';
       const whatsapp = whatsappSetting?.value || process.env.SUPPORT_WHATSAPP || null;
       const operatingHours = hoursSetting?.value || '7:00 AM – 10:30 PM (Daily)';
+      const kitchenAddress = addressSetting?.value || 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India - 700120';
 
       const isWhatsAppConfigured = Boolean(
         whatsapp || (process.env.WHATSAPP_ENABLED === 'true' && process.env.WHATSAPP_PHONE_NUMBER_ID)
@@ -34,7 +36,7 @@ class SupportController {
           phone,
           whatsapp: isWhatsAppConfigured ? (whatsapp || phone) : null,
           isWhatsAppConfigured,
-          address: 'Indiranagar 100ft Road, Bengaluru, Karnataka 560038',
+          address: kitchenAddress,
           operatingHours,
           categories: [
             { key: 'ORDER_ISSUE', label: 'Order Issue', description: 'Delays, wrong items, packaging issues' },

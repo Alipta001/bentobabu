@@ -312,7 +312,7 @@ async function run() {
           Cookie: cookieHeader(riderAuth.cookieJar),
         },
       },
-      { latitude: 12.9716, longitude: 77.5946, accuracy: 8.5 }
+      { latitude: 22.7667, longitude: 88.3789, accuracy: 8.5 }
     );
     assert.equal(loc1Res.statusCode, 200);
 
@@ -328,10 +328,10 @@ async function run() {
           Cookie: cookieHeader(riderAuth.cookieJar),
         },
       },
-      { latitude: 12.9755, longitude: 77.6012, accuracy: 5.0, speed: 6.2 }
+      { latitude: 22.7680, longitude: 88.3800, accuracy: 5.0, speed: 6.2 }
     );
     assert.equal(loc2Res.statusCode, 200);
-    assert.equal(loc2Res.data?.data?.lastLocation?.latitude, 12.9755);
+    assert.equal(loc2Res.data?.data?.lastLocation?.latitude, 22.7680);
     console.log('✅ Scenario 5: Partner movement and GPS location update successfully sent');
 
     // Scenario 6: Admin sees marker move
@@ -341,10 +341,10 @@ async function run() {
       headers: { Cookie: cookieHeader(adminAuth.cookieJar) },
     });
     assert.equal(adminLocRes.statusCode, 200);
-    assert.equal(adminLocRes.data?.data?.lastLocation?.latitude, 12.9755);
-    assert.equal(adminLocRes.data?.data?.lastLocation?.longitude, 77.6012);
+    assert.equal(adminLocRes.data?.data?.lastLocation?.latitude, 22.7680);
+    assert.equal(adminLocRes.data?.data?.lastLocation?.longitude, 88.3800);
     assert.equal(adminLocRes.data?.data?.locationFreshness, 'LIVE');
-    console.log('✅ Scenario 6: Admin sees marker update to new coordinates (12.9755, 77.6012)');
+    console.log('✅ Scenario 6: Admin sees marker update to new coordinates (22.7680, 88.3800)');
 
     // Scenario 7: Partner accepts delivery and becomes busy
     const acceptOrderRes = await makeRequest(

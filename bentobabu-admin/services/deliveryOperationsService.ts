@@ -6,6 +6,17 @@ export type AvailabilityStatus = "ONLINE" | "OFFLINE" | "BUSY";
 export type ConnectionStatus = "CONNECTED" | "DISCONNECTED";
 export type LocationFreshness = "LIVE" | "LAST_KNOWN" | "NONE";
 
+export interface CentralKitchenInfo {
+  name: string;
+  landmark: string;
+  address: string;
+  pincode: string;
+  latitude: number;
+  longitude: number;
+  googleMapsUrl?: string;
+  googleMapsDirectionsUrl?: string;
+}
+
 export interface DeliveryOperationsOverview {
   totalApproved: number;
   online: number;
@@ -16,6 +27,7 @@ export interface DeliveryOperationsOverview {
   suspendedOrDeactivated: number;
   activeDeliveriesCount: number;
   updatedAt: string;
+  centralKitchen?: CentralKitchenInfo;
   config?: {
     heartbeatTimeoutMs: number;
     locationFreshMs: number;

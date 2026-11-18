@@ -261,8 +261,8 @@ async function run() {
         },
       },
       {
-        latitude: 12.9716,
-        longitude: 77.5946,
+        latitude: 22.7667,
+        longitude: 88.3789,
         accuracy: 12.5,
         heading: 180,
         speed: 4.5,
@@ -271,7 +271,7 @@ async function run() {
     );
     assert.equal(locationRes.statusCode, 200);
     assert.equal(locationRes.data?.data?.locationFreshness, 'LIVE');
-    assert.equal(locationRes.data?.data?.lastLocation?.latitude, 12.9716);
+    assert.equal(locationRes.data?.data?.lastLocation?.latitude, 22.7667);
     console.log('✅ [PASS] 6. GPS location update succeeded with LIVE freshness');
 
     // 7. Coordinate validation: Reject invalid coordinates (out of bounds or NaN or Null Island)
@@ -330,7 +330,7 @@ async function run() {
     assert.equal(foundRider.availabilityStatus, 'ONLINE');
     assert.equal(foundRider.connectionStatus, 'CONNECTED');
     assert.equal(foundRider.locationFreshness, 'LIVE');
-    assert.equal(foundRider.lastLocation?.latitude, 12.9716);
+    assert.equal(foundRider.lastLocation?.latitude, 22.7667);
     console.log('✅ [PASS] 9. Admin partners list returned full presence, connection, and location data');
 
     // 10. Admin retrieves detailed partner view for Partner Details Drawer

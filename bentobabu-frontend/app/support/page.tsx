@@ -636,7 +636,7 @@ export default function SupportPage() {
                 <span>Central Kitchen</span>
               </div>
               <p className="text-gray-600 text-[11px] leading-relaxed line-clamp-2">
-                {config?.address || "Indiranagar 100ft Road, Bengaluru, Karnataka 560038"}
+                {config?.address || "Chandanpukur Bazar, Barrackpore, West Bengal 700120"}
               </p>
             </div>
           </div>

@@ -22,13 +22,31 @@ import {
   SlidersHorizontal,
   Navigation,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { AdminShell } from "@/components/layout/AdminShell";
 import {
   useDeliveryOperationsOverview,
   useMonitoredPartners,
 } from "@/hooks/useAdminQueries";
-import { PartnerLocationMap } from "@/components/delivery-operations/PartnerLocationMap";
 import { PartnerDetailsDrawer } from "@/components/delivery-operations/PartnerDetailsDrawer";
+
+const PartnerLocationMap = dynamic(
+  () =>
+    import("@/components/delivery-operations/PartnerLocationMap").then(
+      (mod) => mod.PartnerLocationMap
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full min-h-[360px] rounded-3xl border border-[#E5DFC5] bg-[#F7F3EA] flex flex-col items-center justify-center gap-2 text-xs font-bold text-[#667266]">
+        <div className="w-8 h-8 rounded-xl bg-[#354B35]/10 animate-pulse flex items-center justify-center text-[#354B35]">
+          <Navigation className="w-4 h-4 animate-spin" />
+        </div>
+        <span>Loading Fleet Operations Map...</span>
+      </div>
+    ),
+  }
+);
 
 const STATUS_FILTERS = [
   { label: "All Partners", value: "ALL" },
@@ -251,6 +269,7 @@ export default function DeliveryOperationsPage() {
               partners={partners}
               selectedPartnerId={selectedPartnerId}
               onSelectPartner={handleSelectPartner}
+              kitchen={overview?.centralKitchen}
               className="h-full"
             />
           </div>

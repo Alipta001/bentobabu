@@ -23,6 +23,12 @@ const DEFAULT_SETTINGS = {
   CLOSING_TIME: '22:00',
   ORDER_ACCEPTANCE_ENABLED: true,
   MAINTENANCE_MODE: false,
+  KITCHEN_NAME: 'BentoBabu Central Kitchen',
+  KITCHEN_LANDMARK: 'Apollo Pharmacy / Apollo 24|7',
+  KITCHEN_ADDRESS: 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India',
+  KITCHEN_PINCODE: '700120',
+  KITCHEN_LATITUDE: 22.7666909,
+  KITCHEN_LONGITUDE: 88.3788318,
 };
 
 const ALLOWED_SETTING_KEYS = Object.keys(DEFAULT_SETTINGS);
@@ -207,6 +213,52 @@ class AdminSettingsController {
             }
             updatesToApply[key] = val;
             break;
+
+          case 'KITCHEN_NAME':
+          case 'KITCHEN_LANDMARK':
+          case 'KITCHEN_ADDRESS':
+            if (typeof val !== 'string' || !val.trim()) {
+              return res.status(400).json({
+                success: false,
+                message: `${key} must be a non-empty string.`,
+              });
+            }
+            updatesToApply[key] = val.trim();
+            break;
+
+          case 'KITCHEN_PINCODE':
+            if (!/^[1-9][0-9]{5}$/.test(String(val).trim())) {
+              return res.status(400).json({
+                success: false,
+                message: 'KITCHEN_PINCODE must be a valid 6-digit Indian PIN code.',
+              });
+            }
+            updatesToApply[key] = String(val).trim();
+            break;
+
+          case 'KITCHEN_LATITUDE': {
+            const lat = Number(val);
+            if (isNaN(lat) || !isFinite(lat) || lat < -90 || lat > 90) {
+              return res.status(400).json({
+                success: false,
+                message: 'KITCHEN_LATITUDE must be a number between -90 and 90.',
+              });
+            }
+            updatesToApply[key] = lat;
+            break;
+          }
+
+          case 'KITCHEN_LONGITUDE': {
+            const lng = Number(val);
+            if (isNaN(lng) || !isFinite(lng) || lng < -180 || lng > 180) {
+              return res.status(400).json({
+                success: false,
+                message: 'KITCHEN_LONGITUDE must be a number between -180 and 180.',
+              });
+            }
+            updatesToApply[key] = lng;
+            break;
+          }
 
           default:
             break;

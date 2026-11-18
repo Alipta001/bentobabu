@@ -14,6 +14,8 @@ const connectSrc = [
   "https://*.firebaseio.com",
   "https://fcmregistrations.googleapis.com",
   "https://firebaseinstallations.googleapis.com",
+  "https://*.tile.openstreetmap.org",
+  "https://tile.openstreetmap.org",
 ].join(" ");
 
 const securityHeaders = [
@@ -51,7 +53,7 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.gstatic.com",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://media.bentobabu.com https://*.r2.cloudflarestorage.com https://i.ytimg.com https://*.ytimg.com http://localhost:4000 http://127.0.0.1:4000",
+      "img-src 'self' data: blob: https://images.unsplash.com https://res.cloudinary.com https://media.bentobabu.com https://*.r2.cloudflarestorage.com https://i.ytimg.com https://*.ytimg.com http://localhost:4000 http://127.0.0.1:4000 https://*.tile.openstreetmap.org https://tile.openstreetmap.org",
       "media-src 'self' blob: https://media.bentobabu.com https://*.r2.cloudflarestorage.com",
       "font-src 'self' data:",
       "frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com",

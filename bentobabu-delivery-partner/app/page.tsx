@@ -12,6 +12,7 @@ import {
   Inbox,
   AlertCircle,
   Power,
+  RefreshCw,
   Navigation,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
@@ -24,14 +25,14 @@ import {
   useActiveDeliveries,
   useEarnings,
 } from "@/hooks/useDeliveryQueries";
+import { useDeliveryPresence } from "@/hooks/useDeliveryPresence";
 import { useAppSelector, useAppDispatch } from "@/store/hooks";
-import { toggleOnlineStatus } from "@/store/slices/deliverySlice";
 import { Order } from "@/types";
 
 export default function DashboardPage() {
   const dispatch = useAppDispatch();
   const user = useAppSelector((state) => state.auth.user);
-  const isOnline = useAppSelector((state) => state.delivery.isOnline);
+  const { isOnline, isChangingAvailability, toggleAvailability } = useDeliveryPresence();
 
   const { data: newRequestsData, isLoading: isLoadingRequests } = useNewRequests();
   const { data: activeDeliveriesData, isLoading: isLoadingActive } = useActiveDeliveries();
@@ -85,15 +86,26 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => dispatch(toggleOnlineStatus())}
-              className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer ${
+              onClick={toggleAvailability}
+              disabled={isChangingAvailability}
+              className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 ${
                 isOnline
                   ? "bg-emerald-600 text-white hover:bg-emerald-700"
                   : "bg-gray-200 text-gray-700 hover:bg-gray-300"
               }`}
             >
-              <Power className="w-4 h-4" />
-              <span>{isOnline ? "Online (Active)" : "Offline (Tap to Go Online)"}</span>
+              {isChangingAvailability ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Power className="w-4 h-4" />
+              )}
+              <span>
+                {isChangingAvailability
+                  ? "Updating..."
+                  : isOnline
+                  ? "Online (Active)"
+                  : "Offline (Tap to Go Online)"}
+              </span>
             </button>
           </div>
         </section>
@@ -207,10 +219,11 @@ export default function DashboardPage() {
               </p>
               <button
                 type="button"
-                onClick={() => dispatch(toggleOnlineStatus())}
-                className="px-6 py-2.5 rounded-2xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs"
+                onClick={toggleAvailability}
+                disabled={isChangingAvailability}
+                className="px-6 py-2.5 rounded-2xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-60"
               >
-                Go Online Now
+                {isChangingAvailability ? "Connecting..." : "Go Online Now"}
               </button>
             </div>
           ) : isLoadingRequests ? (

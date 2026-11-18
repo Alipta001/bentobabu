@@ -251,7 +251,12 @@ export interface BusinessSettings {
   tagline: string;
   supportEmail: string;
   supportPhone: string;
+  kitchenName?: string;
+  kitchenLandmark?: string;
   kitchenAddress: string;
+  kitchenPincode?: string;
+  kitchenLatitude?: number;
+  kitchenLongitude?: number;
   operatingHours: string;
   gstRatePercentage: number;
   freeDeliveryThreshold: number;

@@ -5,6 +5,7 @@ const {
   DeliveryPartnerPresence,
   Order,
   RefreshSession,
+  SystemSetting,
 } = require('../models');
 
 const CONNECTION_TIMEOUT_MS = parseInt(process.env.DELIVERY_CONNECTION_TIMEOUT_MS, 10) || 60000;
@@ -93,10 +94,112 @@ class AdminDeliveryOperationsController {
     try {
       await AdminDeliveryOperationsController.syncAllPresences();
 
-      const presences = await DeliveryPartnerPresence.find().lean();
-      const now = Date.now();
+      const deliveryUsers = await User.find({ role: 'DELIVERY' })
+        .select('_id isActive')
+        .lean();
 
-      let totalApproved = 0;
+      if (!deliveryUsers.length) {
+        const [
+          kitchenNameSetting,
+          kitchenLandmarkSetting,
+          kitchenAddressSetting,
+          kitchenPinSetting,
+          kitchenLatSetting,
+          kitchenLngSetting,
+        ] = await Promise.all([
+          SystemSetting.findOne({ key: 'KITCHEN_NAME' }).lean(),
+          SystemSetting.findOne({ key: 'KITCHEN_LANDMARK' }).lean(),
+          SystemSetting.findOne({ key: 'KITCHEN_ADDRESS' }).lean(),
+          SystemSetting.findOne({ key: 'KITCHEN_PINCODE' }).lean(),
+          SystemSetting.findOne({ key: 'KITCHEN_LATITUDE' }).lean(),
+          SystemSetting.findOne({ key: 'KITCHEN_LONGITUDE' }).lean(),
+        ]);
+
+        const kitchenLat = typeof kitchenLatSetting?.value === 'number' ? kitchenLatSetting.value : 22.7666909;
+        const kitchenLng = typeof kitchenLngSetting?.value === 'number' ? kitchenLngSetting.value : 88.3788318;
+        const centralKitchen = {
+          name: kitchenNameSetting?.value || 'BentoBabu Central Kitchen',
+          landmark: kitchenLandmarkSetting?.value || 'Apollo Pharmacy / Apollo 24|7',
+          address: kitchenAddressSetting?.value || 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India',
+          pincode: kitchenPinSetting?.value || '700120',
+          latitude: kitchenLat,
+          longitude: kitchenLng,
+          googleMapsUrl: `https://www.google.com/maps?q=${kitchenLat},${kitchenLng}`,
+          googleMapsDirectionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${kitchenLat},${kitchenLng}`)}`,
+        };
+
+        return res.status(200).json({
+          success: true,
+          data: {
+            totalApproved: 0,
+            online: 0,
+            available: 0,
+            busy: 0,
+            offline: 0,
+            disconnected: 0,
+            suspendedOrDeactivated: 0,
+            activeDeliveriesCount: 0,
+            config: {
+              heartbeatTimeoutMs: CONNECTION_TIMEOUT_MS,
+              locationFreshMs: LOCATION_FRESH_MS,
+            },
+            centralKitchen,
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      const userIds = deliveryUsers.map((u) => u._id);
+      const [
+        presences,
+        activeOrders,
+        applications,
+        kitchenNameSetting,
+        kitchenLandmarkSetting,
+        kitchenAddressSetting,
+        kitchenPinSetting,
+        kitchenLatSetting,
+        kitchenLngSetting,
+      ] = await Promise.all([
+        DeliveryPartnerPresence.find({ user: { $in: userIds } }).lean(),
+        Order.find({
+          assignedDeliveryPartner: { $in: userIds },
+          orderStatus: 'OUT_FOR_DELIVERY',
+        })
+          .select('assignedDeliveryPartner')
+          .lean(),
+        DeliveryApplication.find({ user: { $in: userIds } })
+          .select('user status')
+          .lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_NAME' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_LANDMARK' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_ADDRESS' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_PINCODE' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_LATITUDE' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_LONGITUDE' }).lean(),
+      ]);
+
+      const kitchenLat = typeof kitchenLatSetting?.value === 'number' ? kitchenLatSetting.value : 22.7666909;
+      const kitchenLng = typeof kitchenLngSetting?.value === 'number' ? kitchenLngSetting.value : 88.3788318;
+      const centralKitchen = {
+        name: kitchenNameSetting?.value || 'BentoBabu Central Kitchen',
+        landmark: kitchenLandmarkSetting?.value || 'Apollo Pharmacy / Apollo 24|7',
+        address: kitchenAddressSetting?.value || 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India',
+        pincode: kitchenPinSetting?.value || '700120',
+        latitude: kitchenLat,
+        longitude: kitchenLng,
+        googleMapsUrl: `https://www.google.com/maps?q=${kitchenLat},${kitchenLng}`,
+        googleMapsDirectionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${kitchenLat},${kitchenLng}`)}`,
+      };
+
+      const presenceMap = new Map(presences.map((p) => [p.user.toString(), p]));
+      const appMap = new Map(applications.map((a) => [a.user.toString(), a]));
+      const activeOrderSet = new Set(
+        activeOrders.map((o) => o.assignedDeliveryPartner.toString())
+      );
+
+      const now = Date.now();
+      let totalApproved = deliveryUsers.length;
       let online = 0;
       let available = 0;
       let busy = 0;
@@ -104,10 +207,22 @@ class AdminDeliveryOperationsController {
       let disconnected = 0;
       let suspendedOrDeactivated = 0;
 
-      for (const p of presences) {
-        totalApproved++;
+      for (const u of deliveryUsers) {
+        const uId = u._id.toString();
+        const p = presenceMap.get(uId) || {};
+        const app = appMap.get(uId) || {};
 
-        const isAccountActive = p.accountStatus === 'ACTIVE';
+        const accountStatus =
+          p.accountStatus ||
+          (u.isActive === false
+            ? app.status === 'SUSPENDED'
+              ? 'SUSPENDED'
+              : 'DEACTIVATED'
+            : app.status === 'SUSPENDED'
+            ? 'SUSPENDED'
+            : 'ACTIVE');
+
+        const isAccountActive = accountStatus === 'ACTIVE';
         if (!isAccountActive) {
           suspendedOrDeactivated++;
         }
@@ -119,16 +234,16 @@ class AdminDeliveryOperationsController {
           disconnected++;
         }
 
-        if (p.availabilityStatus === 'ONLINE') {
-          online++;
-          if (!p.currentOrderId) {
-            available++;
-          } else {
-            busy++;
-          }
-        } else if (p.availabilityStatus === 'BUSY') {
+        const hasActiveOrder = activeOrderSet.has(uId);
+        const isBusy = (p.availabilityStatus === 'BUSY' || hasActiveOrder) && isAccountActive;
+        const isAvailable = p.availabilityStatus === 'ONLINE' && !hasActiveOrder && isAccountActive;
+
+        if (isBusy) {
           busy++;
-          online++; // Busy partners are considered part of the active online fleet
+          online++;
+        } else if (isAvailable) {
+          available++;
+          online++;
         } else {
           offline++;
         }
@@ -149,6 +264,7 @@ class AdminDeliveryOperationsController {
             heartbeatTimeoutMs: CONNECTION_TIMEOUT_MS,
             locationFreshMs: LOCATION_FRESH_MS,
           },
+          centralKitchen,
           updatedAt: new Date().toISOString(),
         },
       });

@@ -102,8 +102,8 @@ export default function RegisterPage() {
   const [houseNo, setHouseNo] = useState("");
   const [street, setStreet] = useState("");
   const [landmark, setLandmark] = useState("");
-  const [city, setCity] = useState("Bengaluru");
-  const [state, setState] = useState("Karnataka");
+  const [city, setCity] = useState("Barrackpore");
+  const [state, setState] = useState("West Bengal");
   const [pincode, setPincode] = useState("");
 
   // Step 3: Vehicle Info
@@ -752,7 +752,7 @@ export default function RegisterPage() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. 100ft Road, Indiranagar"
+                      placeholder="e.g. SN Banerjee Road, Chandanpukur"
                       value={street}
                       onChange={(e) => setStreet(e.target.value)}
                       className="w-full px-4 py-3 rounded-2xl border border-gray-300 text-xs sm:text-sm text-[#241C1A] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C86D51]/30 focus:border-[#C86D51] transition"
@@ -766,7 +766,7 @@ export default function RegisterPage() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. Near Metro Station Pillar 50"
+                      placeholder="e.g. Near Apollo Pharmacy"
                       value={landmark}
                       onChange={(e) => setLandmark(e.target.value)}
                       className="w-full px-4 py-3 rounded-2xl border border-gray-300 text-xs sm:text-sm text-[#241C1A] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C86D51]/30 focus:border-[#C86D51] transition"
@@ -780,7 +780,7 @@ export default function RegisterPage() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. Bengaluru"
+                      placeholder="e.g. Barrackpore"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                       className="w-full px-4 py-3 rounded-2xl border border-gray-300 text-xs sm:text-sm text-[#241C1A] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C86D51]/30 focus:border-[#C86D51] transition"
@@ -813,7 +813,7 @@ export default function RegisterPage() {
                     <input
                       type="text"
                       maxLength={6}
-                      placeholder="e.g. 560038"
+                      placeholder="e.g. 700120"
                       value={pincode}
                       onChange={(e) => setPincode(e.target.value.replace(/\D/g, ""))}
                       className="w-full px-4 py-3 rounded-2xl border border-gray-300 text-xs sm:text-sm text-[#241C1A] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C86D51]/30 focus:border-[#C86D51] transition"

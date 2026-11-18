@@ -35,6 +35,12 @@ async function seedDatabase() {
       { key: 'MAINTENANCE_MODE', value: false, description: 'Platform maintenance mode' },
       { key: 'MINIMUM_ORDER_AMOUNT', value: 99, description: 'Global minimum order requirement in rupees' },
       { key: 'AUTO_CANCEL_UNPAID_MINUTES', value: 15, description: 'Minutes before unpaid orders auto-expire' },
+      { key: 'KITCHEN_NAME', value: 'BentoBabu Central Kitchen', description: 'Central Cloud Kitchen official business name' },
+      { key: 'KITCHEN_LANDMARK', value: 'Apollo Pharmacy / Apollo 24|7', description: 'Central kitchen prominent landmark' },
+      { key: 'KITCHEN_ADDRESS', value: 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India', description: 'Central kitchen physical address' },
+      { key: 'KITCHEN_PINCODE', value: '700120', description: 'Central kitchen postal PIN code' },
+      { key: 'KITCHEN_LATITUDE', value: 22.7666909, description: 'Central kitchen GPS latitude coordinate' },
+      { key: 'KITCHEN_LONGITUDE', value: 88.3788318, description: 'Central kitchen GPS longitude coordinate' },
     ];
 
     for (const setting of settings) {
@@ -696,7 +702,7 @@ async function seedDatabase() {
         {
           category: 'DELIVERY',
           question: 'What are your operational delivery hours?',
-          answer: 'We deliver fresh meals daily from 7:00 AM to 10:30 PM across Indiranagar, Koramangala, Whitefield, HSR Layout, and surrounding Bengaluru zones.',
+          answer: 'We deliver fresh meals daily from 7:00 AM to 10:30 PM across Barrackpore Central, Cantonment, Station Road, and surrounding North 24 Parganas zones.',
           orderIndex: 1,
           isPublished: true,
         },

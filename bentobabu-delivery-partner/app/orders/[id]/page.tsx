@@ -95,8 +95,13 @@ export default function OrderExecutionPage() {
   };
 
   const handleOpenKitchenRoute = () => {
-    const q = encodeURIComponent(`${CENTRAL_KITCHEN_DETAILS.address}, ${CENTRAL_KITCHEN_DETAILS.city}`);
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${q}`, "_blank");
+    const kitchen = deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS;
+    if (kitchen.googleMapsDirectionsUrl) {
+      window.open(kitchen.googleMapsDirectionsUrl, "_blank");
+    } else {
+      const dest = `${kitchen.latitude},${kitchen.longitude}`;
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`, "_blank");
+    }
   };
 
   const handleOpenCustomerRoute = () => {
@@ -161,12 +166,21 @@ export default function OrderExecutionPage() {
 
           <div className="space-y-1 text-xs text-gray-600">
             <div className="font-bold text-[#241C1A] text-sm">
-              {CENTRAL_KITCHEN_DETAILS.name}
+              {(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).name}
             </div>
-            <p>{CENTRAL_KITCHEN_DETAILS.address}</p>
-            <p className="text-gray-500">
-              Kitchen Helpline: {CENTRAL_KITCHEN_DETAILS.phone}
+            {(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).landmark && (
+              <div className="text-amber-800 font-medium text-[11px]">
+                Landmark: {(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).landmark}
+              </div>
+            )}
+            <p>
+              {(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).address} - {(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).pincode}
             </p>
+            {(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).phone && (
+              <p className="text-gray-500">
+                Kitchen Helpline: {(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).phone}
+              </p>
+            )}
           </div>
 
           {/* Confirm Pickup Action if READY_FOR_PICKUP */}

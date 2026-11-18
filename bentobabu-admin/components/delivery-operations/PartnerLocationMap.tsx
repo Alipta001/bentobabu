@@ -1,41 +1,89 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { MonitoredPartner } from "@/services/deliveryOperationsService";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { MonitoredPartner, CentralKitchenInfo } from "@/services/deliveryOperationsService";
 import {
   MapPin,
-  Compass,
-  Battery,
   Clock,
   Radio,
-  ExternalLink,
-  Layers,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
   Navigation,
+  Building2,
 } from "lucide-react";
 
 interface PartnerLocationMapProps {
   partners: MonitoredPartner[];
   selectedPartnerId: string | null;
   onSelectPartner: (id: string) => void;
+  kitchen?: CentralKitchenInfo | null;
   className?: string;
+}
+
+export const VERIFIED_CENTRAL_KITCHEN: CentralKitchenInfo = {
+  name: "BentoBabu Central Kitchen",
+  landmark: "Apollo Pharmacy / Apollo 24|7",
+  address: "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India",
+  pincode: "700120",
+  latitude: 22.7666909,
+  longitude: 88.3788318,
+  googleMapsUrl: "https://www.google.com/maps?q=22.7666909,88.3788318",
+  googleMapsDirectionsUrl: "https://www.google.com/maps/dir/?api=1&destination=22.7666909%2C88.3788318",
+};
+
+function getKitchenPopupHtml(kitchen: CentralKitchenInfo, coords: [number, number]) {
+  return `
+    <div style="font-family: inherit; min-width: 240px; padding: 6px;">
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+        <span style="background: #354B35; color: #DFC89B; font-weight: 800; font-size: 10px; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Central Kitchen</span>
+      </div>
+      <div style="font-weight: 800; font-size: 13px; color: #1E2B1E; margin-bottom: 2px;">
+        ${kitchen.name || "BentoBabu Central Kitchen"}
+      </div>
+      <div style="font-size: 11px; font-weight: 600; color: #C86D51; margin-bottom: 4px;">
+        Landmark: ${kitchen.landmark || "Apollo Pharmacy / Apollo 24|7"}
+      </div>
+      <div style="font-size: 11px; color: #64748B; margin-bottom: 6px; line-height: 1.35;">
+        ${kitchen.address || "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India"} - ${kitchen.pincode || "700120"}
+      </div>
+      <div style="font-size: 10px; color: #94A3B8; font-family: monospace; margin-bottom: 8px;">
+        Coordinates: ${coords[0].toFixed(7)}, ${coords[1].toFixed(7)}
+      </div>
+      <a href="https://www.google.com/maps?q=${coords[0]},${coords[1]}" target="_blank" rel="noopener noreferrer" style="display: block; text-align: center; font-size: 11px; font-weight: 700; background: #354B35; color: white; text-decoration: none; padding: 6px 10px; border-radius: 6px;">
+        Open in Google Maps &rarr;
+      </a>
+    </div>
+  `;
 }
 
 export function PartnerLocationMap({
   partners,
   selectedPartnerId,
   onSelectPartner,
+  kitchen,
   className = "",
 }: PartnerLocationMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<Map<string, any>>(new Map());
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const kitchenMarkerRef = useRef<L.Marker | null>(null);
+  const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const initialFitDoneRef = useRef(false);
+
+  const activeKitchen = kitchen || VERIFIED_CENTRAL_KITCHEN;
+  const kitchenCoords = useMemo<[number, number]>(() => {
+    const lat = typeof activeKitchen.latitude === "number" && isFinite(activeKitchen.latitude)
+      ? activeKitchen.latitude
+      : 22.7666909;
+    const lng = typeof activeKitchen.longitude === "number" && isFinite(activeKitchen.longitude)
+      ? activeKitchen.longitude
+      : 88.3788318;
+    return [lat, lng];
+  }, [activeKitchen.latitude, activeKitchen.longitude]);
+
   const [mapReady, setMapReady] = useState(false);
   const [mapFilter, setMapFilter] = useState<"ALL" | "ONLINE" | "BUSY" | "OFFLINE">("ALL");
 
-  // Partners with valid geographic coordinates
+  // Partners with valid, finite geographic coordinates
   const geocodedPartners = useMemo(() => {
     return partners.filter(
       (p) =>
@@ -44,7 +92,13 @@ export function PartnerLocationMap({
         typeof p.lastLocation.longitude === "number" &&
         !isNaN(p.lastLocation.latitude) &&
         !isNaN(p.lastLocation.longitude) &&
-        Math.abs(p.lastLocation.latitude) > 0.001
+        isFinite(p.lastLocation.latitude) &&
+        isFinite(p.lastLocation.longitude) &&
+        p.lastLocation.latitude >= -90 &&
+        p.lastLocation.latitude <= 90 &&
+        p.lastLocation.longitude >= -180 &&
+        p.lastLocation.longitude <= 180 &&
+        (Math.abs(p.lastLocation.latitude) > 0.0001 || Math.abs(p.lastLocation.longitude) > 0.0001)
     );
   }, [partners]);
 
@@ -63,100 +117,113 @@ export function PartnerLocationMap({
     return geocodedPartners;
   }, [geocodedPartners, mapFilter]);
 
-  // Load Leaflet dynamically via CDN script/CSS injection
+  // Initialize Map directly on mount
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let isMounted = true;
-
-    const loadLeaflet = async () => {
-      // Check if Leaflet CSS already loaded
-      if (!document.getElementById("leaflet-css")) {
-        const link = document.createElement("link");
-        link.id = "leaflet-css";
-        link.rel = "stylesheet";
-        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-        document.head.appendChild(link);
-      }
-
-      // Check if window.L is already available
-      if ((window as any).L) {
-        if (isMounted) setMapReady(true);
-        return;
-      }
-
-      // Load Leaflet script
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.async = true;
-      script.onload = () => {
-        if (isMounted) setMapReady(true);
-      };
-      document.body.appendChild(script);
-    };
-
-    loadLeaflet();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Initialize Map
-  useEffect(() => {
-    if (!mapReady || !mapContainerRef.current) return;
-    const L = (window as any).L;
-    if (!L) return;
+    if (!mapContainerRef.current) return;
 
     if (!mapInstanceRef.current) {
-      // Default to Bengaluru Central Cloud Kitchen coordinates
-      const defaultCenter = [12.9716, 77.5946];
+      // Check if container already had a Leaflet instance attached to prevent double-initialization
+      const container = mapContainerRef.current as any;
+      if (container._leaflet_id) {
+        delete container._leaflet_id;
+      }
+
       const map = L.map(mapContainerRef.current, {
-        center: defaultCenter,
-        zoom: 12,
+        center: kitchenCoords,
+        zoom: 14,
         zoomControl: false,
       });
 
       // Free, high quality OpenStreetMap tiles
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
         maxZoom: 19,
       }).addTo(map);
 
       // Custom Zoom Control top-right
       L.control.zoom({ position: "topright" }).addTo(map);
 
+      // Add Central Cloud Kitchen Hub Marker
+      const kitchenIconHtml = `
+        <div class="relative flex items-center justify-center cursor-pointer" style="transform: translate(-50%, -50%);">
+          <span class="animate-pulse absolute w-10 h-10 rounded-full bg-[#354B35]/30"></span>
+          <div class="w-10 h-10 rounded-2xl bg-[#354B35] text-[#DFC89B] flex items-center justify-center shadow-xl border-2 border-white font-bold text-sm">
+            B
+          </div>
+          <span class="absolute -bottom-4 bg-[#354B35] text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded shadow whitespace-nowrap">
+            Kitchen Hub
+          </span>
+        </div>
+      `;
+
+      const kitchenIcon = L.divIcon({
+        html: kitchenIconHtml,
+        className: "custom-kitchen-marker",
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+      });
+
+      const kitchenMarker = L.marker(kitchenCoords, {
+        icon: kitchenIcon,
+        zIndexOffset: 1000,
+      }).addTo(map);
+
+      kitchenMarker.bindPopup(getKitchenPopupHtml(activeKitchen, kitchenCoords), { maxWidth: 320 });
+
+      kitchenMarkerRef.current = kitchenMarker;
       mapInstanceRef.current = map;
+      setMapReady(true);
+
+      // Invalidate size once container layout stabilizes
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 200);
+    }
+
+    // ResizeObserver ensures map tiles layout properly on split/map toggle or window resize
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    });
+
+    if (mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
     }
 
     return () => {
+      resizeObserver.disconnect();
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        kitchenMarkerRef.current = null;
+        markersRef.current.clear();
       }
     };
-  }, [mapReady]);
+  }, [kitchenCoords]);
 
-  // Update Markers when partners or filter change
+  // Sync kitchen marker if kitchen details or coordinates update
+  useEffect(() => {
+    if (!mapReady || !kitchenMarkerRef.current) return;
+    kitchenMarkerRef.current.setLatLng(kitchenCoords);
+    kitchenMarkerRef.current.setPopupContent(getKitchenPopupHtml(activeKitchen, kitchenCoords));
+  }, [kitchenCoords, activeKitchen, mapReady]);
+
+  // Update Markers incrementally when partners or filter change
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current) return;
-    const L = (window as any).L;
-    if (!L) return;
-
     const map = mapInstanceRef.current;
 
-    // Clear existing markers
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current.clear();
-
-    const bounds = L.latLngBounds([]);
+    const currentPartnerIds = new Set<string>();
+    const bounds = L.latLngBounds([kitchenCoords]);
 
     filteredPartners.forEach((partner) => {
       const loc = partner.lastLocation;
-      if (!loc) return;
+      if (!loc || typeof loc.latitude !== "number" || typeof loc.longitude !== "number") return;
 
-      const latLng = [loc.latitude, loc.longitude];
+      currentPartnerIds.add(partner.id);
+      const latLng: [number, number] = [loc.latitude, loc.longitude];
       bounds.extend(latLng);
 
       const isBusy = partner.availabilityStatus === "BUSY" || !!partner.currentOrderId;
@@ -195,7 +262,7 @@ export function PartnerLocationMap({
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" />
             </svg>
           </div>
-          <span class="absolute -bottom-4 bg-black/80 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.2 rounded-md shadow-xs whitespace-nowrap">
+          <span class="absolute -bottom-4 bg-black/80 backdrop-blur-xs text-white text-[9px] font-bold px-1.5 py-0.2 rounded-md shadow-xs whitespace-nowrap pointer-events-none">
             ${partner.name.split(" ")[0]}
           </span>
         </div>
@@ -207,8 +274,6 @@ export function PartnerLocationMap({
         iconSize: [32, 32],
         iconAnchor: [16, 16],
       });
-
-      const marker = L.marker(latLng, { icon: customIcon }).addTo(map);
 
       // Popup Content
       const popupHtml = `
@@ -252,24 +317,43 @@ export function PartnerLocationMap({
         </div>
       `;
 
-      marker.bindPopup(popupHtml, { maxWidth: 280 });
+      if (markersRef.current.has(partner.id)) {
+        // Move existing marker smoothly without flicker
+        const existingMarker = markersRef.current.get(partner.id)!;
+        existingMarker.setLatLng(latLng);
+        existingMarker.setIcon(customIcon);
+        existingMarker.setPopupContent(popupHtml);
+      } else {
+        // Add new marker
+        const newMarker = L.marker(latLng, { icon: customIcon }).addTo(map);
+        newMarker.bindPopup(popupHtml, { maxWidth: 280 });
 
-      marker.on("popupopen", () => {
-        const btn = document.getElementById(`view-partner-btn-${partner.id}`);
-        if (btn) {
-          btn.onclick = () => onSelectPartner(partner.id);
-        }
-      });
+        newMarker.on("popupopen", () => {
+          const btn = document.getElementById(`view-partner-btn-${partner.id}`);
+          if (btn) {
+            btn.onclick = () => onSelectPartner(partner.id);
+          }
+        });
 
-      marker.on("click", () => {
-        onSelectPartner(partner.id);
-      });
+        newMarker.on("click", () => {
+          onSelectPartner(partner.id);
+        });
 
-      markersRef.current.set(partner.id, marker);
+        markersRef.current.set(partner.id, newMarker);
+      }
     });
 
-    // Auto-fit bounds if we have markers and none currently selected
-    if (filteredPartners.length > 0 && !selectedPartnerId) {
+    // Remove markers that are no longer in filtered list or lost coordinates
+    markersRef.current.forEach((marker, id) => {
+      if (!currentPartnerIds.has(id)) {
+        marker.remove();
+        markersRef.current.delete(id);
+      }
+    });
+
+    // Auto-fit bounds on initial load if we have markers and none currently selected
+    if (!initialFitDoneRef.current && filteredPartners.length > 0 && !selectedPartnerId) {
+      initialFitDoneRef.current = true;
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
     }
   }, [filteredPartners, mapReady, onSelectPartner, selectedPartnerId]);
@@ -281,7 +365,7 @@ export function PartnerLocationMap({
     if (!partner || !partner.lastLocation) return;
 
     const map = mapInstanceRef.current;
-    const latLng = [partner.lastLocation.latitude, partner.lastLocation.longitude];
+    const latLng: [number, number] = [partner.lastLocation.latitude, partner.lastLocation.longitude];
 
     map.flyTo(latLng, 15, { duration: 1.2 });
 
@@ -359,22 +443,23 @@ export function PartnerLocationMap({
       {/* Map Viewport */}
       <div ref={mapContainerRef} className="w-full h-full min-h-[360px] z-0" />
 
-      {/* Empty State Banner if no coordinates recorded */}
+      {/* Non-intrusive Floating Notice when no partners have transmitted GPS beacons yet */}
       {geocodedPartners.length === 0 && mapReady && (
-        <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mb-2">
-            <Radio className="w-6 h-6 animate-pulse" />
-          </div>
-          <h4 className="font-bold text-sm text-[#1E2B1E]">Awaiting Partner GPS Coordinates</h4>
-          <p className="text-xs text-[#667266] max-w-sm mt-1">
-            As approved delivery partners switch Online on their mobile devices, live GPS beacons and markers will appear automatically.
-          </p>
+        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md border border-[#E5DFC5] shadow-lg rounded-2xl px-4 py-2.5 flex items-center gap-2.5 z-[1000] max-w-sm text-center">
+          <Radio className="w-4 h-4 text-amber-600 animate-pulse shrink-0" />
+          <span className="text-[11px] font-semibold text-[#1E2B1E]">
+            Awaiting partner GPS beacons. Centered on BentoBabu Central Kitchen (Barrackpore).
+          </span>
         </div>
       )}
 
       {/* Legend Footer */}
-      <div className="bg-white/95 backdrop-blur-md border-t border-[#E5DFC5] px-4 py-2 flex flex-wrap items-center justify-between text-[11px] text-[#667266] gap-2">
+      <div className="bg-white/95 backdrop-blur-md border-t border-[#E5DFC5] px-4 py-2 flex flex-wrap items-center justify-between text-[11px] text-[#667266] gap-2 z-[1000]">
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#354B35] inline-block shadow-xs" />
+            <span className="font-semibold text-gray-700">Central Kitchen Hub</span>
+          </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-xs" />
             <span className="font-semibold text-gray-700">Online & Available</span>
@@ -385,7 +470,7 @@ export function PartnerLocationMap({
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block shadow-xs" />
-            <span className="font-semibold text-gray-700">Offline / Stale Location</span>
+            <span className="font-semibold text-gray-700">Offline / Last Known</span>
           </div>
         </div>
         <div className="text-[10px] text-gray-400 font-medium">

@@ -65,10 +65,13 @@ export function DeliveryCard({
 
   const handleOpenKitchenMaps = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const query = encodeURIComponent(
-      `${CENTRAL_KITCHEN_DETAILS.address}, ${CENTRAL_KITCHEN_DETAILS.city}`
-    );
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}`, "_blank");
+    const kitchen = deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS;
+    if (kitchen.googleMapsDirectionsUrl) {
+      window.open(kitchen.googleMapsDirectionsUrl, "_blank");
+    } else {
+      const dest = `${kitchen.latitude},${kitchen.longitude}`;
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`, "_blank");
+    }
   };
 
   return (
@@ -96,7 +99,7 @@ export function DeliveryCard({
             </div>
             <div className="min-w-0 flex-1">
               <div className="font-bold text-[#241C1A] flex items-center justify-between">
-                <span>{CENTRAL_KITCHEN_DETAILS.name}</span>
+                <span>{(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).name}</span>
                 {variant === "ACTIVE" && (
                   <button
                     type="button"
@@ -109,7 +112,8 @@ export function DeliveryCard({
                 )}
               </div>
               <p className="text-gray-500 text-[11px] truncate">
-                {CENTRAL_KITCHEN_DETAILS.branch} • {CENTRAL_KITCHEN_DETAILS.address}
+                {(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).landmark ? `${(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).landmark} • ` : ""}
+                {(deliveryConfig?.centralKitchen || CENTRAL_KITCHEN_DETAILS).address}
               </p>
             </div>
           </div>

@@ -128,12 +128,25 @@ export interface DeliveryOrderListResponse {
   data: Order[];
 }
 
+export interface CentralKitchenDetails {
+  name: string;
+  landmark: string;
+  address: string;
+  pincode: string;
+  latitude: number;
+  longitude: number;
+  phone?: string;
+  googleMapsUrl?: string;
+  googleMapsDirectionsUrl?: string;
+}
+
 export interface DeliveryConfig {
   minimumOrderValue: number;
   minimumOrderAmount: number;
   deliveryChargeEnabled: boolean;
   deliveryChargeAmount: number;
   otpRequired: boolean;
+  centralKitchen?: CentralKitchenDetails;
 }
 
 export interface NotificationItem {

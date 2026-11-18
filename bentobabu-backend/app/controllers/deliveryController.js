@@ -92,10 +92,26 @@ class DeliveryController {
    */
   static async getDeliveryConfig(req, res, next) {
     try {
-      const [minOrderSetting, chargeEnabledSetting, chargeAmountSetting] = await Promise.all([
+      const [
+        minOrderSetting,
+        chargeEnabledSetting,
+        chargeAmountSetting,
+        kitchenNameSetting,
+        kitchenLandmarkSetting,
+        kitchenAddressSetting,
+        kitchenPinSetting,
+        kitchenLatSetting,
+        kitchenLngSetting,
+      ] = await Promise.all([
         SystemSetting.findOne({ key: { $in: ['MINIMUM_ORDER_VALUE', 'MINIMUM_ORDER_AMOUNT'] } }).lean(),
         SystemSetting.findOne({ key: 'DELIVERY_CHARGE_ENABLED' }).lean(),
         SystemSetting.findOne({ key: 'DELIVERY_CHARGE_AMOUNT' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_NAME' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_LANDMARK' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_ADDRESS' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_PINCODE' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_LATITUDE' }).lean(),
+        SystemSetting.findOne({ key: 'KITCHEN_LONGITUDE' }).lean(),
       ]);
 
       const minimumOrderValue = (minOrderSetting && typeof minOrderSetting.value === 'number')
@@ -107,6 +123,9 @@ class DeliveryController {
         ? chargeAmountSetting.value
         : 30;
 
+      const kitchenLat = typeof kitchenLatSetting?.value === 'number' ? kitchenLatSetting.value : 22.7666909;
+      const kitchenLng = typeof kitchenLngSetting?.value === 'number' ? kitchenLngSetting.value : 88.3788318;
+
       return res.status(200).json({
         success: true,
         data: {
@@ -115,6 +134,16 @@ class DeliveryController {
           deliveryChargeEnabled,
           deliveryChargeAmount,
           otpRequired: isDeliveryOtpRequired(),
+          centralKitchen: {
+            name: kitchenNameSetting?.value || 'BentoBabu Central Kitchen',
+            landmark: kitchenLandmarkSetting?.value || 'Apollo Pharmacy / Apollo 24|7',
+            address: kitchenAddressSetting?.value || 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India',
+            pincode: kitchenPinSetting?.value || '700120',
+            latitude: kitchenLat,
+            longitude: kitchenLng,
+            googleMapsUrl: `https://www.google.com/maps?q=${kitchenLat},${kitchenLng}`,
+            googleMapsDirectionsUrl: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${kitchenLat},${kitchenLng}`)}`,
+          },
         },
       });
     } catch (error) {

@@ -17,6 +17,12 @@ export interface BackendSystemSettings {
   CLOSING_TIME?: string;
   ORDER_ACCEPTANCE_ENABLED?: boolean;
   MAINTENANCE_MODE?: boolean;
+  KITCHEN_NAME?: string;
+  KITCHEN_LANDMARK?: string;
+  KITCHEN_ADDRESS?: string;
+  KITCHEN_PINCODE?: string;
+  KITCHEN_LATITUDE?: number;
+  KITCHEN_LONGITUDE?: number;
 }
 
 const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
@@ -24,7 +30,12 @@ const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
   tagline: "Mindful Indian Bento & Clean Meal Boxes",
   supportEmail: s.SUPPORT_EMAIL || "support@bentobabu.in",
   supportPhone: s.SUPPORT_PHONE || "9876543210",
-  kitchenAddress: "Central Kitchen, Barrackpore, Kolkata 700120",
+  kitchenName: s.KITCHEN_NAME || "BentoBabu Central Kitchen",
+  kitchenLandmark: s.KITCHEN_LANDMARK || "Apollo Pharmacy / Apollo 24|7",
+  kitchenAddress: s.KITCHEN_ADDRESS || "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India",
+  kitchenPincode: s.KITCHEN_PINCODE || "700120",
+  kitchenLatitude: typeof s.KITCHEN_LATITUDE === "number" ? s.KITCHEN_LATITUDE : 22.7666909,
+  kitchenLongitude: typeof s.KITCHEN_LONGITUDE === "number" ? s.KITCHEN_LONGITUDE : 88.3788318,
   operatingHours: `${s.OPENING_TIME || "10:00"} - ${s.CLOSING_TIME || "22:00"}`,
   gstRatePercentage: 5,
   freeDeliveryThreshold: 500,
@@ -53,6 +64,12 @@ export const settingsService = {
     if (data.businessName !== undefined) backendPayload.BUSINESS_NAME = data.businessName;
     if (data.supportEmail !== undefined) backendPayload.SUPPORT_EMAIL = data.supportEmail;
     if (data.supportPhone !== undefined) backendPayload.SUPPORT_PHONE = data.supportPhone;
+    if (data.kitchenName !== undefined) backendPayload.KITCHEN_NAME = data.kitchenName;
+    if (data.kitchenLandmark !== undefined) backendPayload.KITCHEN_LANDMARK = data.kitchenLandmark;
+    if (data.kitchenAddress !== undefined) backendPayload.KITCHEN_ADDRESS = data.kitchenAddress;
+    if (data.kitchenPincode !== undefined) backendPayload.KITCHEN_PINCODE = data.kitchenPincode;
+    if (data.kitchenLatitude !== undefined) backendPayload.KITCHEN_LATITUDE = Number(data.kitchenLatitude);
+    if (data.kitchenLongitude !== undefined) backendPayload.KITCHEN_LONGITUDE = Number(data.kitchenLongitude);
     if (data.isOrderingEnabled !== undefined) backendPayload.ORDER_ACCEPTANCE_ENABLED = data.isOrderingEnabled;
     if (data.deliveryChargeEnabled !== undefined) backendPayload.DELIVERY_CHARGE_ENABLED = data.deliveryChargeEnabled;
     if (data.deliveryChargeAmount !== undefined) {
