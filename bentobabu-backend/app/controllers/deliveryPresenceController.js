@@ -58,7 +58,7 @@ class DeliveryPresenceController {
       // Check if partner has an active in-progress order
       const activeOrder = await Order.findOne({
         assignedDeliveryPartner: req.user.id,
-        orderStatus: 'OUT_FOR_DELIVERY',
+        orderStatus: { $in: ['RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
       })
         .select('_id orderNumber orderStatus items total deliverySlot deliveryZone deliveryAddress')
         .populate('deliveryAddress', 'houseNo street city state pincode landmark');
@@ -121,7 +121,7 @@ class DeliveryPresenceController {
       // Check if partner currently has an active delivery
       const activeOrder = await Order.findOne({
         assignedDeliveryPartner: req.user.id,
-        orderStatus: 'OUT_FOR_DELIVERY',
+        orderStatus: { $in: ['RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
       });
 
       if (normalized === 'ONLINE') {

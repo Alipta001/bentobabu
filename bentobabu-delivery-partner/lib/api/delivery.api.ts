@@ -53,15 +53,38 @@ export const deliveryApi = {
 
   /**
    * PATCH /api/v1/operations/delivery/orders/:id/status
-   * Transitions order from READY_FOR_PICKUP -> OUT_FOR_DELIVERY.
-   * Atomically assigns authenticated delivery agent, generates OTP for customer.
+   * Transitions order from READY_FOR_PICKUP -> RIDER_ACCEPTED.
+   * Atomically assigns authenticated delivery agent, notifies customer rider is on way to kitchen.
    */
-  async acceptAndPickupOrder(id: string, note?: string): Promise<Order> {
+  async acceptOrder(id: string, note?: string): Promise<Order> {
     const response = await apiClient.patch<{ success: boolean; message: string; data: Order }>(
       `/operations/delivery/orders/${id}/status`,
       {
-        status: "OUT_FOR_DELIVERY",
-        note: note || "Order picked up and is out for delivery",
+        status: "RIDER_ACCEPTED",
+        note: note || "Delivery partner accepted delivery request",
+      }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Backwards-compatible alias for acceptOrder
+   */
+  async acceptAndPickupOrder(id: string, note?: string): Promise<Order> {
+    return this.acceptOrder(id, note);
+  },
+
+  /**
+   * PATCH /api/v1/operations/delivery/orders/:id/status
+   * Transitions order from RIDER_ACCEPTED -> PICKED_UP.
+   * Confirms physical package pickup from kitchen and notifies customer out for delivery.
+   */
+  async confirmPickup(id: string, note?: string): Promise<Order> {
+    const response = await apiClient.patch<{ success: boolean; message: string; data: Order }>(
+      `/operations/delivery/orders/${id}/status`,
+      {
+        status: "PICKED_UP",
+        note: note || "Order collected from kitchen and is out for delivery",
       }
     );
     return response.data.data;

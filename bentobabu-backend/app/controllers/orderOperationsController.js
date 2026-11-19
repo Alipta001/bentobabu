@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const { Order } = require('../models');
 const { isDeliveryOtpRequired } = require('../config/env');
 const NotificationDispatcher = require('../utils/notificationDispatcher');
+const { emitOrderEvent } = require('../utils/socketService');
 const { redisDelPattern } = require('../config/redis');
 
 /**
@@ -84,14 +85,15 @@ class OrderOperationsController {
       }
 
       const normalizedStatus = status.toUpperCase();
+      const canonicalStatus = normalizedStatus === 'READY_FOR_DISPATCH' ? 'READY_FOR_PICKUP' : normalizedStatus;
 
       // Kitchen role constraints
       if (req.user.role === 'KITCHEN') {
-        if (!['PREPARING', 'READY_FOR_PICKUP'].includes(normalizedStatus)) {
+        if (!['PREPARING', 'READY_FOR_PICKUP', 'READY_FOR_DISPATCH'].includes(normalizedStatus)) {
           return res.status(403).json({
             success: false,
             message:
-              'Kitchen personnel are only authorized to transition orders to PREPARING or READY_FOR_PICKUP',
+              'Kitchen personnel are only authorized to transition orders to PREPARING, READY_FOR_PICKUP or READY_FOR_DISPATCH',
           });
         }
       }
@@ -108,13 +110,13 @@ class OrderOperationsController {
       const current = order.orderStatus;
       let isValidTransition = false;
 
-      if (current === 'CONFIRMED' && normalizedStatus === 'PREPARING') {
+      if (current === 'CONFIRMED' && canonicalStatus === 'PREPARING') {
         isValidTransition = true;
-      } else if (current === 'PREPARING' && normalizedStatus === 'READY_FOR_PICKUP') {
+      } else if (current === 'PREPARING' && canonicalStatus === 'READY_FOR_PICKUP') {
         isValidTransition = true;
       } else if (req.user.role === 'ADMIN') {
         // Admins can override to valid kitchen states
-        isValidTransition = ['PREPARING', 'READY_FOR_PICKUP'].includes(normalizedStatus);
+        isValidTransition = ['PREPARING', 'READY_FOR_PICKUP'].includes(canonicalStatus);
       }
 
       if (!isValidTransition) {
@@ -124,36 +126,84 @@ class OrderOperationsController {
         });
       }
 
-      order.orderStatus = normalizedStatus;
+      order.orderStatus = canonicalStatus;
       order.statusHistory.push({
-        status: normalizedStatus,
+        status: canonicalStatus,
         changedBy: req.user.id,
         changedAt: new Date(),
-        note: note || `Kitchen status updated to ${normalizedStatus}`,
+        note: note || `Kitchen status updated to ${canonicalStatus}`,
       });
 
       await order.save();
       await redisDelPattern('cache:admin:dashboard:*');
 
-      if (normalizedStatus === 'PREPARING') {
+      if (canonicalStatus === 'PREPARING') {
         NotificationDispatcher.dispatch({
           userId: order.user,
           orderId: order._id,
           order,
           eventType: 'ORDER_PREPARING',
         }).catch((e) => console.error('[Notification] ORDER_PREPARING dispatch error:', e.message));
-      } else if (normalizedStatus === 'READY_FOR_PICKUP') {
+
+        emitOrderEvent(req, 'order:preparing', {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: 'PREPARING',
+          userId: order.user,
+        });
+      } else if (canonicalStatus === 'READY_FOR_PICKUP') {
+        // 1. Notify customer that order is packed & ready
         NotificationDispatcher.dispatch({
           userId: order.user,
           orderId: order._id,
           order,
           eventType: 'ORDER_READY',
         }).catch((e) => console.error('[Notification] ORDER_READY dispatch error:', e.message));
+
+        // 2. Notify available riders that a new order is ready for dispatch/pickup
+        const { DeliveryPartnerPresence } = require('../models');
+        DeliveryPartnerPresence.find({
+          accountStatus: 'ACTIVE',
+          availabilityStatus: 'ONLINE',
+          currentOrderId: null,
+        })
+          .lean()
+          .then((availableRiders) => {
+            if (availableRiders && availableRiders.length > 0) {
+              for (const rider of availableRiders) {
+                NotificationDispatcher.dispatch({
+                  userId: rider.user,
+                  orderId: order._id,
+                  order,
+                  eventType: 'DELIVERY_REQUEST_AVAILABLE',
+                  metadata: {
+                    orderNumber: order.orderNumber,
+                    grandTotal: order.grandTotal,
+                  },
+                }).catch((e) => console.error('[Notification] DELIVERY_REQUEST_AVAILABLE dispatch error:', e.message));
+              }
+            }
+          })
+          .catch((e) => console.error('[Presence] Error querying available riders:', e.message));
+
+        emitOrderEvent(req, 'delivery:request_available', {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          status: 'READY_FOR_PICKUP',
+          userId: order.user,
+        });
       }
+
+      emitOrderEvent(req, 'order:status_updated', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        status: canonicalStatus,
+        userId: order.user,
+      });
 
       return res.status(200).json({
         success: true,
-        message: `Order status updated to ${normalizedStatus}`,
+        message: `Order status updated to ${canonicalStatus}`,
         data: order,
       });
     } catch (error) {
@@ -175,18 +225,24 @@ class OrderOperationsController {
       const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 15));
       const skip = (page - 1) * limit;
 
-      const allowedStatuses = ['READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+      const allowedStatuses = ['READY_FOR_PICKUP', 'READY_FOR_DISPATCH', 'RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'ACTIVE'];
       const query = {};
 
       if (req.query.status) {
         const requestedStatus = req.query.status.toUpperCase();
-        if (allowedStatuses.includes(requestedStatus)) {
+        if (requestedStatus === 'ACTIVE') {
+          query.orderStatus = { $in: ['RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] };
+        } else if (requestedStatus === 'OUT_FOR_DELIVERY') {
+          query.orderStatus = { $in: ['RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] };
+        } else if (['READY_FOR_PICKUP', 'READY_FOR_DISPATCH'].includes(requestedStatus)) {
+          query.orderStatus = { $in: ['READY_FOR_PICKUP', 'READY_FOR_DISPATCH'] };
+        } else if (allowedStatuses.includes(requestedStatus)) {
           query.orderStatus = requestedStatus;
         } else {
-          query.orderStatus = { $in: allowedStatuses };
+          query.orderStatus = { $in: ['READY_FOR_PICKUP', 'READY_FOR_DISPATCH', 'RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'] };
         }
       } else {
-        query.orderStatus = { $in: ['READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'] };
+        query.orderStatus = { $in: ['READY_FOR_PICKUP', 'READY_FOR_DISPATCH', 'RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] };
       }
 
       // If DELIVERY role: show orders assigned to them or ready for pickup if online
@@ -201,10 +257,10 @@ class OrderOperationsController {
         if (isPartnerOnlineAndActive) {
           query.$or = [
             { assignedDeliveryPartner: req.user.id },
-            { orderStatus: 'READY_FOR_PICKUP', assignedDeliveryPartner: null },
+            { orderStatus: { $in: ['READY_FOR_PICKUP', 'READY_FOR_DISPATCH'] }, assignedDeliveryPartner: null },
           ];
         } else {
-          // If offline or suspended, partner is not offered new unassigned assignments
+          // If offline, busy or suspended, partner is offered their assigned orders
           query.assignedDeliveryPartner = req.user.id;
         }
       }
@@ -259,11 +315,11 @@ class OrderOperationsController {
 
       // Delivery role constraints
       if (req.user.role === 'DELIVERY') {
-        if (!['OUT_FOR_DELIVERY', 'DELIVERED'].includes(normalizedStatus)) {
+        if (!['RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(normalizedStatus)) {
           return res.status(403).json({
             success: false,
             message:
-              'Delivery personnel are only authorized to transition orders to OUT_FOR_DELIVERY or DELIVERED',
+              'Delivery personnel are only authorized to transition orders to RIDER_ACCEPTED, PICKED_UP, or DELIVERED',
           });
         }
       }
@@ -283,7 +339,7 @@ class OrderOperationsController {
           order.assignedDeliveryPartner &&
           order.assignedDeliveryPartner.toString() !== req.user.id
         ) {
-          if (normalizedStatus === 'OUT_FOR_DELIVERY') {
+          if (['RIDER_ACCEPTED', 'OUT_FOR_DELIVERY'].includes(normalizedStatus)) {
             return res.status(409).json({
               success: false,
               message: 'This order has already been assigned to another delivery partner.',
@@ -298,8 +354,13 @@ class OrderOperationsController {
 
       const current = order.orderStatus;
 
-      // 1. Transition: READY_FOR_PICKUP -> OUT_FOR_DELIVERY (ATOMIC CLAIM)
-      if (normalizedStatus === 'OUT_FOR_DELIVERY') {
+      // ==============================================================
+      // 1. TRANSITION: READY_FOR_PICKUP -> RIDER_ACCEPTED (RIDER ACCEPTS REQUEST)
+      // ==============================================================
+      if (
+        normalizedStatus === 'RIDER_ACCEPTED' ||
+        (normalizedStatus === 'OUT_FOR_DELIVERY' && ['READY_FOR_PICKUP', 'READY_FOR_DISPATCH'].includes(current))
+      ) {
         const { DeliveryPartnerPresence, User } = require('../models');
 
         // If DELIVERY role: verify partner eligibility
@@ -332,7 +393,7 @@ class OrderOperationsController {
           // Check if partner already has another active in-progress order
           const existingActiveOrder = await Order.findOne({
             assignedDeliveryPartner: req.user.id,
-            orderStatus: 'OUT_FOR_DELIVERY',
+            orderStatus: { $in: ['RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
           }).select('_id orderNumber');
 
           if (
@@ -366,10 +427,10 @@ class OrderOperationsController {
           });
         }
 
-        if (existingOrder.orderStatus !== 'READY_FOR_PICKUP') {
+        if (!['READY_FOR_PICKUP', 'READY_FOR_DISPATCH'].includes(existingOrder.orderStatus)) {
           return res.status(400).json({
             success: false,
-            message: `Cannot transition order to OUT_FOR_DELIVERY from "${existingOrder.orderStatus}". Order must be in READY_FOR_PICKUP status.`,
+            message: `Cannot transition order to RIDER_ACCEPTED from "${existingOrder.orderStatus}". Order must be in READY_FOR_PICKUP status.`,
           });
         }
 
@@ -379,8 +440,15 @@ class OrderOperationsController {
         const otpExpiryMinutes = parseInt(process.env.DELIVERY_OTP_EXPIRY_MINUTES, 10) || 60;
         const otpExpiresAt = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
 
-        // Execute atomic assignment inside MongoDB transaction (with fallback for standalone DBs)
-        const session = await mongoose.startSession();
+        // Execute atomic assignment inside MongoDB transaction (with fallback for standalone DBs or offline environments)
+        let session = null;
+        if (mongoose.connection && mongoose.connection.readyState === 1) {
+          try {
+            session = await mongoose.startSession();
+          } catch (sessionErr) {
+            session = null;
+          }
+        }
         let updatedOrder = null;
 
         try {
@@ -419,14 +487,14 @@ class OrderOperationsController {
 
             const findQuery = {
               _id: id,
-              orderStatus: 'READY_FOR_PICKUP',
+              orderStatus: { $in: ['READY_FOR_PICKUP', 'READY_FOR_DISPATCH'] },
               assignedDeliveryPartner: null,
             };
 
             const updateOps = {
               $set: {
                 assignedDeliveryPartner: req.user.id,
-                orderStatus: 'OUT_FOR_DELIVERY',
+                orderStatus: 'RIDER_ACCEPTED',
                 deliveryOTP: otpHash,
                 deliveryOtpCode: plainOtp,
                 deliveryOtpExpiresAt: otpExpiresAt,
@@ -434,10 +502,10 @@ class OrderOperationsController {
               },
               $push: {
                 statusHistory: {
-                  status: 'OUT_FOR_DELIVERY',
+                  status: 'RIDER_ACCEPTED',
                   changedBy: req.user.id,
                   changedAt: new Date(),
-                  note: note || 'Order claimed and is out for delivery',
+                  note: note || 'Delivery request accepted by rider. Heading to kitchen for pickup.',
                 },
               },
             };
@@ -472,21 +540,26 @@ class OrderOperationsController {
           };
 
           // Try transaction if supported by MongoDB deployment
-          try {
-            await session.withTransaction(async () => {
-              await executeAssignment(session);
-            });
-          } catch (txErr) {
-            if (
-              txErr.message &&
-              (txErr.message.includes('Transaction numbers are only allowed') ||
-                txErr.message.includes('replica set member'))
-            ) {
-              // Standalone MongoDB fallback
-              await executeAssignment(null);
-            } else {
-              throw txErr;
+          if (session) {
+            try {
+              await session.withTransaction(async () => {
+                await executeAssignment(session);
+              });
+            } catch (txErr) {
+              if (
+                txErr.message &&
+                (txErr.message.includes('Transaction numbers are only allowed') ||
+                  txErr.message.includes('replica set member') ||
+                  txErr.message.includes('This MongoDB deployment does not support transactions'))
+              ) {
+                // Standalone MongoDB fallback
+                await executeAssignment(null);
+              } else {
+                throw txErr;
+              }
             }
+          } else {
+            await executeAssignment(null);
           }
         } catch (assignErr) {
           if (assignErr.statusCode === 409) {
@@ -503,27 +576,159 @@ class OrderOperationsController {
           }
           throw assignErr;
         } finally {
-          await session.endSession();
+          if (session) {
+            await session.endSession();
+          }
         }
 
         await redisDelPattern('cache:admin:dashboard:*');
 
+        // Notify customer: "A rider has accepted your order and will pick it up shortly."
+        NotificationDispatcher.dispatch({
+          userId: updatedOrder.user,
+          orderId: updatedOrder._id,
+          order: updatedOrder,
+          eventType: 'RIDER_ACCEPTED',
+          metadata: {
+            orderNumber: updatedOrder.orderNumber,
+            partnerName: req.user.name,
+          },
+        }).catch((e) => console.error('[Notification] RIDER_ACCEPTED dispatch error:', e.message));
+
+        emitOrderEvent(req, 'order:rider_accepted', {
+          orderId: updatedOrder._id,
+          orderNumber: updatedOrder.orderNumber,
+          status: 'RIDER_ACCEPTED',
+          userId: updatedOrder.user,
+          assignedDeliveryPartner: req.user.id,
+        });
+        emitOrderEvent(req, 'order:status_updated', {
+          orderId: updatedOrder._id,
+          orderNumber: updatedOrder.orderNumber,
+          status: 'RIDER_ACCEPTED',
+          userId: updatedOrder.user,
+          assignedDeliveryPartner: req.user.id,
+        });
+
+        const responseOrder = updatedOrder.toJSON();
+        return res.status(200).json({
+          success: true,
+          message: 'Delivery request accepted. Order status updated to RIDER_ACCEPTED.',
+          data: responseOrder,
+        });
+      }
+
+      // ==============================================================
+      // 2. TRANSITION: RIDER_ACCEPTED -> PICKED_UP (RIDER CONFIRMS PICKUP)
+      // ==============================================================
+      if (
+        normalizedStatus === 'PICKED_UP' ||
+        (normalizedStatus === 'OUT_FOR_DELIVERY' && current === 'RIDER_ACCEPTED')
+      ) {
+        // Ownership check: only assigned delivery partner (or ADMIN) can confirm pickup
+        if (req.user.role === 'DELIVERY') {
+          if (
+            !order.assignedDeliveryPartner ||
+            order.assignedDeliveryPartner.toString() !== req.user.id
+          ) {
+            return res.status(403).json({
+              success: false,
+              message: 'Only the assigned delivery partner may confirm order pickup.',
+            });
+          }
+        }
+
+        // Prevent duplicate pickup confirmations
+        if (['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(order.orderStatus)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Order pickup has already been confirmed.',
+          });
+        }
+
+        if (order.orderStatus !== 'RIDER_ACCEPTED') {
+          return res.status(400).json({
+            success: false,
+            message: `Cannot confirm pickup for order in status "${order.orderStatus}". Order must be in RIDER_ACCEPTED status.`,
+          });
+        }
+
+        const updatedOrder = await Order.findOneAndUpdate(
+          {
+            _id: id,
+            orderStatus: 'RIDER_ACCEPTED',
+            ...(req.user.role === 'DELIVERY' ? { assignedDeliveryPartner: req.user.id } : {}),
+          },
+          {
+            $set: {
+              orderStatus: 'PICKED_UP',
+            },
+            $push: {
+              statusHistory: {
+                status: 'PICKED_UP',
+                changedBy: req.user.id,
+                changedAt: new Date(),
+                note: note || 'Order physically collected from kitchen. In transit to customer.',
+              },
+            },
+          },
+          { returnDocument: 'after' }
+        );
+
+        if (!updatedOrder) {
+          return res.status(409).json({
+            success: false,
+            message: 'Could not confirm pickup. Order may have already been updated.',
+          });
+        }
+
+        await redisDelPattern('cache:admin:dashboard:*');
+
+        // Trigger OUT_FOR_DELIVERY notification to customer upon physical pickup
         NotificationDispatcher.dispatch({
           userId: updatedOrder.user,
           orderId: updatedOrder._id,
           order: updatedOrder,
           eventType: 'OUT_FOR_DELIVERY',
+          metadata: {
+            orderNumber: updatedOrder.orderNumber,
+            deliveryOtp: updatedOrder.deliveryOtpCode,
+          },
         }).catch((e) => console.error('[Notification] OUT_FOR_DELIVERY dispatch error:', e.message));
+
+        emitOrderEvent(req, 'order:picked_up', {
+          orderId: updatedOrder._id,
+          orderNumber: updatedOrder.orderNumber,
+          status: 'PICKED_UP',
+          userId: updatedOrder.user,
+          assignedDeliveryPartner: updatedOrder.assignedDeliveryPartner,
+        });
+        emitOrderEvent(req, 'order:out_for_delivery', {
+          orderId: updatedOrder._id,
+          orderNumber: updatedOrder.orderNumber,
+          status: 'PICKED_UP',
+          userId: updatedOrder.user,
+          assignedDeliveryPartner: updatedOrder.assignedDeliveryPartner,
+        });
+        emitOrderEvent(req, 'order:status_updated', {
+          orderId: updatedOrder._id,
+          orderNumber: updatedOrder.orderNumber,
+          status: 'PICKED_UP',
+          userId: updatedOrder.user,
+          assignedDeliveryPartner: updatedOrder.assignedDeliveryPartner,
+        });
 
         const responseOrder = updatedOrder.toJSON();
         return res.status(200).json({
           success: true,
-          message: 'Order is out for delivery and delivery OTP has been generated',
+          message: 'Order pickup confirmed. Order is now out for delivery.',
           data: responseOrder,
         });
       }
 
-      // 2. Transition: OUT_FOR_DELIVERY -> DELIVERED
+      // ==============================================================
+      // 3. TRANSITION: PICKED_UP / OUT_FOR_DELIVERY -> DELIVERED
+      // ==============================================================
       if (normalizedStatus === 'DELIVERED') {
         const order = await Order.findById(id).select('+deliveryOTP +deliveryOtpCode +failedOtpAttempts +deliveryOtpExpiresAt');
         if (!order) {
@@ -546,10 +751,23 @@ class OrderOperationsController {
           }
         }
 
-        if (order.orderStatus !== 'OUT_FOR_DELIVERY') {
+        if (order.orderStatus === 'RIDER_ACCEPTED') {
           return res.status(400).json({
             success: false,
-            message: `Cannot mark order as DELIVERED from "${order.orderStatus}". Order must be OUT_FOR_DELIVERY.`,
+            message: 'Cannot mark order as DELIVERED before pickup is confirmed. Order is still in RIDER_ACCEPTED status.',
+          });
+        }
+
+        if (!['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(order.orderStatus)) {
+          if (order.orderStatus === 'DELIVERED') {
+            return res.status(409).json({
+              success: false,
+              message: 'Order has already been marked as DELIVERED.',
+            });
+          }
+          return res.status(400).json({
+            success: false,
+            message: `Cannot mark order as DELIVERED from "${order.orderStatus}". Order must be PICKED_UP or OUT_FOR_DELIVERY.`,
           });
         }
 
@@ -594,38 +812,55 @@ class OrderOperationsController {
             .digest('hex');
 
           if (calculatedOtpHash !== order.deliveryOTP) {
-            order.failedOtpAttempts = (order.failedOtpAttempts || 0) + 1;
-            await order.save();
+            const updatedFailed = await Order.findByIdAndUpdate(
+              id,
+              { $inc: { failedOtpAttempts: 1 } },
+              { returnDocument: 'after', select: '+failedOtpAttempts' }
+            );
+            const remainingAttempts = Math.max(0, 5 - (updatedFailed?.failedOtpAttempts || (order.failedOtpAttempts || 0) + 1));
             return res.status(400).json({
               success: false,
-              message: `Invalid delivery OTP. Verification failed. (${5 - order.failedOtpAttempts} attempts remaining)`,
+              message: `Invalid delivery OTP. Verification failed. (${remainingAttempts} attempts remaining)`,
             });
           }
         }
 
-        // OTP verified successfully or OTP verification skipped: mark DELIVERED and clear OTP
-        order.orderStatus = 'DELIVERED';
-        order.deliveryOTP = null;
-        order.deliveryOtpCode = null;
-        order.deliveryOtpExpiresAt = null;
-        order.failedOtpAttempts = 0;
+        // OTP verified successfully or OTP verification skipped: atomically mark DELIVERED and clear OTP
+        const updatedOrder = await Order.findOneAndUpdate(
+          {
+            _id: id,
+            orderStatus: { $in: ['PICKED_UP', 'OUT_FOR_DELIVERY'] },
+            ...(req.user.role === 'DELIVERY' ? { assignedDeliveryPartner: req.user.id } : {}),
+          },
+          {
+            $set: {
+              orderStatus: 'DELIVERED',
+              deliveryOTP: null,
+              deliveryOtpCode: null,
+              deliveryOtpExpiresAt: null,
+              failedOtpAttempts: 0,
+            },
+            $push: {
+              statusHistory: {
+                status: 'DELIVERED',
+                changedBy: req.user.id,
+                changedAt: new Date(),
+                note: otpRequired
+                  ? (note || 'Order successfully delivered and verified with OTP')
+                  : (note || 'Order successfully delivered (OTP verification disabled)'),
+              },
+            },
+          },
+          { returnDocument: 'after' }
+        );
 
-        // NOTE: Delivery OTP confirms physical delivery ONLY.
-        // For COD orders, paymentStatus is NOT marked as PAID automatically.
-        // It remains in its existing state (e.g. 'COD_PENDING' or 'COLLECTED_BY_RIDER')
-        // until cash collection is explicitly recorded.
-        // For prepaid orders (RAZORPAY), paymentStatus was already 'PAID' and remains 'PAID'.
+        if (!updatedOrder) {
+          return res.status(409).json({
+            success: false,
+            message: 'Order has already been marked as DELIVERED or is no longer in a deliverable state.',
+          });
+        }
 
-        order.statusHistory.push({
-          status: 'DELIVERED',
-          changedBy: req.user.id,
-          changedAt: new Date(),
-          note: otpRequired
-            ? (note || 'Order successfully delivered and verified with OTP')
-            : (note || 'Order successfully delivered (OTP verification disabled)'),
-        });
-
-        await order.save();
         await redisDelPattern('cache:admin:dashboard:*');
 
         // Recalculate partner availability according to explicit preference
@@ -644,13 +879,28 @@ class OrderOperationsController {
         }
 
         NotificationDispatcher.dispatch({
-          userId: order.user,
-          orderId: order._id,
-          order,
+          userId: updatedOrder.user,
+          orderId: updatedOrder._id,
+          order: updatedOrder,
           eventType: 'ORDER_DELIVERED',
         }).catch((e) => console.error('[Notification] ORDER_DELIVERED dispatch error:', e.message));
 
-        const responseOrder = order.toJSON();
+        emitOrderEvent(req, 'order:delivered', {
+          orderId: updatedOrder._id,
+          orderNumber: updatedOrder.orderNumber,
+          status: 'DELIVERED',
+          userId: updatedOrder.user,
+          assignedDeliveryPartner: updatedOrder.assignedDeliveryPartner,
+        });
+        emitOrderEvent(req, 'order:status_updated', {
+          orderId: updatedOrder._id,
+          orderNumber: updatedOrder.orderNumber,
+          status: 'DELIVERED',
+          userId: updatedOrder.user,
+          assignedDeliveryPartner: updatedOrder.assignedDeliveryPartner,
+        });
+
+        const responseOrder = updatedOrder.toJSON();
         return res.status(200).json({
           success: true,
           message: otpRequired

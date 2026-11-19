@@ -71,9 +71,20 @@ const getInAppMessage = (
         message: `Our kitchen has begun preparing your nutritious meal for order #${orderNumber}.`,
       };
     case 'ORDER_READY':
+    case 'ORDER_READY_FOR_DISPATCH':
       return {
         subject: `Order Ready for Pickup (#${orderNumber})`,
         message: `Order #${orderNumber} is freshly packed and waiting for delivery partner pickup.`,
+      };
+    case 'DELIVERY_REQUEST_AVAILABLE':
+      return {
+        subject: `New Delivery Request Available (#${orderNumber})`,
+        message: `Order #${orderNumber} is packed and ready for pickup at Central Kitchen. Open your partner app to accept.`,
+      };
+    case 'RIDER_ACCEPTED':
+      return {
+        subject: `Rider Assigned (#${orderNumber})`,
+        message: `A rider has accepted your order and will pick it up shortly.`,
       };
     case 'OUT_FOR_DELIVERY':
       return {

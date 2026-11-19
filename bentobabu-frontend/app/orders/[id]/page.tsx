@@ -55,9 +55,15 @@ const TIMELINE_STAGES: Array<{
     icon: PackageCheck,
   },
   {
-    key: "OUT_FOR_DELIVERY",
+    key: "RIDER_ACCEPTED",
+    title: "Rider Assigned",
+    desc: "Heading to kitchen for pickup",
+    icon: Bike,
+  },
+  {
+    key: "PICKED_UP",
     title: "On the Way",
-    desc: "Rider dispatched",
+    desc: "Out for delivery to you",
     icon: Bike,
   },
   {
@@ -70,11 +76,23 @@ const TIMELINE_STAGES: Array<{
 
 const STAGE_ORDER: Record<string, number> = {
   PENDING: 0,
+  pending: 0,
   CONFIRMED: 1,
+  confirmed: 1,
   PREPARING: 2,
+  preparing: 2,
   READY_FOR_PICKUP: 3,
-  OUT_FOR_DELIVERY: 4,
-  DELIVERED: 5,
+  ready_for_pickup: 3,
+  READY_FOR_DISPATCH: 3,
+  ready_for_dispatch: 3,
+  RIDER_ACCEPTED: 4,
+  rider_accepted: 4,
+  PICKED_UP: 5,
+  picked_up: 5,
+  OUT_FOR_DELIVERY: 5,
+  out_for_delivery: 5,
+  DELIVERED: 6,
+  delivered: 6,
 };
 
 export default function OrderTrackingPage() {
@@ -337,8 +355,8 @@ export default function OrderTrackingPage() {
               </div>
             )}
 
-            {/* Secure Delivery OTP Box (Shown when OUT_FOR_DELIVERY) */}
-            {order.status === "OUT_FOR_DELIVERY" && order.deliveryOtp && (
+            {/* Secure Delivery OTP Box (Shown when PICKED_UP or OUT_FOR_DELIVERY) */}
+            {(["PICKED_UP", "OUT_FOR_DELIVERY", "picked_up", "out_for_delivery"].includes(order.status)) && order.deliveryOtp && (
               <div className="p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="space-y-1 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-900">

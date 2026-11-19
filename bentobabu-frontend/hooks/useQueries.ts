@@ -118,11 +118,15 @@ export function useOrder(id: string) {
           "confirmed",
           "preparing",
           "ready_for_pickup",
+          "rider_accepted",
+          "picked_up",
           "out_for_delivery",
           "PENDING",
           "CONFIRMED",
           "PREPARING",
           "READY_FOR_PICKUP",
+          "RIDER_ACCEPTED",
+          "PICKED_UP",
           "OUT_FOR_DELIVERY",
         ].includes(order.status)
       ) {

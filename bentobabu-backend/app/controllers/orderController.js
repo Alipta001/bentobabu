@@ -977,10 +977,10 @@ class OrderController {
 
       const orderData = order.toJSON();
 
-      // Only expose deliveryOtpCode to the customer who owns the order when OUT_FOR_DELIVERY
+      // Only expose deliveryOtpCode to the customer who owns the order when PICKED_UP or OUT_FOR_DELIVERY
       if (
         req.user.role === 'CUSTOMER' &&
-        order.orderStatus === 'OUT_FOR_DELIVERY' &&
+        ['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(order.orderStatus) &&
         order.deliveryOtpCode
       ) {
         orderData.deliveryOtp = order.deliveryOtpCode;

@@ -31,7 +31,8 @@ export function DeliveryWorkflowStepper({ status }: StepperProps) {
   ];
 
   let currentStepIdx = 0;
-  if (status === "OUT_FOR_DELIVERY") currentStepIdx = 1;
+  if (status === "RIDER_ACCEPTED") currentStepIdx = 0;
+  if (status === "PICKED_UP" || status === "OUT_FOR_DELIVERY") currentStepIdx = 1;
   if (status === "DELIVERED") currentStepIdx = 2;
 
   return (

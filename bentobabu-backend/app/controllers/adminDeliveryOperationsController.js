@@ -164,7 +164,7 @@ class AdminDeliveryOperationsController {
         DeliveryPartnerPresence.find({ user: { $in: userIds } }).lean(),
         Order.find({
           assignedDeliveryPartner: { $in: userIds },
-          orderStatus: 'OUT_FOR_DELIVERY',
+          orderStatus: { $in: ['RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
         })
           .select('assignedDeliveryPartner')
           .lean(),
@@ -313,7 +313,7 @@ class AdminDeliveryOperationsController {
           .lean(),
         Order.find({
           assignedDeliveryPartner: { $in: userIds },
-          orderStatus: 'OUT_FOR_DELIVERY',
+          orderStatus: { $in: ['RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
         })
           .select('_id orderNumber orderStatus assignedDeliveryPartner total items deliverySlot deliveryAddress')
           .populate('deliveryAddress', 'houseNo street city landmark')
@@ -508,7 +508,7 @@ class AdminDeliveryOperationsController {
             .lean(),
           Order.findOne({
             assignedDeliveryPartner: id,
-            orderStatus: 'OUT_FOR_DELIVERY',
+            orderStatus: { $in: ['RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
           })
             .select('_id orderNumber total items orderStatus createdAt deliveryAddress deliverySlot')
             .populate('deliveryAddress', 'houseNo street city state pincode landmark phone')

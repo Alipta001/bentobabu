@@ -45,7 +45,7 @@ export function useActiveDeliveries() {
 
   return useQuery({
     queryKey: QUERY_KEYS.ACTIVE_DELIVERIES,
-    queryFn: () => deliveryApi.getDeliveryOrders({ status: "OUT_FOR_DELIVERY", limit: 20 }),
+    queryFn: () => deliveryApi.getDeliveryOrders({ status: "ACTIVE", limit: 20 }),
     enabled: isAuthenticated && isOnline,
     refetchInterval: isAuthenticated && isOnline ? 12000 : false,
   });
@@ -84,18 +84,33 @@ export function useEarnings() {
   });
 }
 
-export function useAcceptAndPickupOrder() {
+export function useAcceptOrder() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ id, note }: { id: string; note?: string }) =>
-      deliveryApi.acceptAndPickupOrder(id, note),
+      deliveryApi.acceptOrder(id, note),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["delivery-orders"] });
       queryClient.setQueryData(QUERY_KEYS.ORDER_DETAIL(data.id || data._id), data);
     },
   });
 }
+
+export function useConfirmPickup() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string }) =>
+      deliveryApi.confirmPickup(id, note),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["delivery-orders"] });
+      queryClient.setQueryData(QUERY_KEYS.ORDER_DETAIL(data.id || data._id), data);
+    },
+  });
+}
+
+export const useAcceptAndPickupOrder = useAcceptOrder;
 
 export function useDeliveryConfig() {
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);

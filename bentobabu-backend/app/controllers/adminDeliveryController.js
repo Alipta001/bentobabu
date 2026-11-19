@@ -365,7 +365,7 @@ class AdminDeliveryController {
       // Prevent accidental deletion if zone is actively tied to live in-progress orders
       const activeOrdersCount = await Order.countDocuments({
         deliveryZone: zone._id,
-        orderStatus: { $in: ['PENDING', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY'] },
+        orderStatus: { $in: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
       });
 
       if (activeOrdersCount > 0) {

@@ -24,7 +24,8 @@ import { DetailSkeleton } from "@/components/ui/LoadingSkeleton";
 import { CENTRAL_KITCHEN_DETAILS } from "@/lib/api/delivery.api";
 import {
   useOrderDetails,
-  useAcceptAndPickupOrder,
+  useAcceptOrder,
+  useConfirmPickup,
   useDeliveryConfig,
 } from "@/hooks/useDeliveryQueries";
 import { Order } from "@/types";
@@ -36,7 +37,8 @@ export default function OrderExecutionPage() {
   const id = params?.id || "";
 
   const { data: order, isLoading, error, refetch } = useOrderDetails(id);
-  const pickupMutation = useAcceptAndPickupOrder();
+  const acceptMutation = useAcceptOrder();
+  const pickupMutation = useConfirmPickup();
   const { data: deliveryConfig } = useDeliveryConfig();
   const otpRequired = deliveryConfig?.otpRequired !== false;
 
@@ -77,9 +79,23 @@ export default function OrderExecutionPage() {
 
   const isCod = order.paymentMethod === "COD";
   const customerAddr = order.deliveryAddress;
-  const isReady = order.orderStatus === "READY_FOR_PICKUP";
-  const isOut = order.orderStatus === "OUT_FOR_DELIVERY";
+  const isReady = order.orderStatus === "READY_FOR_PICKUP" || order.orderStatus === "READY_FOR_DISPATCH";
+  const isAccepted = order.orderStatus === "RIDER_ACCEPTED";
+  const isOut = order.orderStatus === "PICKED_UP" || order.orderStatus === "OUT_FOR_DELIVERY";
   const isDelivered = order.orderStatus === "DELIVERED";
+
+  const handleAcceptRequest = async () => {
+    try {
+      await acceptMutation.mutateAsync({
+        id: order.id || order._id,
+        note: "Delivery partner accepted delivery request",
+      });
+      toast.success("Order accepted! Please head to the kitchen for pickup.");
+      refetch();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to accept order.");
+    }
+  };
 
   const handleConfirmPickup = async () => {
     try {
@@ -183,8 +199,29 @@ export default function OrderExecutionPage() {
             )}
           </div>
 
-          {/* Confirm Pickup Action if READY_FOR_PICKUP */}
+          {/* Accept Request Action if READY_FOR_PICKUP */}
           {isReady && (
+            <div className="pt-2">
+              <button
+                type="button"
+                disabled={acceptMutation.isPending}
+                onClick={handleAcceptRequest}
+                className="w-full py-3.5 rounded-2xl bg-[#C86D51] text-white text-xs sm:text-sm font-bold hover:bg-[#B35D42] transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {acceptMutation.isPending ? (
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Package className="w-4 h-4" />
+                    <span>Accept Delivery Request</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Confirm Pickup Action if RIDER_ACCEPTED */}
+          {isAccepted && (
             <div className="pt-2">
               <button
                 type="button"
@@ -201,6 +238,13 @@ export default function OrderExecutionPage() {
                   </>
                 )}
               </button>
+            </div>
+          )}
+
+          {isOut && (
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Package confirmed picked up from kitchen. In transit to customer.</span>
             </div>
           )}
         </div>

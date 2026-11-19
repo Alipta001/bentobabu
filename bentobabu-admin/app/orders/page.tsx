@@ -27,6 +27,8 @@ const STATUS_FILTERS: { label: string; value: string }[] = [
   { label: "Confirmed", value: "confirmed" },
   { label: "Preparing", value: "preparing" },
   { label: "Ready to Dispatch", value: "ready_for_dispatch" },
+  { label: "Rider Accepted", value: "rider_accepted" },
+  { label: "Picked Up", value: "picked_up" },
   { label: "Out for Delivery", value: "out_for_delivery" },
   { label: "Delivered", value: "delivered" },
   { label: "Cancelled", value: "cancelled" },
@@ -265,7 +267,11 @@ function OrdersContent() {
                             ? "bg-emerald-100 text-emerald-900"
                             : order.status === "preparing"
                             ? "bg-amber-100 text-amber-900"
-                            : order.status === "ready_for_dispatch" ||
+                            : order.status === "ready_for_dispatch"
+                            ? "bg-sky-100 text-sky-900"
+                            : order.status === "rider_accepted"
+                            ? "bg-purple-100 text-purple-900"
+                            : order.status === "picked_up" ||
                               order.status === "out_for_delivery"
                             ? "bg-blue-100 text-blue-900"
                             : order.status === "cancelled"
@@ -311,17 +317,23 @@ function OrdersContent() {
                       )}
 
                       {order.status === "ready_for_dispatch" && (
+                        <span className="text-[11px] text-sky-800 font-semibold">
+                          Awaiting Rider
+                        </span>
+                      )}
+
+                      {order.status === "rider_accepted" && (
                         <button
                           onClick={() =>
-                            handleStatusChange(order.id, "out_for_delivery")
+                            handleStatusChange(order.id, "picked_up")
                           }
-                          className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-[11px] font-bold hover:bg-indigo-700 cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-purple-600 text-white text-[11px] font-bold hover:bg-purple-700 cursor-pointer"
                         >
-                          Dispatch Bento
+                          Confirm Pickup
                         </button>
                       )}
 
-                      {order.status === "out_for_delivery" && (
+                      {(order.status === "picked_up" || order.status === "out_for_delivery") && (
                         <button
                           onClick={() => handleStatusChange(order.id, "delivered")}
                           className="px-3 py-1.5 rounded-xl bg-emerald-700 text-white text-[11px] font-bold hover:bg-emerald-800 cursor-pointer"
@@ -416,15 +428,15 @@ function OrdersContent() {
                           }
                           className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold cursor-pointer"
                         >
-                          Ready
+                          Ready to Dispatch
                         </button>
                         <button
                           onClick={() =>
-                            handleStatusChange(selectedOrder.id, "out_for_delivery")
+                            handleStatusChange(selectedOrder.id, "picked_up")
                           }
-                          className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-semibold cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-semibold cursor-pointer"
                         >
-                          Dispatched
+                          Picked Up
                         </button>
                         <button
                           onClick={() => handleStatusChange(selectedOrder.id, "delivered")}

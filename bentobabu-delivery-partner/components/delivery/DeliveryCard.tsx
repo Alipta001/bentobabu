@@ -18,7 +18,7 @@ import {
 import { Order } from "@/types";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { CENTRAL_KITCHEN_DETAILS } from "@/lib/api/delivery.api";
-import { useAcceptAndPickupOrder, useDeliveryConfig } from "@/hooks/useDeliveryQueries";
+import { useAcceptOrder, useConfirmPickup, useDeliveryConfig } from "@/hooks/useDeliveryQueries";
 import { toast } from "sonner";
 
 interface DeliveryCardProps {
@@ -33,7 +33,8 @@ export function DeliveryCard({
   onVerifyOtpClick,
 }: DeliveryCardProps) {
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
-  const acceptMutation = useAcceptAndPickupOrder();
+  const acceptMutation = useAcceptOrder();
+  const confirmPickupMutation = useConfirmPickup();
   const { data: deliveryConfig } = useDeliveryConfig();
 
   const otpRequired = deliveryConfig?.otpRequired !== false;
@@ -41,6 +42,7 @@ export function DeliveryCard({
   const orderId = order.id || order._id;
   const isCod = order.paymentMethod === "COD";
   const itemsCount = order.items?.reduce((acc, i) => acc + i.quantity, 0) || 0;
+  const isRiderAccepted = order.orderStatus === "RIDER_ACCEPTED";
 
   // Earnings estimation for delivery agent
   const estimatedEarnings = (order.deliveryCharge || 50) + 10;
@@ -48,9 +50,18 @@ export function DeliveryCard({
   const handleAccept = async () => {
     try {
       await acceptMutation.mutateAsync({ id: orderId });
-      toast.success(`Order #${order.orderNumber} accepted! Assigned to you.`);
+      toast.success(`Order #${order.orderNumber} accepted! Assigned to you. Head to kitchen for pickup.`);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || err?.message || "Failed to accept order.");
+    }
+  };
+
+  const handleConfirmPickup = async () => {
+    try {
+      await confirmPickupMutation.mutateAsync({ id: orderId });
+      toast.success(`Pickup confirmed! Order #${order.orderNumber} is now out for delivery.`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || "Failed to confirm pickup.");
     }
   };
 
@@ -187,7 +198,7 @@ export function DeliveryCard({
                   <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <>
-                    <span>Accept & Pickup</span>
+                    <span>Accept Request</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -195,7 +206,47 @@ export function DeliveryCard({
             </div>
           )}
 
-          {variant === "ACTIVE" && (
+          {variant === "ACTIVE" && isRiderAccepted && (
+            <div className="space-y-2">
+              <div className="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
+                <span className="font-semibold">Status: Assigned to You</span>
+                <span className="text-[11px] text-amber-700">Head to Kitchen</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenKitchenMaps}
+                  className="py-2.5 rounded-2xl border border-gray-300 text-gray-700 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span>Kitchen Route</span>
+                </button>
+                <Link
+                  href={`/orders/${orderId}`}
+                  className="py-2.5 rounded-2xl border border-gray-300 text-gray-700 font-bold text-xs text-center hover:bg-gray-50 transition-colors flex items-center justify-center"
+                >
+                  View Details
+                </Link>
+              </div>
+              <button
+                type="button"
+                disabled={confirmPickupMutation.isPending}
+                onClick={handleConfirmPickup}
+                className="w-full py-3 rounded-2xl bg-[#C86D51] text-white font-bold text-xs hover:bg-[#B35D42] transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {confirmPickupMutation.isPending ? (
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Package className="w-4 h-4" />
+                    <span>Confirm Pickup</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {variant === "ACTIVE" && !isRiderAccepted && (
             <div className="space-y-2">
               <div className="grid grid-cols-2 gap-2">
                 <a

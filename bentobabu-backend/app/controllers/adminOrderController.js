@@ -275,8 +275,8 @@ class AdminOrderController {
         });
       }
 
-      // Check if order is OUT_FOR_DELIVERY and prepare fresh secure delivery OTP
-      const isOutForDelivery = order.orderStatus === 'OUT_FOR_DELIVERY';
+      // Check if order is OUT_FOR_DELIVERY / PICKED_UP and prepare fresh secure delivery OTP
+      const isOutForDelivery = ['PICKED_UP', 'OUT_FOR_DELIVERY'].includes(order.orderStatus);
       let newPlainOtp = null;
       let newOtpHash = null;
       let newOtpExpiresAt = null;
@@ -345,7 +345,7 @@ class AdminOrderController {
           // 3. Atomically update order assignment and refresh OTP if OUT_FOR_DELIVERY
           const orderFindQuery = {
             _id: id,
-            orderStatus: { $in: ['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY'] },
+            orderStatus: { $in: ['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'RIDER_ACCEPTED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
             ...(isReassignment ? { assignedDeliveryPartner: oldPartnerId } : { assignedDeliveryPartner: null }),
           };
 

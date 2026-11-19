@@ -12,8 +12,17 @@ export function StatusBadge({ status, className = "" }: StatusBadgeProps) {
 
   switch (status) {
     case "READY_FOR_PICKUP":
+    case "READY_FOR_DISPATCH":
       label = "Ready for Pickup";
       bgClasses = "bg-amber-50 text-amber-800 border-amber-200";
+      break;
+    case "RIDER_ACCEPTED":
+      label = "Rider Assigned (Pickup Pending)";
+      bgClasses = "bg-purple-50 text-purple-800 border-purple-200";
+      break;
+    case "PICKED_UP":
+      label = "Picked Up (On Route)";
+      bgClasses = "bg-blue-50 text-blue-800 border-blue-200 animate-pulse";
       break;
     case "OUT_FOR_DELIVERY":
       label = "Out for Delivery";

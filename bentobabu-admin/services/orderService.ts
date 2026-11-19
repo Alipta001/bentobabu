@@ -79,7 +79,9 @@ export const mapBackendOrder = (o: BackendOrder): Order & { _backendId: string; 
   let status: OrderStatus = "pending";
   if (sUpper === "CONFIRMED") status = "confirmed";
   else if (sUpper === "PREPARING") status = "preparing";
-  else if (sUpper === "READY_FOR_PICKUP") status = "ready_for_dispatch";
+  else if (sUpper === "READY_FOR_PICKUP" || sUpper === "READY_FOR_DISPATCH") status = "ready_for_dispatch";
+  else if (sUpper === "RIDER_ACCEPTED") status = "rider_accepted";
+  else if (sUpper === "PICKED_UP") status = "picked_up";
   else if (sUpper === "OUT_FOR_DELIVERY") status = "out_for_delivery";
   else if (sUpper === "DELIVERED") status = "delivered";
   else if (sUpper === "CANCELLED") status = "cancelled";
@@ -203,6 +205,12 @@ export const orderService = {
       const target = mapped === "preparing" ? "PREPARING" : "READY_FOR_PICKUP";
       endpoint = ADMIN_API_ENDPOINTS.ORDERS.KITCHEN_STATUS(resolvedId);
       payload = { status: target, note: note || `Kitchen status updated to ${target}` };
+    } else if (mapped === "rider_accepted") {
+      endpoint = ADMIN_API_ENDPOINTS.ORDERS.DELIVERY_STATUS(resolvedId);
+      payload = { status: "RIDER_ACCEPTED", note: note || `Status updated to RIDER_ACCEPTED` };
+    } else if (mapped === "picked_up") {
+      endpoint = ADMIN_API_ENDPOINTS.ORDERS.DELIVERY_STATUS(resolvedId);
+      payload = { status: "PICKED_UP", note: note || `Delivery status updated to PICKED_UP` };
     } else if (mapped === "out_for_delivery" || mapped === "delivered") {
       const target = mapped === "out_for_delivery" ? "OUT_FOR_DELIVERY" : "DELIVERED";
       endpoint = ADMIN_API_ENDPOINTS.ORDERS.DELIVERY_STATUS(resolvedId);

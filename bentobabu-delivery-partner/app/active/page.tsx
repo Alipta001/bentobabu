@@ -41,7 +41,7 @@ export default function ActiveDeliveriesPage() {
               Active Deliveries
             </h1>
             <p className="text-xs text-gray-500">
-              Orders currently picked up and on route to customer doorsteps.
+              Orders assigned to you awaiting kitchen pickup or in transit to customer.
             </p>
           </div>
 

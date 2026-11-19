@@ -250,11 +250,30 @@ const getEmailTemplate = (eventType, data = {}) => {
       break;
 
     case 'ORDER_READY':
+    case 'ORDER_READY_FOR_DISPATCH':
       title = 'Your Order is Packed & Ready';
       preheader = `Order #${orderNumber} is boxed and awaiting pickup by delivery partner.`;
       content = `
         <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
           Your bento box for order <strong>#${orderNumber}</strong> is freshly packed and waiting for delivery partner pickup.
+        </p>`;
+      break;
+
+    case 'DELIVERY_REQUEST_AVAILABLE':
+      title = 'New Delivery Request Available 📦';
+      preheader = `Order #${orderNumber} is ready for pickup at Central Kitchen.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          Order <strong>#${orderNumber}</strong> is packed and ready for pickup at Central Kitchen. Open your delivery partner dashboard to accept this order.
+        </p>`;
+      break;
+
+    case 'RIDER_ACCEPTED':
+      title = 'Rider Assigned to Your Order 🛵';
+      preheader = `A rider has accepted order #${orderNumber} and will pick it up shortly.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          A rider has accepted your order <strong>#${orderNumber}</strong> and will pick it up shortly from our central kitchen.
         </p>`;
       break;
 
