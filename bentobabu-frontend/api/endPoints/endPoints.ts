@@ -10,6 +10,7 @@ export const API_ENDPOINTS = {
     OTP_STATUS: "/auth/otp-status",
     VERIFY_SIGNUP_OTP: "/auth/verify-signup-otp",
     RESEND_SIGNUP_OTP: "/auth/resend-signup-otp",
+    VERIFY_MOBILE_WIDGET: "/auth/verify-mobile-widget",
     LOGOUT: "/auth/logout",
     LOGOUT_ALL: "/auth/logout-all",
     ME: "/auth/me",

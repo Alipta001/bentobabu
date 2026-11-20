@@ -50,6 +50,16 @@ export interface ResendOtpPayload {
   phone?: string;
 }
 
+export interface VerifyMobileWidgetPayload {
+  mobile: string;
+  accessToken: string;
+}
+
+export interface VerifyMobileWidgetResponse {
+  verified: boolean;
+  phone: string;
+}
+
 export interface OtpStatusResponse {
   challengeId: string;
   channel: "email" | "sms";
@@ -238,6 +248,41 @@ export const authService = {
       return raw.data;
     }
     return raw as { verified: boolean };
+  },
+
+  /**
+   * Fetches the MSG91 widget configuration from the secure Next.js server-side endpoint.
+   * Reads NEXT_MSG91_TOKEN_AUTH server-side without exposing it as a client-side bundle token.
+   */
+  async getMsg91WidgetConfig(): Promise<{ tokenAuth: string; widgetId: string }> {
+    const res = await fetch("/api/auth/msg91-token", {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+
+    const body = await res.json().catch(() => null);
+    if (!res.ok || !body?.success || !body?.data?.tokenAuth) {
+      throw new Error(
+        body?.message || "Failed to load mobile verification configuration from server."
+      );
+    }
+    return body.data;
+  },
+
+  /**
+   * Verifies customer mobile using MSG91 OTP widget access token
+   */
+  async verifyMobileWidget(payload: VerifyMobileWidgetPayload): Promise<VerifyMobileWidgetResponse> {
+    const response = await apiClient.post<
+      ApiResponse<VerifyMobileWidgetResponse> | VerifyMobileWidgetResponse
+    >(API_ENDPOINTS.AUTH.VERIFY_MOBILE_WIDGET, payload);
+
+    const raw = response.data;
+    if (raw && "data" in raw && raw.data) {
+      return raw.data;
+    }
+    return raw as VerifyMobileWidgetResponse;
   },
 
   /**

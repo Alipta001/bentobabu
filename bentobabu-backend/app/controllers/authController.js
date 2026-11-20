@@ -21,6 +21,7 @@ const {
 } = require('../config/redis');
 const { validateEnv } = require('../config/env');
 const { sendSignupOtpEmail } = require('../utils/email');
+const { Msg91WidgetService } = require('../services/msg91WidgetService');
 const {
   normalizePhone,
   maskEmail,
@@ -167,10 +168,15 @@ class AuthController {
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
       // 4. Create or update unverified user
+      // Atomically consumes pre-verification so it is single-use and bound to this registration attempt
+      const isMobilePreVerified = await Msg91WidgetService.consumePhonePreVerification(cleanPhone);
       let user;
       if (existingUser && !(existingUser.isEmailVerified || existingUser.isPhoneVerified)) {
         existingUser.name = name.trim();
         existingUser.password = hashedPassword;
+        if (isMobilePreVerified) {
+          existingUser.isPhoneVerified = true;
+        }
         await existingUser.save();
         await OtpChallenge.deleteMany({ user: existingUser._id, isConsumed: false });
         user = existingUser;
@@ -184,7 +190,7 @@ class AuthController {
           role: 'CUSTOMER',
           isActive: true,
           isEmailVerified: false,
-          isPhoneVerified: false,
+          isPhoneVerified: Boolean(isMobilePreVerified),
         });
         console.log(`[Registration][${correlationId}] New unverified customer account created for destination: ${maskEmail(cleanEmail)}`);
       }
@@ -1383,6 +1389,78 @@ class AuthController {
       next(err);
     }
   }
+
+  /**
+   * POST /api/v1/auth/verify-mobile-widget
+   * Verifies mobile number using MSG91 OTP Widget access token
+   */
+  static async verifyMobileWidget(req, res, next) {
+    try {
+      const { mobile, accessToken } = req.body || {};
+
+      if (!mobile) {
+        return res.status(400).json({
+          success: false,
+          message: 'Mobile number is required.',
+        });
+      }
+
+      const cleanPhone = normalizePhone(mobile);
+      if (!cleanPhone || cleanPhone.length !== 10 || !/^\d{10}$/.test(cleanPhone)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide a valid 10-digit Indian mobile number.',
+        });
+      }
+
+      if (!accessToken || typeof accessToken !== 'string' || !accessToken.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'MSG91 widget access token is required.',
+        });
+      }
+
+      try {
+        const result = await Msg91WidgetService.verifyAccessToken({
+          accessToken,
+          expectedMobile: cleanPhone,
+        });
+
+        // 1. If an existing user matches this phone, update their verification status
+        const existingUser = await User.findOne({ phone: cleanPhone });
+        if (existingUser) {
+          existingUser.isPhoneVerified = true;
+          await existingUser.save();
+        }
+
+        // 2. If authenticated user matches, update their verification status as well
+        if (req.user && req.user._id) {
+          await User.updateOne(
+            { _id: req.user._id },
+            { $set: { isPhoneVerified: true } }
+          );
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Mobile number verified successfully.',
+          data: {
+            verified: true,
+            phone: cleanPhone,
+          },
+        });
+      } catch (verifyErr) {
+        const statusCode = verifyErr.statusCode || (verifyErr.code === 'CONFIG_MISSING' ? 500 : 400);
+        return res.status(statusCode).json({
+          success: false,
+          message: verifyErr.message || 'Mobile verification failed. Please try again.',
+          code: verifyErr.code || 'VERIFICATION_FAILED',
+        });
+      }
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 // Ensure both class methods and legacy property destructurings work seamlessly
@@ -1393,5 +1471,6 @@ AuthController.logout = AuthController.logout;
 AuthController.logoutAll = AuthController.logoutAll;
 AuthController.getMe = AuthController.getMe;
 AuthController.updateProfile = AuthController.updateProfile;
+AuthController.verifyMobileWidget = AuthController.verifyMobileWidget;
 
 module.exports = AuthController;

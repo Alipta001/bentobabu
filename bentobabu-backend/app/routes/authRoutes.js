@@ -14,6 +14,7 @@ router.post('/register', authRateLimiter, AuthController.register);
 router.get('/otp-status', otpRateLimiter, AuthController.getOtpStatus);
 router.post('/verify-signup-otp', otpRateLimiter, AuthController.verifySignupOtp);
 router.post('/resend-signup-otp', otpRateLimiter, AuthController.resendSignupOtp);
+router.post('/verify-mobile-widget', otpRateLimiter, AuthController.verifyMobileWidget);
 router.post('/login', authRateLimiter, AuthController.login);
 router.post('/refresh', refreshRateLimiter, AuthController.refresh);
 router.post('/logout', AuthController.logout);

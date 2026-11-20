@@ -211,6 +211,9 @@ const validateEnv = () => {
     smsApiKey: process.env.SMS_API_KEY || '',
     smsApiSecret: process.env.SMS_API_SECRET || '',
     smsSenderId: process.env.SMS_SENDER_ID || 'BENTOB',
+    // MSG91 OTP Widget Configuration
+    msg91AuthKey: (process.env.MSG91_AUTH_KEY || '').trim(),
+    msg91WidgetId: (process.env.MSG91_WIDGET_ID || '366b746e3258343539303835').trim(),
     // Delivery Fleet Presence & Live Tracking Configuration
     deliveryHeartbeatIntervalMs: parseInt(process.env.DELIVERY_HEARTBEAT_INTERVAL_MS, 10) || 25000,
     deliveryConnectionTimeoutMs: parseInt(process.env.DELIVERY_CONNECTION_TIMEOUT_MS, 10) || 60000,
