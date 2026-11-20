@@ -19,6 +19,10 @@ const LOCK_LEASE_MS = 60000; // 60 seconds lease for distributed lock
 function formatBusinessPhone(rawPhone) {
   if (!rawPhone) return '+91 8584085669';
   const str = String(rawPhone).trim();
+  const digits = str.replace(/\D/g, '');
+  if (digits.includes('9876543210') || digits.includes('98765') || digits.includes('99999')) {
+    return '+91 8584085669';
+  }
   const cleaned = str.replace(/^(\+?91[\s-]*)*/, '').trim();
   return `+91 ${cleaned || '8584085669'}`;
 }
@@ -272,6 +276,10 @@ async function generateAndStoreReceipt(orderOrId, options = {}) {
     }
 
     let rawPhone = activeSettings.SUPPORT_PHONE || '+91 8584085669';
+    const rawDigits = String(rawPhone).replace(/\D/g, '');
+    if (rawDigits.includes('9876543210') || rawDigits.includes('98765') || rawDigits.includes('99999')) {
+      rawPhone = '+91 8584085669';
+    }
     const formattedPhone = formatBusinessPhone(rawPhone);
 
     let rawWebsite = activeSettings.WEBSITE_URL || 'https://bentobabu.com';

@@ -412,6 +412,96 @@ async function runTests() {
     assert.strictEqual(mockOrder.receipt.snapshot.websiteUrl, 'https://bentobabu.com');
   });
 
+  // --- Suite 6: Business Phone Number Regression Verification ---
+  console.log('\n--- Suite 6: Business Phone Number Regression Verification ---');
+
+  await test('Correct number in settings produces +91 8584085669 in receipt PDF', async () => {
+    const order = {
+      orderNumber: 'BB-PHONE-TEST-1',
+      createdAt: new Date(),
+      paymentMethod: 'ONLINE',
+      paymentStatus: 'PAID',
+      paymentDetails: { razorpayPaymentId: 'pay_PHONE_1' },
+      items: [{ productName: 'Chicken Bento', quantity: 1, unitPrice: 200, subtotal: 200 }],
+      grandTotal: 200,
+    };
+    const settings = { SUPPORT_PHONE: '+91 8584085669' };
+    const pdfBuf = await generateOrderReceiptPdf(order, settings);
+    const pdfText = extractTextFromPdf(pdfBuf);
+    assert.ok(pdfText.includes('+91 8584085669'), 'Receipt must display +91 8584085669');
+    assert.ok(!pdfText.includes('+91 +91'), 'Receipt must never duplicate country code');
+  });
+
+  await test('Legacy number in snapshot is sanitized to +91 8584085669 without modifying transaction info', async () => {
+    const order = {
+      orderNumber: 'BB-PHONE-TEST-2',
+      createdAt: new Date(),
+      paymentMethod: 'ONLINE',
+      paymentStatus: 'PAID',
+      paymentDetails: { razorpayPaymentId: 'pay_PHONE_2_TXN_STRICT' },
+      items: [{ productName: 'Veg Bento', quantity: 1, unitPrice: 150, subtotal: 150 }],
+      grandTotal: 150,
+      receipt: {
+        snapshot: {
+          businessName: 'BentoBabu Central Kitchen',
+          supportPhone: '+91 98765 43210', // Legacy dummy number
+        },
+      },
+    };
+    const pdfBuf = await generateOrderReceiptPdf(order, {});
+    const pdfText = extractTextFromPdf(pdfBuf);
+    assert.ok(pdfText.includes('+91 8584085669'), 'Receipt must display authoritative +91 8584085669');
+    assert.ok(!pdfText.includes('9876543210') && !pdfText.includes('98765 43210'), 'Legacy dummy number must be purged');
+    assert.ok(pdfText.includes('pay_PHONE_2_TXN_STRICT'), 'Transaction ID must remain completely unchanged');
+    assert.strictEqual(order.paymentDetails.razorpayPaymentId, 'pay_PHONE_2_TXN_STRICT');
+    assert.strictEqual(order.grandTotal, 150);
+  });
+
+  await test('Legacy number in settings is sanitized to +91 8584085669', async () => {
+    const order = {
+      orderNumber: 'BB-PHONE-TEST-3',
+      createdAt: new Date(),
+      paymentMethod: 'COD',
+      paymentStatus: 'PENDING',
+      items: [{ productName: 'Fish Bento', quantity: 1, unitPrice: 250, subtotal: 250 }],
+      grandTotal: 250,
+    };
+    const settings = { SUPPORT_PHONE: '9876543210' }; // Legacy number in settings
+    const pdfBuf = await generateOrderReceiptPdf(order, settings);
+    const pdfText = extractTextFromPdf(pdfBuf);
+    assert.ok(pdfText.includes('+91 8584085669'), 'Receipt must display authoritative +91 8584085669');
+    assert.ok(!pdfText.includes('9876543210'), 'Legacy number in settings must not be displayed');
+  });
+
+  await test('Missing phone in snapshot and settings safely defaults to +91 8584085669', async () => {
+    const order = {
+      orderNumber: 'BB-PHONE-TEST-4',
+      createdAt: new Date(),
+      paymentMethod: 'ONLINE',
+      paymentStatus: 'PAID',
+      paymentDetails: { razorpayPaymentId: 'pay_PHONE_4' },
+      items: [{ productName: 'Paneer Bento', quantity: 1, unitPrice: 180, subtotal: 180 }],
+      grandTotal: 180,
+      receipt: { snapshot: { supportPhone: '' } },
+    };
+    const pdfBuf = await generateOrderReceiptPdf(order, { SUPPORT_PHONE: '' });
+    const pdfText = extractTextFromPdf(pdfBuf);
+    assert.ok(pdfText.includes('+91 8584085669'), 'Receipt must default to +91 8584085669');
+  });
+
+  await test('Country code +91 is never duplicated with various phone string shapes', () => {
+    // formatBusinessPhone checks
+    const { formatBusinessPhone } = require('../app/utils/receiptGenerator');
+    assert.strictEqual(formatBusinessPhone('+91 8584085669'), '+91 8584085669');
+    assert.strictEqual(formatBusinessPhone('8584085669'), '+91 8584085669');
+    assert.strictEqual(formatBusinessPhone('+91 +91 8584085669'), '+91 8584085669');
+    assert.strictEqual(formatBusinessPhone('918584085669'), '+91 8584085669');
+    assert.strictEqual(formatBusinessPhone('9876543210'), '+91 8584085669');
+    assert.strictEqual(formatBusinessPhone('+91 98765 43210'), '+91 8584085669');
+    assert.strictEqual(formatBusinessPhone(null), '+91 8584085669');
+    assert.strictEqual(formatBusinessPhone(''), '+91 8584085669');
+  });
+
   console.log('\n================================================================');
   console.log(`  ALL ${passed}/${total} TESTS PASSED SUCCESSFULLY!                 `);
   console.log('================================================================\n');

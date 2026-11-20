@@ -20,7 +20,11 @@ class SupportController {
       ]);
 
       const email = emailSetting?.value || process.env.SUPPORT_EMAIL || 'bentobabuofficial@gmail.com';
-      const phone = phoneSetting?.value || process.env.SUPPORT_PHONE || '+91 8584085669';
+      let phone = phoneSetting?.value || process.env.SUPPORT_PHONE || '+91 8584085669';
+      const phoneDigits = String(phone).replace(/\D/g, '');
+      if (phoneDigits.includes('9876543210') || phoneDigits.includes('98765') || phoneDigits.includes('99999')) {
+        phone = '+91 8584085669';
+      }
       const whatsapp = whatsappSetting?.value || process.env.SUPPORT_WHATSAPP || null;
       const operatingHours = hoursSetting?.value || '7:00 AM – 10:30 PM (Daily)';
       const kitchenAddress = addressSetting?.value || 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India';

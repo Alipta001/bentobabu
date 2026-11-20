@@ -47,6 +47,10 @@ function formatTime(dateInput) {
 function formatBusinessPhone(rawPhone) {
   if (!rawPhone) return '+91 8584085669';
   const str = String(rawPhone).trim();
+  const digits = str.replace(/\D/g, '');
+  if (digits.includes('9876543210') || digits.includes('98765') || digits.includes('99999')) {
+    return '+91 8584085669';
+  }
   // Strip duplicate leading +91 / 91
   const cleaned = str.replace(/^(\+?91[\s-]*)*/, '').trim();
   return `+91 ${cleaned || '8584085669'}`;
@@ -103,10 +107,9 @@ function generateOrderReceiptPdf(order, settings = {}) {
       }
 
       let rawPhone = snap.supportPhone || settings.SUPPORT_PHONE || '+91 8584085669';
-      if (rawPhone.includes('98765') || rawPhone.includes('99999')) {
-        if (!snap.supportPhone) {
-          rawPhone = '+91 8584085669';
-        }
+      const rawDigits = String(rawPhone).replace(/\D/g, '');
+      if (rawDigits.includes('9876543210') || rawDigits.includes('98765') || rawDigits.includes('99999')) {
+        rawPhone = '+91 8584085669';
       }
       const formattedPhone = formatBusinessPhone(rawPhone);
 
@@ -760,4 +763,5 @@ function generateOrderReceiptPdf(order, settings = {}) {
 
 module.exports = {
   generateOrderReceiptPdf,
+  formatBusinessPhone,
 };

@@ -60,6 +60,13 @@ class AdminSettingsController {
 
     storedSettings.forEach((item) => {
       if (ALLOWED_SETTING_KEYS.includes(item.key)) {
+        if (item.key === 'SUPPORT_PHONE') {
+          const digits = String(item.value || '').replace(/\D/g, '');
+          if (digits.includes('9876543210') || digits.includes('98765') || digits.includes('99999')) {
+            settingsMap[item.key] = DEFAULT_SETTINGS.SUPPORT_PHONE;
+            return;
+          }
+        }
         settingsMap[item.key] = item.value;
       }
     });
@@ -142,6 +149,12 @@ class AdminSettingsController {
               return res.status(400).json({
                 success: false,
                 message: 'SUPPORT_PHONE must be a valid 10-digit mobile number.',
+              });
+            }
+            if (phoneDigits === '9876543210' || phoneDigits.startsWith('98765') || phoneDigits === '9999999999') {
+              return res.status(400).json({
+                success: false,
+                message: 'SUPPORT_PHONE cannot be the legacy test placeholder number.',
               });
             }
             updatesToApply[key] = `+91 ${phoneDigits}`;
