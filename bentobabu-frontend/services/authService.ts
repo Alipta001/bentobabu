@@ -12,7 +12,7 @@ export interface LoginCredentials {
 export interface RegisterData {
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
   password?: string;
 }
 
@@ -71,6 +71,13 @@ export interface OtpStatusResponse {
   maxResends: number;
 }
 
+export interface OtpConfigResponse {
+  otpEmailEnabled: boolean;
+  otpSmsEnabled: boolean;
+  phoneRequired: boolean;
+  phoneVerificationRequired: boolean;
+}
+
 export interface AuthResponse {
   user: User;
 }
@@ -82,6 +89,34 @@ interface ApiResponse<T> {
 }
 
 export const authService = {
+  /**
+   * Fetches the active OTP registration policy from backend (/auth/otp-config)
+   */
+  async getOtpConfig(): Promise<OtpConfigResponse> {
+    try {
+      const response = await apiClient.get<ApiResponse<OtpConfigResponse>>(
+        API_ENDPOINTS.AUTH.OTP_CONFIG
+      );
+      if (response.data && response.data.data) {
+        return response.data.data;
+      }
+      return {
+        otpEmailEnabled: true,
+        otpSmsEnabled: false,
+        phoneRequired: false,
+        phoneVerificationRequired: false,
+      };
+    } catch {
+      const envSms = process.env.NEXT_PUBLIC_OTP_SMS_ENABLED === "true";
+      return {
+        otpEmailEnabled: true,
+        otpSmsEnabled: envSms,
+        phoneRequired: envSms,
+        phoneVerificationRequired: envSms,
+      };
+    }
+  },
+
   /**
    * Authoritatively fetches authenticated user profile from backend (/auth/me)
    */
@@ -271,7 +306,7 @@ export const authService = {
     >(API_ENDPOINTS.AUTH.REGISTER, {
       name: data.name.trim(),
       email: data.email.trim().toLowerCase(),
-      phone: data.phone.trim(),
+      phone: data.phone ? data.phone.trim() : undefined,
       password: data.password,
     });
 

@@ -26,6 +26,7 @@
     "test:cors": "node test/cors_order_idempotency.test.js",
     "test:msg91-widget": "node test/msg91_otp_widget_verification.test.js",
     "test:google-auth": "node test/google_auth.test.js",
+    "test:email-only-registration": "node test/email_only_registration.test.js",
     "test:phase1-critical-fixes": "node test/phase1_critical_delivery_fixes.test.js",
     "test:all": "npm test"
   },

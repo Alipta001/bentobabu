@@ -117,12 +117,25 @@ class AuthController {
         });
       }
 
-      const cleanPhone = normalizePhone(phone);
-      if (!cleanPhone || !/^\d{10}$/.test(cleanPhone)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Please provide a valid 10-digit Indian mobile number',
-        });
+      const rawPhone = typeof phone === 'string' ? phone.trim() : '';
+      const cleanPhone = normalizePhone(rawPhone);
+
+      // In SMS mode, phone is strictly required
+      if (activeEnv.otpSmsEnabled) {
+        if (!cleanPhone || !/^\d{10}$/.test(cleanPhone)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Please provide a valid 10-digit Indian mobile number',
+          });
+        }
+      } else {
+        // In email-only mode, phone is optional; but if provided, it must be valid 10 digits
+        if (rawPhone && (!cleanPhone || !/^\d{10}$/.test(cleanPhone))) {
+          return res.status(400).json({
+            success: false,
+            message: 'Please provide a valid 10-digit Indian mobile number or leave the field blank',
+          });
+        }
       }
 
       const correlationId = req.headers['x-request-id'] || req.headers['x-correlation-id'] || `reg_${Date.now().toString(36)}`;
@@ -143,8 +156,13 @@ class AuthController {
       }
 
       // 2. Duplicate check
+      const duplicateConditions = [{ email: cleanEmail }];
+      if (cleanPhone) {
+        duplicateConditions.push({ phone: cleanPhone });
+      }
+
       const existingUser = await User.findOne({
-        $or: [{ email: cleanEmail }, { phone: cleanPhone }],
+        $or: duplicateConditions,
       });
 
       if (existingUser) {
@@ -156,7 +174,7 @@ class AuthController {
               message: 'An account with this email address already exists',
             });
           }
-          if (existingUser.phone === cleanPhone) {
+          if (cleanPhone && existingUser.phone === cleanPhone) {
             return res.status(409).json({
               success: false,
               message: 'An account with this mobile number already exists',
@@ -168,23 +186,41 @@ class AuthController {
       // 3. Hash password
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-      // 4. Enforce mandatory MSG91 OTP Widget mobile pre-verification
-      // Atomically consumes pre-verification so it is single-use and bound to this registration attempt
-      const isMobilePreVerified = await Msg91WidgetService.consumePhonePreVerification(cleanPhone);
-      if (!isMobilePreVerified) {
-        console.warn(`[Registration][${correlationId}] Registration rejected: Mobile number not verified via MSG91 widget: ${maskPhoneNumber(cleanPhone)}`);
-        return res.status(400).json({
-          success: false,
-          message: 'Mobile number must be verified via the OTP widget before registering.',
-          code: 'MOBILE_VERIFICATION_REQUIRED',
-        });
+      // 4. Mobile pre-verification policy
+      // In SMS mode (otpSmsEnabled=true), mobile pre-verification via MSG91 OTP widget is strictly mandatory.
+      // In email-only mode (otpSmsEnabled=false), mobile pre-verification is NOT required.
+      let isPhoneVerified = false;
+      let isMobilePreVerified = false;
+
+      if (cleanPhone) {
+        isMobilePreVerified = await Msg91WidgetService.consumePhonePreVerification(cleanPhone);
+      }
+
+      if (activeEnv.otpSmsEnabled) {
+        if (!isMobilePreVerified) {
+          console.warn(`[Registration][${correlationId}] Registration rejected: Mobile number not verified via MSG91 widget: ${maskPhoneNumber(cleanPhone)}`);
+          return res.status(400).json({
+            success: false,
+            message: 'Mobile number must be verified via the OTP widget before registering.',
+            code: 'MOBILE_VERIFICATION_REQUIRED',
+          });
+        }
+        isPhoneVerified = true;
+      } else if (isMobilePreVerified) {
+        // In email-only mode, if mobile was pre-verified via MSG91 widget, honor it
+        isPhoneVerified = true;
       }
 
       let user;
       if (existingUser && !(existingUser.isEmailVerified || existingUser.isPhoneVerified)) {
         existingUser.name = name.trim();
         existingUser.password = hashedPassword;
-        existingUser.isPhoneVerified = true;
+        if (cleanPhone) {
+          existingUser.phone = cleanPhone;
+        }
+        if (isPhoneVerified) {
+          existingUser.isPhoneVerified = true;
+        }
         await existingUser.save();
         await OtpChallenge.deleteMany({ user: existingUser._id, isConsumed: false });
         user = existingUser;
@@ -193,12 +229,12 @@ class AuthController {
         user = await User.create({
           name: name.trim(),
           email: cleanEmail,
-          phone: cleanPhone,
+          phone: cleanPhone || null,
           password: hashedPassword,
           role: 'CUSTOMER',
           isActive: true,
           isEmailVerified: false,
-          isPhoneVerified: true,
+          isPhoneVerified,
         });
         console.log(`[Registration][${correlationId}] New unverified customer account created for destination: ${maskEmail(cleanEmail)}`);
       }
@@ -248,7 +284,7 @@ class AuthController {
         }
 
         // Restore mobile pre-verification so the customer can retry without needing another paid SMS OTP
-        if (isMobilePreVerified) {
+        if (isMobilePreVerified && cleanPhone) {
           try {
             await Msg91WidgetService.recordPhonePreVerified(cleanPhone);
           } catch (restoreErr) {
@@ -276,6 +312,27 @@ class AuthController {
           maskedDestination: channel === 'email' ? maskEmail(cleanEmail) : maskPhoneNumber(cleanPhone),
           cooldown: activeEnv.otpResendCooldownSeconds,
           cooldownSeconds: activeEnv.otpResendCooldownSeconds,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/auth/otp-config
+   * Public configuration endpoint exposing active OTP verification policy
+   */
+  static async getOtpConfig(req, res, next) {
+    try {
+      const activeEnv = validateEnv();
+      return res.status(200).json({
+        success: true,
+        data: {
+          otpEmailEnabled: activeEnv.otpEmailEnabled,
+          otpSmsEnabled: activeEnv.otpSmsEnabled,
+          phoneRequired: activeEnv.otpSmsEnabled,
+          phoneVerificationRequired: activeEnv.otpSmsEnabled,
         },
       });
     } catch (err) {

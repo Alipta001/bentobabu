@@ -42,8 +42,33 @@ function RegisterForm() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [isMobileVerified, setIsMobileVerified] = useState(false);
+  const [phoneRequired, setPhoneRequired] = useState(false);
+  const [phoneVerificationRequired, setPhoneVerificationRequired] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Load active OTP registration policy from backend
+  useEffect(() => {
+    let isMounted = true;
+    authService
+      .getOtpConfig()
+      .then((cfg) => {
+        if (isMounted && cfg) {
+          setPhoneRequired(Boolean(cfg.phoneRequired));
+          setPhoneVerificationRequired(Boolean(cfg.phoneVerificationRequired));
+        }
+      })
+      .catch(() => {
+        const envSms = process.env.NEXT_PUBLIC_OTP_SMS_ENABLED === "true";
+        if (isMounted) {
+          setPhoneRequired(envSms);
+          setPhoneVerificationRequired(envSms);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Restore draft registration state if available (e.g. returning from verify-otp)
   // SECURITY: Never restores or reads password from storage
@@ -115,25 +140,32 @@ function RegisterForm() {
     } else if (digits.length > 10) {
       phoneClean = digits.slice(-10);
     }
-    if (phoneClean.length !== 10 || !/^\d{10}$/.test(phoneClean)) {
-      setError("Please enter a valid 10-digit Indian mobile number.");
+
+    if (phoneVerificationRequired || phoneRequired) {
+      if (phoneClean.length !== 10 || !/^\d{10}$/.test(phoneClean)) {
+        setError("Please enter a valid 10-digit Indian mobile number.");
+        return;
+      }
+    } else if (phoneClean && (phoneClean.length !== 10 || !/^\d{10}$/.test(phoneClean))) {
+      setError("Please enter a valid 10-digit Indian mobile number or leave the field blank.");
       return;
     }
 
-    if (!isMobileVerified) {
-      if (!name.trim()) {
-        setError("Please enter your full name.");
-        return;
-      }
-      if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
-        setError("Please enter a valid email address.");
-        return;
-      }
-      if (!password || password.length < 8) {
-        setError("Password must be at least 8 characters long.");
-        return;
-      }
+    if (!name.trim()) {
+      setError("Please enter your full name.");
+      return;
+    }
+    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (!password || password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
 
+    // Only initiate mobile verification if phone verification is actually required
+    if (phoneVerificationRequired && !isMobileVerified) {
       saveDraft();
       setIsLoading(true);
 
@@ -166,7 +198,7 @@ function RegisterForm() {
       const result = await register({
         name: name.trim(),
         email: email.trim().toLowerCase(),
-        phone: phoneClean,
+        phone: phoneClean || undefined,
         password,
       });
 
@@ -280,23 +312,25 @@ function RegisterForm() {
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-[#222922]">
-                Phone Number *
+                {phoneRequired ? "Phone Number *" : "Phone Number (Optional)"}
               </label>
-              <Msg91OtpWidget
-                phone={phone}
-                isVerified={isMobileVerified}
-                onBeforeSend={saveDraft}
-                returnTo={returnTo}
-                onError={(msg) => setError(msg)}
-                onVerified={() => {
-                  setIsMobileVerified(true);
-                }}
-              />
+              {phoneVerificationRequired && (
+                <Msg91OtpWidget
+                  phone={phone}
+                  isVerified={isMobileVerified}
+                  onBeforeSend={saveDraft}
+                  returnTo={returnTo}
+                  onError={(msg) => setError(msg)}
+                  onVerified={() => {
+                    setIsMobileVerified(true);
+                  }}
+                />
+              )}
             </div>
             <div className="relative">
               <input
                 type="tel"
-                required
+                required={phoneRequired}
                 value={phone}
                 onChange={handlePhoneChange}
                 placeholder="e.g. +91 85840 85669"
@@ -329,7 +363,13 @@ function RegisterForm() {
             disabled={isLoading}
             className="w-full py-3.5 rounded-full bg-[#354B35] text-[#F7F3EA] text-xs font-bold shadow-md hover:bg-[#253525] disabled:opacity-50 cursor-pointer transition-all flex items-center justify-center gap-2"
           >
-            <span>{isLoading ? "Creating Account..." : (!isMobileVerified ? "Verify Mobile to Register" : "Register Account")}</span>
+            <span>
+              {isLoading
+                ? "Creating Account..."
+                : phoneVerificationRequired && !isMobileVerified
+                ? "Verify Mobile to Register"
+                : "Register Account"}
+            </span>
             <ArrowRight className="w-4 h-4 text-[#B99A60]" />
           </button>
         </form>

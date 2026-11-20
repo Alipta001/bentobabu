@@ -775,9 +775,11 @@ const runTests = async () => {
     // -------------------------------------------------------------------------
     // Scenario 10b: Unverified mobile registration rejection (HTTP 400 MOBILE_VERIFICATION_REQUIRED)
     // -------------------------------------------------------------------------
-    console.log(`[Test ${testNumber()}] Scenario 10b: Unverified mobile registration is strictly rejected`);
+    console.log(`[Test ${testNumber()}] Scenario 10b: Unverified mobile registration is strictly rejected when SMS OTP enabled`);
     sentSmsList = [];
     sentEmails = [];
+    process.env.OTP_SMS_ENABLED = 'true';
+    process.env.OTP_EMAIL_ENABLED = 'false';
     const unverifiedPhone = '9876543299';
     const unverifiedRegRes = await makeMockRequest({
       method: 'POST',
@@ -795,6 +797,8 @@ const runTests = async () => {
     assert.strictEqual(unverifiedRegRes.body.code, 'MOBILE_VERIFICATION_REQUIRED');
     assert.strictEqual(sentSmsList.length, 0, 'Must not dispatch any SMS OTP when mobile is unverified');
     assert.strictEqual(sentEmails.length, 0, 'Must not dispatch any Email OTP when mobile is unverified');
+    process.env.OTP_SMS_ENABLED = 'false';
+    process.env.OTP_EMAIL_ENABLED = 'true';
     console.log('  ✓ Unverified mobile registration strictly rejected with HTTP 400 MOBILE_VERIFICATION_REQUIRED');
 
     // -------------------------------------------------------------------------
