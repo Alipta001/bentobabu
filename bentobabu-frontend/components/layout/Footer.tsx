@@ -224,8 +224,14 @@ export function Footer() {
           <div>
             &copy; {new Date().getFullYear()} {brandConfig.name}. All rights reserved.
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-6">
             <span>Privacy Policy</span>
+            <Link
+              href="/google-privacy-policy"
+              className="hover:text-white transition-colors"
+            >
+              Google Privacy Policy
+            </Link>
             <span>Terms of Service</span>
             <span>FSSAI License No. 11223344000123</span>
           </div>
