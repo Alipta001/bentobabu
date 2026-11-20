@@ -16,6 +16,8 @@ const connectSrc = [
   "https://verify.msg91.com",
   "https://verify.phone91.com",
   "https://control.msg91.com",
+  "https://hcaptcha.com",
+  "https://*.hcaptcha.com",
 ].join(" ");
 
 const securityHeaders = [
@@ -51,12 +53,12 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com https://verify.msg91.com https://verify.phone91.com",
-      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com https://verify.msg91.com https://verify.phone91.com https://hcaptcha.com https://*.hcaptcha.com",
+      "style-src 'self' 'unsafe-inline' https://hcaptcha.com https://*.hcaptcha.com",
       "img-src 'self' data: blob: https://images.unsplash.com https://*.razorpay.com https://res.cloudinary.com https://media.bentobabu.com https://*.r2.cloudflarestorage.com https://i.ytimg.com https://*.ytimg.com",
       "media-src 'self' blob: https://media.bentobabu.com https://*.r2.cloudflarestorage.com",
       "font-src 'self' data:",
-      "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://www.youtube-nocookie.com https://www.youtube.com https://verify.msg91.com https://verify.phone91.com",
+      "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://www.youtube-nocookie.com https://www.youtube.com https://verify.msg91.com https://verify.phone91.com https://hcaptcha.com https://*.hcaptcha.com",
       `connect-src ${connectSrc}`,
     ].join("; "),
   },

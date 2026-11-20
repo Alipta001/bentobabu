@@ -141,13 +141,15 @@ const runAuditTests = () => {
   }
   console.log('    ✓ Environment files correctly use NEXT_MSG91_TOKEN_AUTH');
 
-  // Test 7: Verify CSP headers in next.config.ts allow MSG91 domains
-  test('next.config.ts CSP headers allow MSG91 domains');
+  // Test 7: Verify CSP headers in next.config.ts allow MSG91 and hCaptcha domains
+  test('next.config.ts CSP headers allow MSG91 and hCaptcha domains');
   const nextConfigPath = path.resolve(__dirname, '../next.config.ts');
   const nextConfigCode = fs.readFileSync(nextConfigPath, 'utf-8');
   assert.ok(nextConfigCode.includes('https://verify.msg91.com'), 'script-src/connect-src must allow verify.msg91.com');
   assert.ok(nextConfigCode.includes('https://verify.phone91.com'), 'script-src/connect-src must allow verify.phone91.com');
-  console.log('    ✓ CSP headers permit MSG91 scripts, iframes, and connect endpoints');
+  assert.ok(nextConfigCode.includes('https://hcaptcha.com'), 'script-src/frame-src/style-src/connect-src must allow hcaptcha.com');
+  assert.ok(nextConfigCode.includes('https://*.hcaptcha.com'), 'script-src/frame-src/style-src/connect-src must allow *.hcaptcha.com');
+  console.log('    ✓ CSP headers permit MSG91 and hCaptcha scripts, iframes, styles, and connect endpoints');
 
   console.log('\n======================================================');
   console.log(`🎉 ALL ${passed} FRONTEND TOKEN CONFIG TESTS PASSED!`);
