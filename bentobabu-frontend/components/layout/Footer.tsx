@@ -232,7 +232,12 @@ export function Footer() {
             >
               Google Privacy Policy
             </Link>
-            <span>Terms of Service</span>
+            <Link
+              href="/terms"
+              className="hover:text-white transition-colors"
+            >
+              Terms of Service
+            </Link>
             <span>FSSAI License No. 11223344000123</span>
           </div>
         </div>
