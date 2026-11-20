@@ -1176,7 +1176,14 @@ class OrderController {
         });
       }
 
-      const result = await orderReceiptService.generateAndStoreReceipt(order, { forceRegenerate: true });
+      const updateBusinessDetails = Boolean(
+        req.body?.updateBusinessDetails || req.query?.updateBusinessDetails === 'true'
+      );
+
+      const result = await orderReceiptService.generateAndStoreReceipt(order, {
+        forceRegenerate: true,
+        updateBusinessDetails,
+      });
 
       return res.status(200).json({
         success: true,

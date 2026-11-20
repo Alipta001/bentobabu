@@ -19,11 +19,11 @@ class SupportController {
         SystemSetting.findOne({ key: 'KITCHEN_ADDRESS' }).lean(),
       ]);
 
-      const email = emailSetting?.value || process.env.SUPPORT_EMAIL || 'care@bentobabu.in';
-      const phone = phoneSetting?.value || process.env.SUPPORT_PHONE || '+91 98765 43210';
+      const email = emailSetting?.value || process.env.SUPPORT_EMAIL || 'bentobabuofficial@gmail.com';
+      const phone = phoneSetting?.value || process.env.SUPPORT_PHONE || '+91 8584085669';
       const whatsapp = whatsappSetting?.value || process.env.SUPPORT_WHATSAPP || null;
       const operatingHours = hoursSetting?.value || '7:00 AM – 10:30 PM (Daily)';
-      const kitchenAddress = addressSetting?.value || 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India - 700120';
+      const kitchenAddress = addressSetting?.value || 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India';
 
       const isWhatsAppConfigured = Boolean(
         whatsapp || (process.env.WHATSAPP_ENABLED === 'true' && process.env.WHATSAPP_PHONE_NUMBER_ID)

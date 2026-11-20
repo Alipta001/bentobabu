@@ -138,7 +138,7 @@ class DeliveryController {
             name: kitchenNameSetting?.value || 'BentoBabu Central Kitchen',
             landmark: kitchenLandmarkSetting?.value || 'Apollo Pharmacy / Apollo 24|7',
             address: kitchenAddressSetting?.value || 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India',
-            pincode: kitchenPinSetting?.value || '700120',
+            pincode: kitchenPinSetting?.value || '700122',
             latitude: kitchenLat,
             longitude: kitchenLng,
             googleMapsUrl: `https://www.google.com/maps?q=${kitchenLat},${kitchenLng}`,

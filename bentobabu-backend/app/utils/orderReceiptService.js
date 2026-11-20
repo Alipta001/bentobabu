@@ -16,6 +16,13 @@ const b2Storage = require('./b2Storage');
 const MAX_RETRIES = 5;
 const LOCK_LEASE_MS = 60000; // 60 seconds lease for distributed lock
 
+function formatBusinessPhone(rawPhone) {
+  if (!rawPhone) return '+91 8584085669';
+  const str = String(rawPhone).trim();
+  const cleaned = str.replace(/^(\+?91[\s-]*)*/, '').trim();
+  return `+91 ${cleaned || '8584085669'}`;
+}
+
 /**
  * Structured logger helper
  */
@@ -246,22 +253,43 @@ async function generateAndStoreReceipt(orderOrId, options = {}) {
   const activeSettings = await AdminSettingsController.getAllMergedSettings();
 
   // If order already has an immutable legal snapshot, prioritize it to ensure 100% historical accuracy
-  let snapshot =
-    lockedOrder.receipt && lockedOrder.receipt.snapshot && lockedOrder.receipt.snapshot.businessName
-      ? lockedOrder.receipt.snapshot
-      : {
-          businessName: activeSettings.BUSINESS_NAME || 'BentoBabu Central Kitchen',
-          businessAddress:
-            activeSettings.BUSINESS_ADDRESS ||
-            activeSettings.KITCHEN_ADDRESS ||
-            'Chandanpukur Bazar, Barrackpore, West Bengal - 700120',
-          supportEmail: activeSettings.SUPPORT_EMAIL || 'care@bentobabu.in',
-          supportPhone: activeSettings.SUPPORT_PHONE ? `+91 ${activeSettings.SUPPORT_PHONE}` : '+91 98765 43210',
-          websiteUrl: activeSettings.WEBSITE_URL || 'https://bentobabu.in',
-          fssaiStatus: activeSettings.FSSAI_STATUS || 'APPLICATION_SUBMITTED',
-          fssaiNumber: activeSettings.FSSAI_NUMBER ? String(activeSettings.FSSAI_NUMBER).trim() : '',
-          gstin: activeSettings.GSTIN ? String(activeSettings.GSTIN).trim() : '',
-        };
+  // unless options.updateBusinessDetails is explicitly requested for controlled correction
+  let snapshot;
+  if (!options.updateBusinessDetails && lockedOrder.receipt && lockedOrder.receipt.snapshot && lockedOrder.receipt.snapshot.businessName) {
+    snapshot = lockedOrder.receipt.snapshot;
+  } else {
+    let rawAddress =
+      activeSettings.BUSINESS_ADDRESS ||
+      activeSettings.KITCHEN_ADDRESS ||
+      'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India';
+    if (rawAddress.includes('700120')) {
+      rawAddress = rawAddress.replace('700120', '700122');
+    }
+
+    let rawEmail = activeSettings.SUPPORT_EMAIL || 'bentobabuofficial@gmail.com';
+    if (rawEmail === 'care@bentobabu.in' || rawEmail === 'support@bentobabu.in') {
+      rawEmail = 'bentobabuofficial@gmail.com';
+    }
+
+    let rawPhone = activeSettings.SUPPORT_PHONE || '+91 8584085669';
+    const formattedPhone = formatBusinessPhone(rawPhone);
+
+    let rawWebsite = activeSettings.WEBSITE_URL || 'https://bentobabu.com';
+    if (rawWebsite.includes('bentobabu.in')) {
+      rawWebsite = rawWebsite.replace('bentobabu.in', 'bentobabu.com');
+    }
+
+    snapshot = {
+      businessName: activeSettings.BUSINESS_NAME || 'BentoBabu Central Kitchen',
+      businessAddress: rawAddress,
+      supportEmail: rawEmail,
+      supportPhone: formattedPhone,
+      websiteUrl: rawWebsite,
+      fssaiStatus: activeSettings.FSSAI_STATUS || 'APPLICATION_SUBMITTED',
+      fssaiNumber: activeSettings.FSSAI_NUMBER ? String(activeSettings.FSSAI_NUMBER).trim() : '',
+      gstin: activeSettings.GSTIN ? String(activeSettings.GSTIN).trim() : '',
+    };
+  }
 
   if (!lockedOrder.receipt) lockedOrder.receipt = {};
   lockedOrder.receipt.snapshot = snapshot;

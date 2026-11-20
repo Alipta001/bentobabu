@@ -2,8 +2,8 @@ const { SystemSetting } = require('../models');
 
 const DEFAULT_SETTINGS = {
   BUSINESS_NAME: 'Bento Babu',
-  SUPPORT_EMAIL: 'support@bentobabu.in',
-  SUPPORT_PHONE: '9876543210',
+  SUPPORT_EMAIL: 'bentobabuofficial@gmail.com',
+  SUPPORT_PHONE: '+91 8584085669',
   MINIMUM_ORDER_AMOUNT: 99,
   MINIMUM_ORDER_VALUE: 99,
   DEFAULT_DELIVERY_FEE: 30,
@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS = {
   KITCHEN_NAME: 'BentoBabu Central Kitchen',
   KITCHEN_LANDMARK: 'Apollo Pharmacy / Apollo 24|7',
   KITCHEN_ADDRESS: 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India',
-  KITCHEN_PINCODE: '700120',
+  KITCHEN_PINCODE: '700122',
   KITCHEN_LATITUDE: 22.7666909,
   KITCHEN_LONGITUDE: 88.3788318,
   FSSAI_STATUS: 'APPLICATION_SUBMITTED',
@@ -34,8 +34,8 @@ const DEFAULT_SETTINGS = {
   FSSAI_CERTIFICATE_URL: '',
   GSTIN: '',
   GST_CERTIFICATE_URL: '',
-  WEBSITE_URL: 'https://bentobabu.in',
-  BUSINESS_ADDRESS: 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700120, India',
+  WEBSITE_URL: 'https://bentobabu.com',
+  BUSINESS_ADDRESS: 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India',
 };
 
 const ALLOWED_SETTING_KEYS = Object.keys(DEFAULT_SETTINGS);
@@ -48,7 +48,14 @@ class AdminSettingsController {
    * Helper to retrieve all settings merged with default fallbacks
    */
   static async getAllMergedSettings() {
-    const storedSettings = await SystemSetting.find().lean();
+    let storedSettings = [];
+    if (SystemSetting.db && SystemSetting.db.readyState === 1) {
+      try {
+        storedSettings = await SystemSetting.find().lean();
+      } catch {
+        storedSettings = [];
+      }
+    }
     const settingsMap = { ...DEFAULT_SETTINGS };
 
     storedSettings.forEach((item) => {
@@ -126,14 +133,18 @@ class AdminSettingsController {
             break;
 
           case 'SUPPORT_PHONE': {
-            const digits = String(val).replace(/\D/g, '');
-            if (digits.length !== 10) {
+            const rawDigits = String(val).replace(/\D/g, '');
+            let phoneDigits = rawDigits;
+            if (rawDigits.length === 12 && rawDigits.startsWith('91')) {
+              phoneDigits = rawDigits.slice(2);
+            }
+            if (phoneDigits.length !== 10) {
               return res.status(400).json({
                 success: false,
                 message: 'SUPPORT_PHONE must be a valid 10-digit mobile number.',
               });
             }
-            updatesToApply[key] = digits;
+            updatesToApply[key] = `+91 ${phoneDigits}`;
             break;
           }
 

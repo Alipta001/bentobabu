@@ -3,13 +3,14 @@ const fs = require('fs');
 const PDFDocument = require('pdfkit');
 
 /**
- * Format a Date object or ISO string to a clean Indian format
+ * Format a Date object or ISO string to Indian Standard Time (Asia/Kolkata)
  */
 function formatDateTime(dateInput) {
   if (!dateInput) return 'N/A';
   const d = new Date(dateInput);
   if (isNaN(d.getTime())) return 'N/A';
-  return d.toLocaleDateString('en-IN', {
+  return d.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -24,10 +25,31 @@ function formatDate(dateInput) {
   const d = new Date(dateInput);
   if (isNaN(d.getTime())) return 'N/A';
   return d.toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
+}
+
+function formatTime(dateInput) {
+  if (!dateInput) return 'N/A';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return 'N/A';
+  return d.toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function formatBusinessPhone(rawPhone) {
+  if (!rawPhone) return '+91 8584085669';
+  const str = String(rawPhone).trim();
+  // Strip duplicate leading +91 / 91
+  const cleaned = str.replace(/^(\+?91[\s-]*)*/, '').trim();
+  return `+91 ${cleaned || '8584085669'}`;
 }
 
 function formatCurrency(amount) {
@@ -65,16 +87,40 @@ function generateOrderReceiptPdf(order, settings = {}) {
 
       // Merge authoritative settings with immutable order receipt snapshot if present
       const snap = order.receipt && order.receipt.snapshot ? order.receipt.snapshot : {};
+
+      let rawAddress =
+        snap.businessAddress ||
+        settings.BUSINESS_ADDRESS ||
+        settings.KITCHEN_ADDRESS ||
+        'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India';
+      if (rawAddress.includes('700120')) {
+        rawAddress = rawAddress.replace('700120', '700122');
+      }
+
+      let rawEmail = snap.supportEmail || settings.SUPPORT_EMAIL || 'bentobabuofficial@gmail.com';
+      if (rawEmail === 'care@bentobabu.in' || rawEmail === 'support@bentobabu.in') {
+        rawEmail = 'bentobabuofficial@gmail.com';
+      }
+
+      let rawPhone = snap.supportPhone || settings.SUPPORT_PHONE || '+91 8584085669';
+      if (rawPhone.includes('98765') || rawPhone.includes('99999')) {
+        if (!snap.supportPhone) {
+          rawPhone = '+91 8584085669';
+        }
+      }
+      const formattedPhone = formatBusinessPhone(rawPhone);
+
+      let rawWebsite = snap.websiteUrl || settings.WEBSITE_URL || 'https://bentobabu.com';
+      if (rawWebsite.includes('bentobabu.in')) {
+        rawWebsite = rawWebsite.replace('bentobabu.in', 'bentobabu.com');
+      }
+
       const activeSettings = {
         BUSINESS_NAME: snap.businessName || settings.BUSINESS_NAME || 'BentoBabu Central Kitchen',
-        BUSINESS_ADDRESS:
-          snap.businessAddress ||
-          settings.BUSINESS_ADDRESS ||
-          settings.KITCHEN_ADDRESS ||
-          'Chandanpukur Bazar, Barrackpore, West Bengal - 700120',
-        SUPPORT_EMAIL: snap.supportEmail || settings.SUPPORT_EMAIL || 'care@bentobabu.in',
-        SUPPORT_PHONE: snap.supportPhone || settings.SUPPORT_PHONE || '+91 98765 43210',
-        WEBSITE_URL: snap.websiteUrl || settings.WEBSITE_URL || 'https://bentobabu.in',
+        BUSINESS_ADDRESS: rawAddress,
+        SUPPORT_EMAIL: rawEmail,
+        SUPPORT_PHONE: formattedPhone,
+        WEBSITE_URL: rawWebsite,
         FSSAI_STATUS: snap.fssaiStatus || settings.FSSAI_STATUS || 'APPLICATION_SUBMITTED',
         FSSAI_NUMBER:
           snap.fssaiNumber !== undefined && snap.fssaiNumber !== null
@@ -134,13 +180,13 @@ function generateOrderReceiptPdf(order, settings = {}) {
           .font('Helvetica')
           .fontSize(10)
           .fillColor(COLOR_ACCENT)
-          .text('Good Food. Better Living.', margin, 65);
+          .text('Good Food. Better Living.', margin, 68);
       } else {
         doc
           .font('Helvetica')
           .fontSize(9)
           .fillColor(COLOR_ACCENT)
-          .text('Good Food. Better Living.', margin, 96);
+          .text('Good Food. Better Living.', margin, 114, { width: 130, align: 'center' });
       }
 
       // Top Right: Document Title & Meta
@@ -176,7 +222,7 @@ function generateOrderReceiptPdf(order, settings = {}) {
         });
 
       // Horizontal separator
-      let currentY = 120;
+      let currentY = 136;
       doc
         .strokeColor(COLOR_BORDER)
         .lineWidth(1)
@@ -209,7 +255,7 @@ function generateOrderReceiptPdf(order, settings = {}) {
       bY += 13;
       const kitchenAddress =
         activeSettings.BUSINESS_ADDRESS ||
-        'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700120, India';
+        'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India';
 
       doc
         .font('Helvetica')
@@ -218,19 +264,19 @@ function generateOrderReceiptPdf(order, settings = {}) {
         .text(kitchenAddress, leftColX, bY, { width: colWidth, lineGap: 1.5 });
 
       bY = doc.y + 4;
-      const supportEmail = activeSettings.SUPPORT_EMAIL || 'care@bentobabu.in';
-      const supportPhone = activeSettings.SUPPORT_PHONE ? `+91 ${activeSettings.SUPPORT_PHONE}` : '+91 98765 43210';
-      const website = activeSettings.WEBSITE_URL || 'https://bentobabu.in';
+      const supportEmail = activeSettings.SUPPORT_EMAIL || 'bentobabuofficial@gmail.com';
+      const supportPhone = activeSettings.SUPPORT_PHONE;
+      const website = activeSettings.WEBSITE_URL || 'https://bentobabu.com';
 
       doc
         .font('Helvetica')
         .fontSize(8)
         .fillColor(COLOR_MUTED)
         .text(`Email: ${supportEmail}`, leftColX, bY)
-        .text(`Phone: ${supportPhone}`, leftColX, bY + 11)
-        .text(`Web: ${website}`, leftColX, bY + 22);
+        .text(`Phone: ${supportPhone}`, leftColX, doc.y + 2)
+        .text(`Web: ${website}`, leftColX, doc.y + 2);
 
-      bY += 34;
+      bY = doc.y + 8;
 
       // FSSAI compliance information
       const fssaiStatus = activeSettings.FSSAI_STATUS || 'APPLICATION_SUBMITTED';
@@ -292,7 +338,7 @@ function generateOrderReceiptPdf(order, settings = {}) {
       const formattedAddr = [
         addr.addressLine,
         addr.landmark ? `Near ${addr.landmark}` : null,
-        `${addr.city || 'Barrackpore'}, ${addr.state || 'West Bengal'} - ${addr.pincode || '700120'}`,
+        `${addr.city || 'Barrackpore'}, ${addr.state || 'West Bengal'} - ${addr.pincode || '700122'}`,
       ]
         .filter(Boolean)
         .join(', ');
@@ -430,8 +476,9 @@ function generateOrderReceiptPdf(order, settings = {}) {
       const rightBoxX = pageWidth - margin - rightBoxWidth;
 
       // Left Box: Payment Details & Status
+      const leftBoxHeight = 138;
       doc
-        .rect(margin, summaryYStart, leftBoxWidth, 120)
+        .rect(margin, summaryYStart, leftBoxWidth, leftBoxHeight)
         .fillColor(COLOR_LIGHT_BG)
         .strokeColor(COLOR_BORDER)
         .lineWidth(1)
@@ -441,73 +488,155 @@ function generateOrderReceiptPdf(order, settings = {}) {
         .font('Helvetica-Bold')
         .fontSize(9)
         .fillColor(COLOR_PRIMARY)
-        .text('PAYMENT & ORDER STATUS', margin + 12, summaryYStart + 10);
+        .text('PAYMENT & TRANSACTION DETAILS', margin + 12, summaryYStart + 10);
 
-      let payY = summaryYStart + 28;
+      let payY = summaryYStart + 26;
       const isCod = order.paymentMethod === 'COD';
       const paymentMethodLabel = isCod ? 'CASH ON DELIVERY (COD)' : 'RAZORPAY ONLINE';
       const paymentStatus = order.paymentStatus || (isCod ? 'COD_PENDING' : 'PENDING');
+      const isPaid = paymentStatus === 'PAID';
 
       doc
         .font('Helvetica')
-        .fontSize(8)
+        .fontSize(7.5)
         .fillColor(COLOR_MUTED)
         .text('Payment Method:', margin + 12, payY)
         .font('Helvetica-Bold')
         .fillColor(COLOR_TEXT)
-        .text(paymentMethodLabel, margin + 95, payY);
+        .text(paymentMethodLabel, margin + 85, payY);
 
-      payY += 15;
+      payY += 13;
       let statusColor = COLOR_PRIMARY;
       if (paymentStatus === 'PAID') statusColor = '#1B6B2B';
       else if (paymentStatus === 'FAILED' || paymentStatus === 'REFUND_FAILED') statusColor = '#A82525';
       else if (paymentStatus.includes('REFUND')) statusColor = '#8A5816';
+      else if (paymentStatus === 'PENDING' || paymentStatus === 'COD_PENDING') statusColor = '#8C713B';
 
       doc
         .font('Helvetica')
-        .fontSize(8)
+        .fontSize(7.5)
         .fillColor(COLOR_MUTED)
         .text('Payment Status:', margin + 12, payY)
         .font('Helvetica-Bold')
         .fillColor(statusColor)
-        .text(paymentStatus.replace(/_/g, ' '), margin + 95, payY);
+        .text(paymentStatus.replace(/_/g, ' '), margin + 85, payY);
 
-      payY += 15;
+      payY += 13;
       doc
         .font('Helvetica')
-        .fontSize(8)
+        .fontSize(7.5)
         .fillColor(COLOR_MUTED)
         .text('Order Status:', margin + 12, payY)
         .font('Helvetica-Bold')
         .fillColor(COLOR_PRIMARY)
-        .text(String(order.orderStatus || 'CONFIRMED').replace(/_/g, ' '), margin + 95, payY);
+        .text(String(order.orderStatus || 'CONFIRMED').replace(/_/g, ' '), margin + 85, payY);
 
-      payY += 15;
+      payY += 13;
       const pDetails = order.paymentDetails || {};
-      if (!isCod && pDetails.razorpayPaymentId) {
+      if (!isCod) {
+        if (pDetails.razorpayPaymentId) {
+          doc
+            .font('Helvetica')
+            .fontSize(7.5)
+            .fillColor(COLOR_MUTED)
+            .text('Transaction ID:', margin + 12, payY)
+            .font('Helvetica-Bold')
+            .fillColor(COLOR_TEXT)
+            .text(pDetails.razorpayPaymentId, margin + 85, payY, { width: leftBoxWidth - 95, ellipsis: true });
+          payY += 12;
+        } else if (isPaid) {
+          doc
+            .font('Helvetica')
+            .fontSize(7.5)
+            .fillColor(COLOR_MUTED)
+            .text('Transaction ID:', margin + 12, payY)
+            .font('Helvetica-Bold')
+            .fillColor(COLOR_TEXT)
+            .text('Online Payment Verified', margin + 85, payY);
+          payY += 12;
+        } else {
+          doc
+            .font('Helvetica')
+            .fontSize(7.5)
+            .fillColor(COLOR_MUTED)
+            .text('Transaction ID:', margin + 12, payY)
+            .font('Helvetica-Oblique')
+            .fillColor(COLOR_MUTED)
+            .text('Not Applicable (Pending / Failed)', margin + 85, payY);
+          payY += 12;
+        }
+
+        if (pDetails.razorpayOrderId) {
+          doc
+            .font('Helvetica')
+            .fontSize(7)
+            .fillColor(COLOR_MUTED)
+            .text(`Razorpay Order ID: ${pDetails.razorpayOrderId}`, margin + 12, payY, { width: leftBoxWidth - 24, ellipsis: true });
+          payY += 11;
+        }
+      } else {
+        // COD Orders: NEVER invent a transaction ID
         doc
           .font('Helvetica')
           .fontSize(7.5)
           .fillColor(COLOR_MUTED)
-          .text(`Txn ID: ${pDetails.razorpayPaymentId}`, margin + 12, payY);
-        payY += 13;
-      } else if (isCod) {
-        const codNotice =
-          order.paymentStatus === 'PAID'
-            ? 'Cash collected and verified upon delivery.'
-            : 'Payment to be collected by rider upon delivery.';
+          .text('Transaction ID:', margin + 12, payY)
+          .font('Helvetica')
+          .fillColor(COLOR_TEXT)
+          .text('Cash on Delivery', margin + 85, payY);
+        payY += 12;
+
+        const codNotice = isPaid
+          ? 'Cash collected and verified upon delivery.'
+          : 'Payment to be collected by rider upon delivery.';
         doc
           .font('Helvetica-Oblique')
-          .fontSize(7.5)
+          .fontSize(7)
           .fillColor(COLOR_MUTED)
           .text(codNotice, margin + 12, payY, { width: leftBoxWidth - 24 });
-        payY += 14;
+        payY += 11;
+      }
+
+      // Payment Timestamp (IST) derived strictly from verified database records
+      let paymentTimestamp = null;
+      if (isPaid) {
+        if (isCod) {
+          paymentTimestamp = pDetails.collectedAt || pDetails.cashCollection?.collectedAt;
+          if (!paymentTimestamp && Array.isArray(order.statusHistory)) {
+            const deliveredEntry = order.statusHistory.find((s) => s.status === 'DELIVERED');
+            if (deliveredEntry && deliveredEntry.changedAt) paymentTimestamp = deliveredEntry.changedAt;
+          }
+        } else {
+          paymentTimestamp = pDetails.paidAt;
+          if (!paymentTimestamp && Array.isArray(order.statusHistory)) {
+            const confirmedEntry = order.statusHistory.find((s) => s.status === 'CONFIRMED');
+            if (confirmedEntry && confirmedEntry.changedAt) paymentTimestamp = confirmedEntry.changedAt;
+          }
+        }
+        if (!paymentTimestamp) {
+          paymentTimestamp = order.updatedAt || order.createdAt;
+        }
+
+        doc
+          .font('Helvetica')
+          .fontSize(7)
+          .fillColor(COLOR_MUTED)
+          .text(`Paid: ${formatDateTime(paymentTimestamp)} (IST)`, margin + 12, payY);
+        payY += 11;
+      } else {
+        const pendingNote = isCod ? 'Payment: Pending Collection (On Delivery)' : 'Payment: Pending / Incomplete';
+        doc
+          .font('Helvetica-Oblique')
+          .fontSize(7)
+          .fillColor(COLOR_MUTED)
+          .text(pendingNote, margin + 12, payY);
+        payY += 11;
       }
 
       if (order.cancellationReason || order.orderStatus === 'CANCELLED') {
         doc
           .font('Helvetica-Bold')
-          .fontSize(7.5)
+          .fontSize(7)
           .fillColor('#A82525')
           .text(
             `Notice: Order Cancelled${order.cancellationReason ? ` (${order.cancellationReason})` : ''}`,
@@ -606,7 +735,7 @@ function generateOrderReceiptPdf(order, settings = {}) {
           .fontSize(7.5)
           .fillColor(COLOR_MUTED)
           .text(
-            'Mindful Indian Bento & Clean Meal Boxes • Good Food. Better Living. • Chandanpukur Bazar, Barrackpore, West Bengal - 700120',
+            'Mindful Indian Bento & Clean Meal Boxes • Good Food. Better Living. • Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India',
             margin,
             footerY + 20,
             { align: 'center', width: contentWidth }

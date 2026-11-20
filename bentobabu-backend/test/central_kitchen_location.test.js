@@ -109,7 +109,7 @@ async function run() {
     assert.ok(kitchenData, 'centralKitchen must exist in /delivery/config');
     assert.equal(kitchenData.name, 'BentoBabu Central Kitchen');
     assert.equal(kitchenData.landmark, 'Apollo Pharmacy / Apollo 24|7');
-    assert.equal(kitchenData.pincode, '700120');
+    assert.equal(kitchenData.pincode, '700122');
     assert.equal(kitchenData.latitude, 22.7666909);
     assert.equal(kitchenData.longitude, 88.3788318);
     assert.ok(kitchenData.address.includes('Chandanpukur'));
@@ -141,7 +141,7 @@ async function run() {
     const settings = settingsGetRes.body?.data?.settings;
     assert.equal(settings.KITCHEN_NAME, 'BentoBabu Central Kitchen');
     assert.equal(settings.KITCHEN_LANDMARK, 'Apollo Pharmacy / Apollo 24|7');
-    assert.equal(settings.KITCHEN_PINCODE, '700120');
+    assert.equal(settings.KITCHEN_PINCODE, '700122');
     assert.equal(settings.KITCHEN_LATITUDE, 22.7666909);
     assert.equal(settings.KITCHEN_LONGITUDE, 88.3788318);
     console.log('✅ [PASS] 3. GET /api/v1/admin/settings returns central kitchen keys');

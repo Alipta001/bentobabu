@@ -38,7 +38,7 @@ async function seedDatabase() {
       { key: 'KITCHEN_NAME', value: 'BentoBabu Central Kitchen', description: 'Central Cloud Kitchen official business name' },
       { key: 'KITCHEN_LANDMARK', value: 'Apollo Pharmacy / Apollo 24|7', description: 'Central kitchen prominent landmark' },
       { key: 'KITCHEN_ADDRESS', value: 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India', description: 'Central kitchen physical address' },
-      { key: 'KITCHEN_PINCODE', value: '700120', description: 'Central kitchen postal PIN code' },
+      { key: 'KITCHEN_PINCODE', value: '700122', description: 'Central kitchen postal PIN code' },
       { key: 'KITCHEN_LATITUDE', value: 22.7666909, description: 'Central kitchen GPS latitude coordinate' },
       { key: 'KITCHEN_LONGITUDE', value: 88.3788318, description: 'Central kitchen GPS longitude coordinate' },
     ];
