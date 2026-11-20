@@ -6,6 +6,7 @@
 export const API_ENDPOINTS = {
   AUTH: {
     LOGIN: "/auth/login",
+    GOOGLE: "/auth/google",
     REGISTER: "/auth/register",
     OTP_STATUS: "/auth/otp-status",
     VERIFY_SIGNUP_OTP: "/auth/verify-signup-otp",

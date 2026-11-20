@@ -15,7 +15,7 @@
  */
 
 const crypto = require('crypto');
-const { normalizePhone } = require('../utils/sms');
+const { normalizePhone, maskPhoneNumber } = require('../utils/sms');
 const { redisGet, redisSet, redisDel, isRedisReady, getRedisClient } = require('../config/redis');
 
 // In-memory fallback stores (used when Redis is unavailable or in mock test mode)
@@ -265,9 +265,13 @@ class Msg91WidgetService {
    * @param {Object} params
    * @param {string} params.accessToken - JWT access token returned by MSG91 OTP widget
    * @param {string} params.expectedMobile - Customer registration phone number
+   * @param {string} [params.correlationId] - Optional request correlation ID for structured tracing
    * @returns {Promise<{ success: boolean, verified: boolean, phone: string, providerResponse?: any }>}
    */
-  static async verifyAccessToken({ accessToken, expectedMobile }) {
+  static async verifyAccessToken({ accessToken, expectedMobile, correlationId }) {
+    const corrId =
+      correlationId || `mwv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+
     // 1. Input Validation
     if (!accessToken || typeof accessToken !== 'string' || !accessToken.trim()) {
       const err = new Error('Access token is required and must be a valid string.');
@@ -293,9 +297,34 @@ class Msg91WidgetService {
     }
 
     // 2. Auth Key Check
-    const authKey = (process.env.MSG91_AUTH_KEY || '').trim();
+    // Checks standard MSG91_AUTH_KEY as well as common platform variations; removes accidental surrounding quotes
+    const authKey = (
+      process.env.MSG91_AUTH_KEY ||
+      process.env.MSG91_AUTHKEY ||
+      process.env.MSG_91_AUTH_KEY ||
+      ''
+    ).replace(/^["']+|["']+$/g, '').trim();
+
+    console.log(
+      JSON.stringify({
+        event: 'MSG91_VERIFY_REQUEST',
+        correlationId: corrId,
+        authKeyConfigured: Boolean(authKey),
+        redisReady: isRedisReady(),
+        expectedMobile: maskPhoneNumber(cleanExpectedMobile),
+      })
+    );
+
     if (!authKey && !customVerifier) {
-      console.error('[MSG91-Widget] Error: Missing required MSG91_AUTH_KEY environment variable.');
+      console.error(
+        JSON.stringify({
+          event: 'MSG91_CONFIG_MISSING',
+          correlationId: corrId,
+          authKeyConfigured: false,
+          redisReady: isRedisReady(),
+          message: 'Missing required MSG91_AUTH_KEY environment variable on server.',
+        })
+      );
       const err = new Error('SMS verification service is currently unconfigured.');
       err.code = 'CONFIG_MISSING';
       err.statusCode = 500;
@@ -306,7 +335,15 @@ class Msg91WidgetService {
     const tokenHash = this.hashAccessToken(trimmedToken);
     const acquired = await this.acquireTokenAtomic(tokenHash, cleanExpectedMobile);
     if (!acquired) {
-      console.warn(`[MSG91-Widget] Replay attempt blocked for token hash: ${tokenHash.slice(0, 12)}...`);
+      console.warn(
+        JSON.stringify({
+          event: 'MSG91_REPLAY_BLOCKED',
+          correlationId: corrId,
+          failureCategory: 'TOKEN_ALREADY_USED',
+          tokenHashPrefix: tokenHash.slice(0, 12),
+          expectedMobile: maskPhoneNumber(cleanExpectedMobile),
+        })
+      );
       const err = new Error('This verification token has already been used. Please request a new verification code.');
       err.code = 'TOKEN_ALREADY_USED';
       err.statusCode = 400;
@@ -321,9 +358,15 @@ class Msg91WidgetService {
           accessToken: trimmedToken,
           authKey,
           expectedMobile: cleanExpectedMobile,
+          correlationId: corrId,
         });
       } catch (mockErr) {
-        if (mockErr.code === 'TIMEOUT' || mockErr.code === 'PROVIDER_ERROR' || mockErr.code === 'SERVICE_UNAVAILABLE') {
+        if (
+          mockErr.code === 'TIMEOUT' ||
+          mockErr.code === 'PROVIDER_ERROR' ||
+          mockErr.code === 'SERVICE_UNAVAILABLE' ||
+          mockErr.code === 'UPSTREAM_AUTH_FAILURE'
+        ) {
           await this.releaseTokenLock(tokenHash);
         }
         throw mockErr;
@@ -331,6 +374,16 @@ class Msg91WidgetService {
     } else {
       const endpoint = 'https://control.msg91.com/api/v5/widget/verifyAccessToken';
       const timeoutMs = 5000;
+
+      console.log(
+        JSON.stringify({
+          event: 'MSG91_UPSTREAM_DISPATCH',
+          correlationId: corrId,
+          endpoint,
+          authKeyConfigured: Boolean(authKey),
+          tokenLength: trimmedToken.length,
+        })
+      );
 
       let response;
       try {
@@ -350,23 +403,45 @@ class Msg91WidgetService {
       } catch (fetchErr) {
         await this.releaseTokenLock(tokenHash);
         if (fetchErr.name === 'TimeoutError' || fetchErr.name === 'AbortError') {
-          console.warn(`[MSG91-Widget] Verification timed out after ${timeoutMs}ms.`);
+          console.warn(
+            JSON.stringify({
+              event: 'MSG91_UPSTREAM_TIMEOUT',
+              correlationId: corrId,
+              timeoutMs,
+              failureCategory: 'TIMEOUT',
+            })
+          );
           const err = new Error('SMS verification service timed out. Please try again.');
           err.code = 'TIMEOUT';
           err.statusCode = 504;
           throw err;
         }
 
-        console.error('[MSG91-Widget] Network connection failed:', fetchErr.message);
+        console.error(
+          JSON.stringify({
+            event: 'MSG91_UPSTREAM_NETWORK_ERROR',
+            correlationId: corrId,
+            failureCategory: 'SERVICE_UNAVAILABLE',
+            message: fetchErr.message,
+          })
+        );
         const err = new Error('SMS verification service is temporarily unreachable. Please try again.');
         err.code = 'SERVICE_UNAVAILABLE';
         err.statusCode = 502;
         throw err;
       }
 
+      // Check for upstream provider internal outages (5xx)
       if (response.status >= 500) {
         await this.releaseTokenLock(tokenHash);
-        console.error(`[MSG91-Widget] Provider returned HTTP ${response.status}`);
+        console.error(
+          JSON.stringify({
+            event: 'MSG91_UPSTREAM_5XX',
+            correlationId: corrId,
+            upstreamStatus: response.status,
+            failureCategory: 'PROVIDER_ERROR',
+          })
+        );
         const err = new Error('SMS verification service is temporarily unavailable. Please try again.');
         err.code = 'PROVIDER_ERROR';
         err.statusCode = 502;
@@ -378,7 +453,15 @@ class Msg91WidgetService {
         parsedBody = await response.json();
       } catch (jsonErr) {
         await this.releaseTokenLock(tokenHash);
-        console.error('[MSG91-Widget] Failed to parse provider response JSON:', jsonErr.message);
+        console.error(
+          JSON.stringify({
+            event: 'MSG91_MALFORMED_JSON',
+            correlationId: corrId,
+            upstreamStatus: response.status,
+            failureCategory: 'MALFORMED_RESPONSE',
+            message: jsonErr.message,
+          })
+        );
         const err = new Error('Received malformed response from SMS verification service.');
         err.code = 'MALFORMED_RESPONSE';
         err.statusCode = 502;
@@ -387,9 +470,48 @@ class Msg91WidgetService {
 
       providerData = parsedBody;
 
+      console.log(
+        JSON.stringify({
+          event: 'MSG91_UPSTREAM_RESPONSE',
+          correlationId: corrId,
+          upstreamStatus: response.status,
+          responseType: providerData?.type || providerData?.status || 'unknown',
+          authKeyConfigured: Boolean(authKey),
+          redisReady: isRedisReady(),
+        })
+      );
+
+      // Check for MSG91 backend Authentication failure (HTTP 401/403)
+      if (response.status === 401 || response.status === 403) {
+        await this.releaseTokenLock(tokenHash);
+        console.error(
+          JSON.stringify({
+            event: 'MSG91_AUTH_FAILURE',
+            correlationId: corrId,
+            upstreamStatus: response.status,
+            authKeyConfigured: Boolean(authKey),
+            failureCategory: 'UPSTREAM_AUTH_FAILURE',
+            message: 'MSG91 rejected backend Auth Key as invalid or unauthorized',
+          })
+        );
+        const err = new Error('SMS verification provider authentication failed. Please contact support.');
+        err.code = 'UPSTREAM_AUTH_FAILURE';
+        err.statusCode = 502;
+        throw err;
+      }
+
+      // Check for other client errors from provider (e.g. HTTP 400 Invalid Token)
       if (!response.ok) {
         const errMsg = providerData?.message || providerData?.error || 'Verification failed with provider.';
-        console.warn(`[MSG91-Widget] Provider HTTP ${response.status}: ${errMsg}`);
+        console.warn(
+          JSON.stringify({
+            event: 'MSG91_TOKEN_REJECTED',
+            correlationId: corrId,
+            upstreamStatus: response.status,
+            failureCategory: 'INVALID_TOKEN',
+            message: errMsg,
+          })
+        );
         const err = new Error(errMsg);
         err.code = 'INVALID_TOKEN';
         err.statusCode = 400;
@@ -403,7 +525,34 @@ class Msg91WidgetService {
     const responseType = providerData?.type || (providerData?.status === 'success' ? 'success' : null);
     if (responseType !== 'success') {
       const errMsg = providerData?.message || providerData?.error || 'Mobile verification token is invalid or expired.';
-      console.warn(`[MSG91-Widget] Verification unsuccessful: ${errMsg}`);
+      
+      // If the error message indicates invalid auth key, categorize appropriately
+      const isAuthKeyError = typeof errMsg === 'string' && /auth\s*key/i.test(errMsg);
+      if (isAuthKeyError) {
+        await this.releaseTokenLock(tokenHash);
+        console.error(
+          JSON.stringify({
+            event: 'MSG91_AUTH_FAILURE',
+            correlationId: corrId,
+            failureCategory: 'UPSTREAM_AUTH_FAILURE',
+            message: errMsg,
+          })
+        );
+        const err = new Error('SMS verification provider authentication failed. Please contact support.');
+        err.code = 'UPSTREAM_AUTH_FAILURE';
+        err.statusCode = 502;
+        throw err;
+      }
+
+      console.warn(
+        JSON.stringify({
+          event: 'MSG91_VERIFICATION_UNSUCCESSFUL',
+          correlationId: corrId,
+          responseType: providerData?.type || 'error',
+          failureCategory: 'INVALID_TOKEN',
+          message: errMsg,
+        })
+      );
       const err = new Error(errMsg);
       err.code = 'INVALID_TOKEN';
       err.statusCode = 400;
@@ -425,7 +574,13 @@ class Msg91WidgetService {
     if (normalizedMsg91Phone && normalizedMsg91Phone.length === 10) {
       if (normalizedMsg91Phone !== cleanExpectedMobile) {
         console.warn(
-          `[MSG91-Widget] Token binding mismatch! Expected ${cleanExpectedMobile.slice(-4)}, received ${normalizedMsg91Phone.slice(-4)}`
+          JSON.stringify({
+            event: 'MSG91_MOBILE_MISMATCH',
+            correlationId: corrId,
+            failureCategory: 'MOBILE_MISMATCH',
+            expectedMobileMasked: maskPhoneNumber(cleanExpectedMobile),
+            receivedMobileMasked: maskPhoneNumber(normalizedMsg91Phone),
+          })
         );
         const err = new Error('Verified mobile number does not match registration mobile number.');
         err.code = 'MOBILE_MISMATCH';
@@ -437,12 +592,21 @@ class Msg91WidgetService {
     // 7. Successful verification: Cache pre-verified phone number (short 10-minute expiry)
     await this.recordPhonePreVerified(cleanExpectedMobile);
 
-    console.log(`[MSG91-Widget] Mobile successfully verified for ${cleanExpectedMobile.slice(-4)}`);
+    console.log(
+      JSON.stringify({
+        event: 'MSG91_VERIFY_SUCCESS',
+        correlationId: corrId,
+        authKeyConfigured: Boolean(authKey),
+        redisReady: isRedisReady(),
+        verifiedMobileMasked: maskPhoneNumber(cleanExpectedMobile),
+      })
+    );
 
     return {
       success: true,
       verified: true,
       phone: cleanExpectedMobile,
+      correlationId: corrId,
     };
   }
 }

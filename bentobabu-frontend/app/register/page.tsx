@@ -7,6 +7,7 @@ import { User as UserIcon, Mail, Phone, Lock, ArrowRight, AlertCircle, Sparkles 
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Msg91OtpWidget } from "@/components/auth/Msg91OtpWidget";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { sendMsg91Otp } from "@/lib/msg91";
 import { useAuth } from "@/context/AuthContext";
 import { authService } from "@/services/authService";
@@ -230,6 +231,15 @@ function RegisterForm() {
             <span>{error}</span>
           </div>
         )}
+
+        <GoogleSignInButton returnTo={returnTo} mode="signup" />
+
+        <div className="relative flex items-center justify-center">
+          <div className="border-t border-[#E5DFC5] w-full" />
+          <span className="bg-white px-3 text-[11px] font-medium text-[#8A9A86] uppercase tracking-wider relative">
+            or register with email
+          </span>
+        </div>
 
         <form onSubmit={handleRegister} className="space-y-4">
           <div className="space-y-1">

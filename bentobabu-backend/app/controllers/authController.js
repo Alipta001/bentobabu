@@ -22,6 +22,7 @@ const {
 const { validateEnv } = require('../config/env');
 const { sendSignupOtpEmail } = require('../utils/email');
 const { Msg91WidgetService } = require('../services/msg91WidgetService');
+const { GoogleAuthService } = require('../services/googleAuthService');
 const {
   normalizePhone,
   maskEmail,
@@ -247,10 +248,12 @@ class AuthController {
         }
 
         // Restore mobile pre-verification so the customer can retry without needing another paid SMS OTP
-        try {
-          await Msg91WidgetService.recordPhonePreVerified(cleanPhone);
-        } catch (restoreErr) {
-          console.warn(`[Registration][${correlationId}] Failed to restore phone pre-verification:`, restoreErr.message);
+        if (isMobilePreVerified) {
+          try {
+            await Msg91WidgetService.recordPhonePreVerified(cleanPhone);
+          } catch (restoreErr) {
+            console.warn(`[Registration][${correlationId}] Failed to restore phone pre-verification:`, restoreErr.message);
+          }
         }
 
         return res.status(502).json({
@@ -775,6 +778,170 @@ class AuthController {
       return res.status(200).json({
         success: true,
         message: 'Login successful',
+        data: {
+          user: user.toJSON(),
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/auth/google
+   * Authenticates or creates customer accounts using verified Google Identity Services ID tokens
+   */
+  static async googleAuth(req, res, next) {
+    try {
+      const activeEnv = validateEnv();
+      const rawToken = req.body?.idToken || req.body?.credential || req.body?.token;
+
+      if (!rawToken || typeof rawToken !== 'string' || !rawToken.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Google ID token is required',
+        });
+      }
+
+      // Verify Google token
+      let payload;
+      try {
+        payload = await GoogleAuthService.verifyIdToken(rawToken);
+      } catch (tokenErr) {
+        return res.status(tokenErr.statusCode || 401).json({
+          success: false,
+          message: tokenErr.message || 'Google token verification failed',
+        });
+      }
+
+      const { googleId, email, name, picture, emailVerified } = payload;
+
+      // 1. Check if user already exists by googleId
+      let user = await User.findOne({ googleId });
+
+      if (user) {
+        // Enforce role boundary: Google authentication is strictly for customers
+        if (user.role !== 'CUSTOMER') {
+          return res.status(403).json({
+            success: false,
+            message: 'Google authentication is only permitted for customer accounts.',
+          });
+        }
+
+        // Account status check
+        if (!user.isActive) {
+          return res.status(403).json({
+            success: false,
+            message: 'Your account is inactive or has been suspended. Please contact support.',
+          });
+        }
+
+        // Update profile picture and ensure email verification if needed
+        let modified = false;
+        if (!user.profileImage && picture) {
+          user.profileImage = picture;
+          modified = true;
+        }
+        if (!user.isEmailVerified && emailVerified) {
+          user.isEmailVerified = true;
+          modified = true;
+        }
+        if (!user.authProviders.includes('google')) {
+          user.authProviders.push('google');
+          modified = true;
+        }
+        if (modified) {
+          await user.save();
+        }
+      } else {
+        // 2. Check if user exists by email
+        const existingEmailUser = await User.findOne({ email });
+
+        if (existingEmailUser) {
+          // If already bound to a different Google sub, reject conflict
+          if (existingEmailUser.googleId && existingEmailUser.googleId !== googleId) {
+            return res.status(409).json({
+              success: false,
+              message: 'This email is already associated with a different Google account.',
+            });
+          }
+
+          // Enforce role boundary
+          if (existingEmailUser.role !== 'CUSTOMER') {
+            return res.status(403).json({
+              success: false,
+              message: 'Google authentication is only permitted for customer accounts.',
+            });
+          }
+
+          // Account status check
+          if (!existingEmailUser.isActive) {
+            return res.status(403).json({
+              success: false,
+              message: 'Your account is inactive or has been suspended. Please contact support.',
+            });
+          }
+
+          // Link Google identity to existing customer
+          existingEmailUser.googleId = googleId;
+          if (!existingEmailUser.authProviders.includes('google')) {
+            existingEmailUser.authProviders.push('google');
+          }
+          if (emailVerified) {
+            existingEmailUser.isEmailVerified = true;
+          }
+          if (!existingEmailUser.profileImage && picture) {
+            existingEmailUser.profileImage = picture;
+          }
+          await existingEmailUser.save();
+          user = existingEmailUser;
+        } else {
+          // 3. First-time registration: create new customer account
+          user = await User.create({
+            name,
+            email,
+            googleId,
+            authProviders: ['google'],
+            role: 'CUSTOMER',
+            isActive: true,
+            isEmailVerified: emailVerified,
+            isPhoneVerified: false,
+            profileImage: picture || null,
+          });
+        }
+      }
+
+      // 4. Session & Cookie creation
+      const sessionId = new mongoose.Types.ObjectId();
+      const refreshToken = generateRefreshToken(user, { sessionId: sessionId.toString() });
+      const accessToken = generateAccessToken(user);
+
+      const tokenHash = hashToken(refreshToken);
+      const refreshExpiryMs = parseDurationToMs(activeEnv.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000);
+      const expiresAt = new Date(Date.now() + refreshExpiryMs);
+
+      await RefreshSession.create({
+        _id: sessionId,
+        user: user._id,
+        tokenHash,
+        expiresAt,
+      });
+
+      // Clear legacy cookie if present
+      const rawCookies = req.headers?.cookie || '';
+      if (rawCookies.includes(activeEnv.refreshTokenCookieName) || rawCookies.includes('refreshToken')) {
+        res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
+        res.clearCookie('refreshToken', getClearCookieOptions('/api/v1/auth/refresh'));
+      }
+
+      // Set customer cookies
+      const cookieNames = getCookieNamesForRole(user.role);
+      res.cookie(cookieNames.access, accessToken, getAccessTokenCookieOptions());
+      res.cookie(cookieNames.refresh, refreshToken, getRefreshCookieOptions('/api/v1/auth'));
+
+      return res.status(200).json({
+        success: true,
+        message: 'Google authentication successful',
         data: {
           user: user.toJSON(),
         },
@@ -1405,6 +1572,11 @@ class AuthController {
    * Verifies mobile number using MSG91 OTP Widget access token
    */
   static async verifyMobileWidget(req, res, next) {
+    const correlationId =
+      req.headers['x-request-id'] ||
+      req.headers['x-correlation-id'] ||
+      `mwv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+
     try {
       const { mobile, accessToken } = req.body || {};
 
@@ -1412,6 +1584,7 @@ class AuthController {
         return res.status(400).json({
           success: false,
           message: 'Mobile number is required.',
+          code: 'MOBILE_REQUIRED',
         });
       }
 
@@ -1420,6 +1593,7 @@ class AuthController {
         return res.status(400).json({
           success: false,
           message: 'Please provide a valid 10-digit Indian mobile number.',
+          code: 'INVALID_MOBILE',
         });
       }
 
@@ -1427,6 +1601,7 @@ class AuthController {
         return res.status(400).json({
           success: false,
           message: 'MSG91 widget access token is required.',
+          code: 'TOKEN_REQUIRED',
         });
       }
 
@@ -1434,6 +1609,7 @@ class AuthController {
         const result = await Msg91WidgetService.verifyAccessToken({
           accessToken,
           expectedMobile: cleanPhone,
+          correlationId,
         });
 
         // 1. If an existing user matches this phone, update their verification status
@@ -1457,6 +1633,7 @@ class AuthController {
           data: {
             verified: true,
             phone: cleanPhone,
+            correlationId,
           },
         });
       } catch (verifyErr) {
@@ -1465,6 +1642,7 @@ class AuthController {
           success: false,
           message: verifyErr.message || 'Mobile verification failed. Please try again.',
           code: verifyErr.code || 'VERIFICATION_FAILED',
+          correlationId,
         });
       }
     } catch (err) {

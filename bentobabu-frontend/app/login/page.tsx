@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, Mail, ArrowRight, AlertCircle, Sparkles, CheckCircle2 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { useAuth } from "@/context/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS } from "@/hooks/useQueries";
@@ -150,6 +151,15 @@ function LoginForm() {
             <span>{error}</span>
           </div>
         )}
+
+        <GoogleSignInButton returnTo={returnTo} mode="signin" />
+
+        <div className="relative flex items-center justify-center">
+          <div className="border-t border-[#E5DFC5] w-full" />
+          <span className="bg-white px-3 text-[11px] font-medium text-[#8A9A86] uppercase tracking-wider relative">
+            or sign in with email
+          </span>
+        </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-1">

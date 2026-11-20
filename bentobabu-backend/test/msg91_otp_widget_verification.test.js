@@ -530,6 +530,74 @@ const runTests = async () => {
     console.log('  ✓ Missing auth key returns HTTP 500 with safe message and zero leaked secrets');
 
     // -------------------------------------------------------------------------
+    // Scenario 7b: Invalid Auth Key / MSG91 HTTP 401/403 (HTTP 502 UPSTREAM_AUTH_FAILURE)
+    // -------------------------------------------------------------------------
+    console.log(`[Test ${testNumber()}] Scenario 7b: Invalid Auth Key / Provider 401/403 returns HTTP 502 UPSTREAM_AUTH_FAILURE`);
+    setCustomVerifier(async () => {
+      const err = new Error('SMS verification provider authentication failed. Please contact support.');
+      err.code = 'UPSTREAM_AUTH_FAILURE';
+      err.statusCode = 502;
+      throw err;
+    });
+
+    const res7b = await makeMockRequest({
+      method: 'POST',
+      path: '/api/v1/auth/verify-mobile-widget',
+      body: {
+        mobile: '8584085669',
+        accessToken: 'valid_token_with_invalid_auth_key',
+      },
+    });
+
+    assert.strictEqual(res7b.statusCode, 502, 'Upstream auth rejection must return HTTP 502 Bad Gateway');
+    assert.strictEqual(res7b.body.success, false);
+    assert.strictEqual(res7b.body.code, 'UPSTREAM_AUTH_FAILURE');
+    assert.ok(!JSON.stringify(res7b.body).includes(process.env.MSG91_AUTH_KEY));
+    console.log('  ✓ Invalid backend Auth Key safely categorized as UPSTREAM_AUTH_FAILURE (HTTP 502)');
+
+    // -------------------------------------------------------------------------
+    // Scenario 7c: Structured logging sanitization (zero secrets or credentials logged)
+    // -------------------------------------------------------------------------
+    console.log(`[Test ${testNumber()}] Scenario 7c: Structured logging verification (no credentials or tokens logged)`);
+    const logsCaptured = [];
+    const origLog = console.log;
+    const origWarn = console.warn;
+    const origErr = console.error;
+
+    console.log = (...args) => logsCaptured.push(args.join(' '));
+    console.warn = (...args) => logsCaptured.push(args.join(' '));
+    console.error = (...args) => logsCaptured.push(args.join(' '));
+
+    setCustomVerifier(async ({ expectedMobile }) => ({
+      type: 'success',
+      message: `91${expectedMobile}`,
+    }));
+
+    const rawSecretToken = 'secret_jwt_payload_token_do_not_log_987654321';
+    await makeMockRequest({
+      method: 'POST',
+      path: '/api/v1/auth/verify-mobile-widget',
+      headers: { 'x-correlation-id': 'test_corr_log_audit' },
+      body: {
+        mobile: '8584085669',
+        accessToken: rawSecretToken,
+      },
+    });
+
+    console.log = origLog;
+    console.warn = origWarn;
+    console.error = origErr;
+
+    const allLogs = logsCaptured.join('\n');
+    assert.ok(allLogs.includes('test_corr_log_audit'), 'Logs must record correlationId');
+    assert.ok(allLogs.includes('"authKeyConfigured":true'), 'Logs must record authKeyConfigured as boolean');
+    assert.ok(!allLogs.includes(rawSecretToken), 'Logs must NEVER contain raw access token');
+    assert.ok(!allLogs.includes(process.env.MSG91_AUTH_KEY), 'Logs must NEVER contain MSG91 Auth Key');
+    assert.ok(!allLogs.includes('8584085669'), 'Logs must NEVER contain unmasked full mobile number');
+    assert.ok(allLogs.includes('5669'), 'Logs must mask mobile number');
+    console.log('  ✓ Structured logging verified: correlationId recorded, boolean authKey flag, zero credential leakage');
+
+    // -------------------------------------------------------------------------
     // Scenario 8: Mobile number mismatch (MSG91 verified number != customer registration number)
     // -------------------------------------------------------------------------
     console.log(`[Test ${testNumber()}] Scenario 8: Mobile number mismatch`);

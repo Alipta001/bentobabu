@@ -19,17 +19,29 @@ const userSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: [true, 'Phone number is required'],
+      sparse: true,
       unique: true,
       trim: true,
+      default: null,
       match: [/^\d{10}$/, 'Please enter a valid 10-digit Indian mobile number'],
       index: true,
     },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+      default: null,
+    },
+    authProviders: {
+      type: [String],
+      default: ['local'],
+    },
     password: {
       type: String,
-      required: [true, 'Password is required'],
       minlength: [6, 'Password must be at least 6 characters'],
       select: false, // Never exposed in default queries
+      default: null,
     },
     role: {
       type: String,

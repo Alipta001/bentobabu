@@ -104,6 +104,19 @@ const validateEnv = () => {
     throw new Error(`Production startup aborted: Missing required environment variables: ${missing.join(', ')}`);
   }
 
+  const resolvedMsg91Key = (
+    process.env.MSG91_AUTH_KEY ||
+    process.env.MSG91_AUTHKEY ||
+    process.env.MSG_91_AUTH_KEY ||
+    ''
+  ).replace(/^["']+|["']+$/g, '').trim();
+
+  if (isProd && !resolvedMsg91Key) {
+    console.warn(
+      '[ENV] ⚠️  WARNING: MSG91_AUTH_KEY is not configured in production environment variables. Customer mobile verification (/api/v1/auth/verify-mobile-widget) will fail with HTTP 500 CONFIG_MISSING.'
+    );
+  }
+
   const otpEmailEnabled = process.env.OTP_EMAIL_ENABLED === 'true';
   const otpSmsEnabled = process.env.OTP_SMS_ENABLED === 'true';
 
@@ -212,8 +225,15 @@ const validateEnv = () => {
     smsApiSecret: process.env.SMS_API_SECRET || '',
     smsSenderId: process.env.SMS_SENDER_ID || 'BENTOB',
     // MSG91 OTP Widget Configuration
-    msg91AuthKey: (process.env.MSG91_AUTH_KEY || '').trim(),
+    msg91AuthKey: (
+      process.env.MSG91_AUTH_KEY ||
+      process.env.MSG91_AUTHKEY ||
+      process.env.MSG_91_AUTH_KEY ||
+      ''
+    ).replace(/^["']+|["']+$/g, '').trim(),
     msg91WidgetId: (process.env.MSG91_WIDGET_ID || '366b746e3258343539303835').trim(),
+    // Google Identity Services (GIS) OAuth 2.0 Configuration
+    googleClientId: (process.env.GOOGLE_CLIENT_ID || '').trim(),
     // Delivery Fleet Presence & Live Tracking Configuration
     deliveryHeartbeatIntervalMs: parseInt(process.env.DELIVERY_HEARTBEAT_INTERVAL_MS, 10) || 25000,
     deliveryConnectionTimeoutMs: parseInt(process.env.DELIVERY_CONNECTION_TIMEOUT_MS, 10) || 60000,

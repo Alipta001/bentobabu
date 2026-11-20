@@ -11,6 +11,7 @@ router.get('/csrf-token', getCsrfTokenHandler);
 
 // Public authentication routes
 router.post('/register', authRateLimiter, AuthController.register);
+router.post('/google', authRateLimiter, AuthController.googleAuth);
 router.get('/otp-status', otpRateLimiter, AuthController.getOtpStatus);
 router.post('/verify-signup-otp', otpRateLimiter, AuthController.verifySignupOtp);
 router.post('/resend-signup-otp', otpRateLimiter, AuthController.resendSignupOtp);

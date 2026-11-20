@@ -138,6 +138,33 @@ export const authService = {
   },
 
   /**
+   * Google Identity Services authentication using verified ID token.
+   * Access and refresh tokens are stored exclusively in HttpOnly cookies.
+   */
+  async googleLogin(idToken: string): Promise<AuthResponse> {
+    const response = await apiClient.post<
+      ApiResponse<{ user: User }> | AuthResponse
+    >(API_ENDPOINTS.AUTH.GOOGLE, { idToken });
+
+    const raw = response.data;
+    let authData: AuthResponse;
+
+    if (raw && "data" in raw && raw.data) {
+      authData = {
+        user: raw.data.user,
+      };
+    } else {
+      authData = raw as AuthResponse;
+    }
+
+    if (authData.user && typeof window !== "undefined") {
+      localStorage.setItem("bb_user", JSON.stringify(authData.user));
+    }
+    bumpAuthGeneration();
+    return authData;
+  },
+
+  /**
    * Safe persistent session storage for OTP challenge information (navigation state without PII in URL)
    */
   saveStoredChallenge(challenge: StoredOtpChallenge): void {
