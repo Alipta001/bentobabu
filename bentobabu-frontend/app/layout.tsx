@@ -21,9 +21,15 @@ export const metadata: Metadata = {
     "office healthy lunch",
   ],
   icons: {
-    icon: brandConfig.logo.imagePath,
-    shortcut: brandConfig.logo.imagePath,
-    apple: brandConfig.logo.imagePath,
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "96x96" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
   authors: [{ name: brandConfig.name }],
   openGraph: {
