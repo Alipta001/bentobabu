@@ -100,19 +100,21 @@ const runAuditTests = () => {
   assert.ok(!routeTsCode.includes('NEXT_PUBLIC_MSG91_TOKEN_AUTH'), 'Must not read NEXT_PUBLIC_MSG91_TOKEN_AUTH');
   console.log('    ✓ route.ts implements server-side NEXT_MSG91_TOKEN_AUTH lookup');
 
-  // Test 5: Verify Msg91OtpWidget.tsx strictly avoids NEXT_PUBLIC_MSG91_TOKEN_AUTH
-  test('Msg91OtpWidget.tsx uses server config fetch and avoids NEXT_PUBLIC_MSG91_TOKEN_AUTH');
+  // Test 5: Verify Msg91OtpWidget.tsx and lib/msg91.ts strictly avoid NEXT_PUBLIC_MSG91_TOKEN_AUTH
+  test('Msg91OtpWidget and lib/msg91.ts use server config fetch and avoid NEXT_PUBLIC_MSG91_TOKEN_AUTH');
   const widgetPath = path.resolve(__dirname, '../components/auth/Msg91OtpWidget.tsx');
+  const libPath = path.resolve(__dirname, '../lib/msg91.ts');
   const widgetCode = fs.readFileSync(widgetPath, 'utf-8');
+  const libCode = fs.readFileSync(libPath, 'utf-8');
   assert.ok(
-    !widgetCode.includes('NEXT_PUBLIC_MSG91_TOKEN_AUTH'),
-    'Msg91OtpWidget.tsx must NOT reference NEXT_PUBLIC_MSG91_TOKEN_AUTH'
+    !widgetCode.includes('NEXT_PUBLIC_MSG91_TOKEN_AUTH') && !libCode.includes('NEXT_PUBLIC_MSG91_TOKEN_AUTH'),
+    'Msg91OtpWidget.tsx and lib/msg91.ts must NOT reference NEXT_PUBLIC_MSG91_TOKEN_AUTH'
   );
   assert.ok(
-    widgetCode.includes('getMsg91WidgetConfig'),
-    'Msg91OtpWidget.tsx must fetch configuration from authService.getMsg91WidgetConfig'
+    widgetCode.includes('getMsg91WidgetConfig') || libCode.includes('getMsg91WidgetConfig'),
+    'Configuration must be fetched from authService.getMsg91WidgetConfig'
   );
-  console.log('    ✓ Msg91OtpWidget.tsx correctly fetches server-side token without bundle exposure');
+  console.log('    ✓ Frontend files correctly fetch server-side token without bundle exposure');
 
   // Test 6: Verify .env.local and .env.example variable names
   test('Environment files declare NEXT_MSG91_TOKEN_AUTH');

@@ -245,6 +245,14 @@ class AuthController {
         if (!existingUser) {
           await User.deleteOne({ _id: user._id });
         }
+
+        // Restore mobile pre-verification so the customer can retry without needing another paid SMS OTP
+        try {
+          await Msg91WidgetService.recordPhonePreVerified(cleanPhone);
+        } catch (restoreErr) {
+          console.warn(`[Registration][${correlationId}] Failed to restore phone pre-verification:`, restoreErr.message);
+        }
+
         return res.status(502).json({
           success: false,
           message: `Failed to deliver verification code via email. Please try again later.`,

@@ -7,6 +7,7 @@ import { User as UserIcon, Mail, Phone, Lock, ArrowRight, AlertCircle, Sparkles 
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { Msg91OtpWidget } from "@/components/auth/Msg91OtpWidget";
+import { sendMsg91Otp } from "@/lib/msg91";
 import { useAuth } from "@/context/AuthContext";
 import { authService } from "@/services/authService";
 import { useQueryClient } from "@tanstack/react-query";
@@ -42,6 +43,41 @@ function RegisterForm() {
   const [isMobileVerified, setIsMobileVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Restore draft registration state if available (e.g. returning from verify-otp)
+  // SECURITY: Never restores or reads password from storage
+  useEffect(() => {
+    const draft = authService.getDraftRegistration();
+    if (draft) {
+      if (draft.name) setName(draft.name);
+      if (draft.email) setEmail(draft.email);
+      if (draft.phone) setPhone(draft.phone);
+    }
+  }, []);
+
+  const cleanCurrentPhone = (rawPhone: string) => {
+    const digits = rawPhone.replace(/\D/g, "");
+    if (digits.length === 11 && digits.startsWith("0")) {
+      return digits.slice(1);
+    } else if (digits.length === 12 && digits.startsWith("91")) {
+      return digits.slice(2);
+    } else if (digits.length === 13 && digits.startsWith("091")) {
+      return digits.slice(3);
+    } else if (digits.length > 10) {
+      return digits.slice(-10);
+    }
+    return digits;
+  };
+
+  const saveDraft = React.useCallback(() => {
+    const phoneClean = cleanCurrentPhone(phone);
+    // SECURITY: Only saves name, email, and clean phone; NEVER saves password
+    authService.saveDraftRegistration({
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      phone: phoneClean,
+    });
+  }, [name, email, phone]);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhone(e.target.value);
@@ -84,8 +120,43 @@ function RegisterForm() {
     }
 
     if (!isMobileVerified) {
-      setError("Please verify your mobile number with the OTP widget before registering.");
-      return;
+      if (!name.trim()) {
+        setError("Please enter your full name.");
+        return;
+      }
+      if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
+        setError("Please enter a valid email address.");
+        return;
+      }
+      if (!password || password.length < 8) {
+        setError("Password must be at least 8 characters long.");
+        return;
+      }
+
+      saveDraft();
+      setIsLoading(true);
+
+      try {
+        const res = await sendMsg91Otp(phoneClean);
+        const reqId = res.requestId;
+        authService.saveStoredChallenge({
+          challengeId: reqId,
+          channel: "sms",
+          destination: phoneClean,
+          cooldownSeconds: 60,
+          createdAt: Date.now(),
+        });
+        const verifyUrl =
+          returnTo && returnTo !== "/"
+            ? `/verify-otp?channel=sms&dest=${phoneClean}&reqId=${encodeURIComponent(reqId)}&returnTo=${encodeURIComponent(returnTo)}`
+            : `/verify-otp?channel=sms&dest=${phoneClean}&reqId=${encodeURIComponent(reqId)}`;
+        router.push(verifyUrl);
+        return;
+      } catch (err: any) {
+        setIsLoading(false);
+        setError(err?.message || "Failed to send mobile verification code.");
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -203,6 +274,9 @@ function RegisterForm() {
               <Msg91OtpWidget
                 phone={phone}
                 isVerified={isMobileVerified}
+                onBeforeSend={saveDraft}
+                returnTo={returnTo}
+                onError={(msg) => setError(msg)}
                 onVerified={() => {
                   setIsMobileVerified(true);
                 }}
@@ -229,10 +303,10 @@ function RegisterForm() {
               <input
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5] text-xs text-[#222922] focus:outline-none focus:border-[#354B35]"
               />
               <Lock className="w-4 h-4 text-[#8A9A86] absolute left-3.5 top-3 pointer-events-none" />

@@ -261,12 +261,24 @@ const runTests = async () => {
     return { matchedCount: matched ? 1 : 0, modifiedCount: matched ? 1 : 0 };
   };
 
+  User.deleteOne = async (filter) => {
+    const idx = usersStore.findIndex((u) => String(u._id) === String(filter._id));
+    if (idx !== -1) usersStore.splice(idx, 1);
+    return { deletedCount: idx !== -1 ? 1 : 0 };
+  };
+
   // Mock OtpChallenge model methods
   const origChallengeFindOne = OtpChallenge.findOne;
   const origChallengeCreate = OtpChallenge.create;
   const origChallengeFindOneAndUpdate = OtpChallenge.findOneAndUpdate;
   const origChallengeUpdateMany = OtpChallenge.updateMany;
   const origChallengeDeleteMany = OtpChallenge.deleteMany;
+
+  OtpChallenge.deleteOne = async (filter) => {
+    const idx = challengesStore.findIndex((c) => c.challengeTokenHash === filter.challengeTokenHash);
+    if (idx !== -1) challengesStore.splice(idx, 1);
+    return { deletedCount: idx !== -1 ? 1 : 0 };
+  };
 
   OtpChallenge.create = async (challengeData) => {
     const doc = {
@@ -716,6 +728,71 @@ const runTests = async () => {
     assert.strictEqual(sentSmsList.length, 0, 'Must not dispatch any SMS OTP when mobile is unverified');
     assert.strictEqual(sentEmails.length, 0, 'Must not dispatch any Email OTP when mobile is unverified');
     console.log('  ✓ Unverified mobile registration strictly rejected with HTTP 400 MOBILE_VERIFICATION_REQUIRED');
+
+    // -------------------------------------------------------------------------
+    // Scenario 10c: Failed email dispatch does not strand customer (restores pre-verification)
+    // -------------------------------------------------------------------------
+    console.log(`[Test ${testNumber()}] Scenario 10c: Failed email dispatch restores mobile pre-verification for retry`);
+    const retryTestPhone = '9876543219';
+    const retryTestEmail = `email_retry_${Date.now()}@test-msg91.com`;
+    const retryToken = `token_retry_flow_${Date.now()}`;
+
+    // 1. Verify mobile with matching custom verifier
+    setCustomVerifier(async () => ({ type: 'success', message: `91${retryTestPhone}` }));
+    await makeMockRequest({
+      method: 'POST',
+      path: '/api/v1/auth/verify-mobile-widget',
+      body: {
+        mobile: retryTestPhone,
+        accessToken: retryToken,
+      },
+    });
+
+    // 2. Simulate transient Resend failure
+    setResendClient({
+      emails: {
+        send: async () => {
+          return { data: null, error: { message: 'Upstream email provider outage' } };
+        },
+      },
+    });
+
+    const failedReg = await makeMockRequest({
+      method: 'POST',
+      path: '/api/v1/auth/register',
+      body: {
+        name: 'Retry Test User',
+        email: retryTestEmail,
+        phone: retryTestPhone,
+        password: 'Password123!',
+      },
+    });
+    assert.strictEqual(failedReg.statusCode, 502, 'Email failure must return HTTP 502');
+
+    // 3. Restore Resend mock client
+    setResendClient({
+      emails: {
+        send: async (mailOptions) => {
+          sentEmails.push(mailOptions);
+          return { data: { id: `mock-email-${Date.now()}` }, error: null };
+        },
+      },
+    });
+
+    // 4. Retry registration with same phone without re-verifying mobile
+    const retriedReg = await makeMockRequest({
+      method: 'POST',
+      path: '/api/v1/auth/register',
+      body: {
+        name: 'Retry Test User',
+        email: retryTestEmail,
+        phone: retryTestPhone,
+        password: 'Password123!',
+      },
+    });
+    assert.strictEqual(retriedReg.statusCode, 201, 'Retried registration must succeed because pre-verification was restored');
+    assert.strictEqual(retriedReg.body.success, true);
+    console.log('  ✓ Transient email failure safely restores mobile pre-verification; customer is never stranded');
 
     // -------------------------------------------------------------------------
     // Scenario 11: Unverified mobile / account restrictions (HTTP 403)

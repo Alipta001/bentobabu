@@ -174,6 +174,68 @@ export const authService = {
   },
 
   /**
+   * Safe persistent session storage for draft registration data (preserved during mobile OTP verification).
+   * SECURITY REQUIREMENT: Never stores password or sensitive authentication credentials.
+   * Only persists name, email, and normalized phone.
+   */
+  saveDraftRegistration(data: { name?: string; email?: string; phone?: string }): void {
+    if (typeof window !== "undefined") {
+      try {
+        const payload = {
+          name: (data.name || "").trim(),
+          email: (data.email || "").trim().toLowerCase(),
+          phone: (data.phone || "").replace(/\D/g, "").slice(-10),
+          savedAt: Date.now(),
+        };
+        // Explicitly ensure no password property can ever be written to storage
+        delete (payload as any).password;
+        sessionStorage.setItem("bb_draft_registration", JSON.stringify(payload));
+      } catch {
+        // Ignore
+      }
+    }
+  },
+
+  getDraftRegistration(): { name: string; email: string; phone: string } | null {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = sessionStorage.getItem("bb_draft_registration");
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+
+        // Security check: purge password if present
+        delete parsed.password;
+
+        // 15-minute automatic expiry for temporary draft registration state
+        if (parsed.savedAt && Date.now() - parsed.savedAt > 15 * 60 * 1000) {
+          sessionStorage.removeItem("bb_draft_registration");
+          return null;
+        }
+
+        return {
+          name: parsed.name || "",
+          email: parsed.email || "",
+          phone: parsed.phone || "",
+        };
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  },
+
+  clearDraftRegistration(): void {
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("bb_draft_registration");
+      } catch {
+        // Ignore
+      }
+    }
+  },
+
+  /**
    * User registration. Creates customer account and dispatches verification OTP.
    */
   async register(data: RegisterData): Promise<RegisterResponse> {

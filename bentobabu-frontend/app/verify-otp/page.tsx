@@ -3,17 +3,32 @@
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Mail, Phone, ArrowRight, AlertCircle, CheckCircle2, ShieldCheck, RefreshCw } from "lucide-react";
+import { Mail, Phone, Lock, Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle2, ShieldCheck, RefreshCw } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { authService } from "@/services/authService";
+import { verifyMsg91Otp, retryMsg91Otp } from "@/lib/msg91";
 import { getSafeReturnUrl, DEFAULT_POST_LOGIN_PATH } from "@/lib/authRedirect";
+
+function formatDisplayDestination(dest: string, channel: "email" | "sms"): string {
+  if (!dest) {
+    return channel === "email" ? "your registered email" : "your registered phone";
+  }
+  if (channel === "sms") {
+    const digits = dest.replace(/\D/g, "");
+    if (digits.length >= 10) {
+      const last4 = digits.slice(-4);
+      return `+91 ****** ${last4}`;
+    }
+  }
+  return dest;
+}
 
 function VerifyOtpContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const urlChallengeId = searchParams.get("challengeId") || "";
+  const urlChallengeId = searchParams.get("challengeId") || searchParams.get("reqId") || "";
   const channelParam = (searchParams.get("channel") as "email" | "sms") || null;
   const destinationParam = searchParams.get("dest") || searchParams.get("destination") || null;
   const rawReturnTo = searchParams.get("returnTo") || searchParams.get("redirect");
@@ -29,6 +44,13 @@ function VerifyOtpContent() {
   const [cooldown, setCooldown] = useState(60);
   const [isResending, setIsResending] = useState(false);
   const [isChallengeLoaded, setIsChallengeLoaded] = useState(false);
+
+  // Post-mobile verification password entry state (password is NEVER saved in browser storage)
+  const [mobilePreVerified, setMobilePreVerified] = useState(false);
+  const [draftUser, setDraftUser] = useState<{ name: string; email: string; phone: string } | null>(null);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -56,12 +78,20 @@ function VerifyOtpContent() {
       setCooldown(remaining);
     }
 
+    // Check draft registration
+    const draft = authService.getDraftRegistration();
+    if (draft && draft.name && draft.email && draft.phone) {
+      setDraftUser(draft);
+    }
+
     setIsChallengeLoaded(true);
   }, [urlChallengeId, channelParam, destinationParam]);
 
-  // Query server status for challenge to ensure validity and update cooldown
+  // Query server status ONLY for email challenges (backend OtpChallenge collection)
+  // MSG91 SMS challenges are managed client-side via requestId
   useEffect(() => {
     if (!challengeId) return;
+    if (activeChannel === "sms") return;
 
     authService
       .getOtpStatus(challengeId)
@@ -91,7 +121,7 @@ function VerifyOtpContent() {
           setError("Verification challenge not found or has expired. Please register again.");
         }
       });
-  }, [challengeId]);
+  }, [challengeId, activeChannel]);
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -104,10 +134,10 @@ function VerifyOtpContent() {
 
   // Focus first input box on load
   useEffect(() => {
-    if (challengeId) {
+    if (challengeId && !mobilePreVerified) {
       inputRefs.current[0]?.focus();
     }
-  }, [challengeId]);
+  }, [challengeId, mobilePreVerified]);
 
   const handleDigitChange = (index: number, value: string) => {
     const cleaned = value.replace(/\D/g, "");
@@ -161,6 +191,7 @@ function VerifyOtpContent() {
     inputRefs.current[focusIdx]?.focus();
   };
 
+  // Phase 1: Verify OTP code (MSG91 SMS or Resend Email)
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -180,22 +211,135 @@ function VerifyOtpContent() {
     setIsLoading(true);
 
     try {
-      await authService.verifySignupOtp({
-        challengeId,
-        otp: fullOtp,
+      if (activeChannel === "sms") {
+        // 1. Verify OTP with MSG91 client-side SDK
+        const { accessToken } = await verifyMsg91Otp(fullOtp, challengeId);
+
+        // 2. Validate access token with backend (sets single-use Redis pre-verification lock)
+        const cleanMobile = activeDestination.replace(/\D/g, "").slice(-10);
+        await authService.verifyMobileWidget({
+          mobile: cleanMobile,
+          accessToken,
+        });
+
+        // 3. Check for draft registration.
+        // SECURITY REQUIREMENT: Never read password from storage.
+        // Prompt the user to enter their password before submitting registration.
+        const draft = authService.getDraftRegistration();
+        if (draft && draft.name && draft.email && draft.phone) {
+          setDraftUser(draft);
+          setMobilePreVerified(true);
+          setIsLoading(false);
+          setSuccessMsg("Mobile number verified successfully! Please set your password to finalize account creation.");
+          return;
+        }
+
+        // If no draft exists (standalone mobile verification):
+        authService.clearStoredChallenge();
+        authService.clearDraftRegistration();
+        setSuccessMsg("Mobile verified successfully! Redirecting to sign in...");
+        setTimeout(() => {
+          const loginUrl = `/login?verified=true&returnTo=${encodeURIComponent(returnTo)}`;
+          router.replace(loginUrl);
+        }, 1200);
+      } else {
+        // Email OTP verification flow
+        await authService.verifySignupOtp({
+          challengeId,
+          otp: fullOtp,
+        });
+
+        authService.clearStoredChallenge();
+        authService.clearDraftRegistration();
+
+        setSuccessMsg("Account verified successfully! Redirecting to sign in...");
+        setTimeout(() => {
+          const loginUrl = `/login?verified=true&returnTo=${encodeURIComponent(returnTo)}`;
+          router.replace(loginUrl);
+        }, 1200);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Verification failed. Please check the code and try again.");
+      setIsLoading(false);
+    }
+  };
+
+  // Phase 2: Post-mobile verification password submission (creates account & sends email OTP)
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccessMsg("");
+
+    if (!draftUser || !draftUser.email || !draftUser.phone) {
+      setError("Registration information missing. Please register again.");
+      return;
+    }
+
+    if (!password || password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match. Please re-enter.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const regRes = await authService.register({
+        name: draftUser.name,
+        email: draftUser.email,
+        phone: draftUser.phone,
+        password,
       });
 
-      // Clear challenge session state on successful verification
-      authService.clearStoredChallenge();
+      const nextChallengeId = regRes.challengeId;
+      if (regRes.requiresVerification && nextChallengeId) {
+        // Registration created unverified customer account and dispatched email OTP
+        authService.clearDraftRegistration();
 
-      setSuccessMsg("Account verified successfully! Redirecting to sign in...");
+        const nextChannel = (regRes.channel ? String(regRes.channel).toLowerCase() : "email") as "email" | "sms";
+        const nextDest = regRes.maskedDestination || regRes.destination || draftUser.email;
+        const nextCooldown = regRes.cooldown ?? regRes.cooldownSeconds ?? 60;
+
+        authService.saveStoredChallenge({
+          challengeId: nextChallengeId,
+          channel: nextChannel,
+          destination: nextDest,
+          cooldownSeconds: nextCooldown,
+          createdAt: Date.now(),
+        });
+
+        setChallengeId(nextChallengeId);
+        setActiveChannel(nextChannel);
+        setActiveDestination(nextDest);
+        setCooldown(nextCooldown);
+        setMobilePreVerified(false);
+        setPassword("");
+        setConfirmPassword("");
+        setOtpDigits(["", "", "", "", "", ""]);
+        setIsLoading(false);
+        setSuccessMsg(`Mobile verified! We sent a 6-digit verification code to ${nextDest}. Please enter it to complete registration.`);
+        setTimeout(() => {
+          inputRefs.current[0]?.focus();
+        }, 100);
+        return;
+      }
+
+      // If registration completed without requiring email verification:
+      authService.clearStoredChallenge();
+      authService.clearDraftRegistration();
+      setSuccessMsg("Account created and verified! Redirecting to sign in...");
       setTimeout(() => {
         const loginUrl = `/login?verified=true&returnTo=${encodeURIComponent(returnTo)}`;
         router.replace(loginUrl);
       }, 1200);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Verification failed. Please check the code and try again.");
+    } catch (regErr: any) {
+      console.error("[VerifyOtp] Registration error after phone verification:", regErr);
       setIsLoading(false);
+      setError(regErr?.message || "Failed to create account. Please try again.");
     }
   };
 
@@ -211,31 +355,47 @@ function VerifyOtpContent() {
     setIsResending(true);
 
     try {
-      const res = await authService.resendSignupOtp({
-        challengeId,
-      });
+      if (activeChannel === "sms") {
+        // Retries SMS using documented custom UI channel "11"
+        await retryMsg91Otp("sms", challengeId);
+        setCooldown(60);
+        authService.saveStoredChallenge({
+          challengeId,
+          channel: "sms",
+          destination: activeDestination,
+          cooldownSeconds: 60,
+          createdAt: Date.now(),
+        });
+        setSuccessMsg("A fresh verification code has been dispatched via SMS.");
+        setOtpDigits(["", "", "", "", "", ""]);
+        inputRefs.current[0]?.focus();
+      } else {
+        const res = await authService.resendSignupOtp({
+          challengeId,
+        });
 
-      const dest = res.destination || (res as any).maskedDestination;
-      if (dest) {
-        setActiveDestination(dest);
+        const dest = res.destination || (res as any).maskedDestination;
+        if (dest) {
+          setActiveDestination(dest);
+        }
+        if (res.channel) {
+          setActiveChannel(res.channel as "email" | "sms");
+        }
+        const newCooldown = res.cooldownSeconds ?? (res as any).cooldown ?? 60;
+        setCooldown(newCooldown);
+
+        authService.saveStoredChallenge({
+          challengeId,
+          channel: (res.channel as "email" | "sms") || activeChannel,
+          destination: dest || activeDestination,
+          cooldownSeconds: newCooldown,
+          createdAt: Date.now(),
+        });
+
+        setSuccessMsg(`A fresh verification code has been dispatched to your ${res.channel || activeChannel}.`);
+        setOtpDigits(["", "", "", "", "", ""]);
+        inputRefs.current[0]?.focus();
       }
-      if (res.channel) {
-        setActiveChannel(res.channel as "email" | "sms");
-      }
-      const newCooldown = res.cooldownSeconds ?? (res as any).cooldown ?? 60;
-      setCooldown(newCooldown);
-
-      authService.saveStoredChallenge({
-        challengeId,
-        channel: (res.channel as "email" | "sms") || activeChannel,
-        destination: dest || activeDestination,
-        cooldownSeconds: newCooldown,
-        createdAt: Date.now(),
-      });
-
-      setSuccessMsg(`A fresh verification code has been dispatched to your ${res.channel || activeChannel}.`);
-      setOtpDigits(["", "", "", "", "", ""]);
-      inputRefs.current[0]?.focus();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to resend code. Please try again.");
     } finally {
@@ -243,8 +403,14 @@ function VerifyOtpContent() {
     }
   };
 
+  const handleCancelRegistration = () => {
+    authService.clearDraftRegistration();
+    authService.clearStoredChallenge();
+    router.push("/register");
+  };
+
   // Direct navigation without active challenge
-  if (isChallengeLoaded && !challengeId) {
+  if (isChallengeLoaded && !challengeId && !mobilePreVerified) {
     return (
       <div className="max-w-md w-full mx-auto px-4 sm:px-6">
         <div className="bg-white rounded-3xl p-8 sm:p-10 border border-[#E5DFC5] shadow-xs space-y-6 text-center">
@@ -276,6 +442,108 @@ function VerifyOtpContent() {
     );
   }
 
+  // View: Post-mobile verification password entry
+  if (mobilePreVerified && draftUser) {
+    return (
+      <div className="max-w-md w-full mx-auto px-4 sm:px-6">
+        <div className="bg-white rounded-3xl p-8 sm:p-10 border border-[#E5DFC5] shadow-xs space-y-6">
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Mobile Number Verified</span>
+            </div>
+            <h1 className="font-serif text-3xl font-bold text-[#222922]">
+              Set Your Password
+            </h1>
+            <p className="text-xs text-[#6B776A]">
+              Create a secure password to complete your registration for{" "}
+              <span className="font-semibold text-[#222922]">{draftUser.email}</span>.
+            </p>
+          </div>
+
+          {error && (
+            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+          )}
+
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#222922]">
+                Account Password *
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5] text-xs text-[#222922] focus:outline-none focus:border-[#354B35]"
+                />
+                <Lock className="w-4 h-4 text-[#8A9A86] absolute left-3.5 top-3 pointer-events-none" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-3 text-[#8A9A86] hover:text-[#354B35]"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#222922]">
+                Confirm Password *
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  required
+                  minLength={8}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5] text-xs text-[#222922] focus:outline-none focus:border-[#354B35]"
+                />
+                <Lock className="w-4 h-4 text-[#8A9A86] absolute left-3.5 top-3 pointer-events-none" />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3.5 rounded-full bg-[#354B35] text-[#F7F3EA] text-xs font-bold shadow-md hover:bg-[#253525] disabled:opacity-50 cursor-pointer transition-all flex items-center justify-center gap-2"
+            >
+              <span>{isLoading ? "Creating Account..." : "Create Account & Verify Email"}</span>
+              <ArrowRight className="w-4 h-4 text-[#B99A60]" />
+            </button>
+          </form>
+
+          <div className="pt-2 text-center text-xs text-[#6B776A]">
+            <button
+              type="button"
+              onClick={handleCancelRegistration}
+              className="text-[#354B35] underline hover:text-[#B99A60] font-medium"
+            >
+              Cancel registration
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // View: 6-Digit OTP verification (SMS or Email)
   return (
     <div className="max-w-md w-full mx-auto px-4 sm:px-6">
       <div className="bg-white rounded-3xl p-8 sm:p-10 border border-[#E5DFC5] shadow-xs space-y-6">
@@ -285,10 +553,12 @@ function VerifyOtpContent() {
             <span>Identity Verification</span>
           </div>
           <h1 className="font-serif text-3xl font-bold text-[#222922]">
-            Verify Your Account
+            {activeChannel === "email" ? "Verify Your Email" : "Verify Your Mobile"}
           </h1>
           <p className="text-xs text-[#6B776A]">
-            We sent a 6-digit verification code to:
+            {activeChannel === "email"
+              ? "We sent a 6-digit verification code to:"
+              : "Enter the 6-digit SMS verification code sent to:"}
           </p>
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#F7F3EA] border border-[#E5DFC5] text-xs font-medium text-[#222922]">
             {activeChannel === "email" ? (
@@ -296,7 +566,7 @@ function VerifyOtpContent() {
             ) : (
               <Phone className="w-3.5 h-3.5 text-[#354B35]" />
             )}
-            <span>{activeDestination || "your registered destination"}</span>
+            <span>{formatDisplayDestination(activeDestination, activeChannel)}</span>
           </div>
         </div>
 
@@ -349,7 +619,13 @@ function VerifyOtpContent() {
             disabled={isLoading || otpDigits.join("").length !== 6}
             className="w-full py-3.5 rounded-full bg-[#354B35] text-[#F7F3EA] text-xs font-bold shadow-md hover:bg-[#253525] disabled:opacity-50 cursor-pointer transition-all flex items-center justify-center gap-2"
           >
-            <span>{isLoading ? "Verifying..." : "Verify & Continue"}</span>
+            <span>
+              {isLoading
+                ? "Verifying..."
+                : activeChannel === "sms"
+                ? "Verify Phone Number"
+                : "Verify & Complete Registration"}
+            </span>
             <ArrowRight className="w-4 h-4 text-[#B99A60]" />
           </button>
         </form>
@@ -375,12 +651,13 @@ function VerifyOtpContent() {
           </div>
           <div className="text-[11px] text-[#8A9A86]">
             Incorrect email or mobile?{" "}
-            <Link
-              href="/register"
-              className="text-[#354B35] underline hover:text-[#B99A60] font-medium"
+            <button
+              type="button"
+              onClick={handleCancelRegistration}
+              className="text-[#354B35] underline hover:text-[#B99A60] font-medium cursor-pointer"
             >
               Register again
-            </Link>
+            </button>
           </div>
         </div>
       </div>
