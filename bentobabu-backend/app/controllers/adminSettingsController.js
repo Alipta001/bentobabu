@@ -1,4 +1,5 @@
 const { SystemSetting } = require('../models');
+const { redisDel } = require('../config/redis');
 
 const DEFAULT_SETTINGS = {
   BUSINESS_NAME: 'Bento Babu',
@@ -355,6 +356,9 @@ class AdminSettingsController {
       );
 
       await Promise.all(upsertPromises);
+
+      // Invalidate public ordering status cache immediately
+      await redisDel('cache:ordering_status');
 
       const allMerged = await AdminSettingsController.getAllMergedSettings();
 

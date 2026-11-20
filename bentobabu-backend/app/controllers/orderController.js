@@ -46,9 +46,10 @@ class OrderController {
       }
 
       if (acceptSetting && acceptSetting.value === false) {
-        return res.status(400).json({
+        return res.status(503).json({
           success: false,
-          message: 'Order placement is currently disabled. We are not accepting new orders at this time.',
+          code: 'ORDERING_DISABLED',
+          message: "We're not accepting new orders right now. Please check back later.",
         });
       }
 
@@ -459,9 +460,10 @@ class OrderController {
     }
 
     if (acceptSetting && acceptSetting.value === false) {
-      return res.status(400).json({
+      return res.status(503).json({
         success: false,
-        message: 'Order placement is currently disabled. We are not accepting new orders at this time.',
+        code: 'ORDERING_DISABLED',
+        message: "We're not accepting new orders right now. Please check back later.",
       });
     }
 
@@ -547,6 +549,33 @@ class OrderController {
       let customerUsageCount = 0;
 
       try {
+        // 0. Atomic serialization gate against admin ordering availability toggle
+        // Ensures order creation serializes with concurrent admin updates to ORDER_ACCEPTANCE_ENABLED
+        const gateOpts = session ? { returnDocument: 'after', session } : { returnDocument: 'after' };
+        const orderingGate = await SystemSetting.findOneAndUpdate(
+          { key: 'ORDER_ACCEPTANCE_ENABLED', value: true },
+          { $set: { lastOrderCheckAt: new Date() } },
+          gateOpts
+        );
+
+        if (!orderingGate) {
+          const currentSetting = session
+            ? await SystemSetting.findOne({ key: 'ORDER_ACCEPTANCE_ENABLED' }).session(session)
+            : await SystemSetting.findOne({ key: 'ORDER_ACCEPTANCE_ENABLED' });
+
+          if (currentSetting && currentSetting.value === false) {
+            if (session) {
+              await session.abortTransaction();
+              session.endSession();
+            }
+            return res.status(503).json({
+              success: false,
+              code: 'ORDERING_DISABLED',
+              message: "We're not accepting new orders right now. Please check back later.",
+            });
+          }
+        }
+
         // 3. Atomically allocate Delivery Slot capacity (if provided)
         let slot = null;
         if (deliverySlotId) {

@@ -7,6 +7,8 @@ import { store } from "@/store/store";
 import { hydrateCart } from "@/store/cartSlice";
 import { ToastProvider } from "@/context/ToastContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { OrderingStatusProvider } from "@/context/OrderingStatusContext";
+import { ServiceUnavailableModal } from "@/components/ui/ServiceUnavailableModal";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -34,7 +36,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <OrderingStatusProvider>
+              {children}
+              <ServiceUnavailableModal />
+            </OrderingStatusProvider>
+          </ToastProvider>
         </AuthProvider>
       </QueryClientProvider>
     </Provider>

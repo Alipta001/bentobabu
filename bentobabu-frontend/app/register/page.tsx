@@ -191,7 +191,7 @@ function RegisterForm() {
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="e.g. +91 98765 43210"
+                placeholder="e.g. +91 85840 85669"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5] text-xs text-[#222922] focus:outline-none focus:border-[#354B35]"
               />
               <Phone className="w-4 h-4 text-[#8A9A86] absolute left-3.5 top-3 pointer-events-none" />

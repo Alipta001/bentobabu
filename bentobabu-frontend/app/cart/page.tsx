@@ -24,10 +24,12 @@ import { applyCoupon } from "@/store/cartSlice";
 import { useCartSync } from "@/hooks/useCartSync";
 import { cartService } from "@/services/cartService";
 import { useDeliveryConfig } from "@/hooks/useQueries";
+import { useOrderingStatus } from "@/context/OrderingStatusContext";
 
 export default function CartPage() {
   const dispatch = useAppDispatch();
   const { cartItems, appliedCoupon, setQuantity, removeItem, clear } = useCartSync();
+  const { acceptingOrders } = useOrderingStatus();
   const { data: deliveryConfig } = useDeliveryConfig();
 
   const [couponInput, setCouponInput] = useState("");
@@ -378,7 +380,19 @@ export default function CartPage() {
                   </div>
                 )}
 
-                {isBelowMinimum ? (
+                {!acceptingOrders ? (
+                  <div className="space-y-2">
+                    <button
+                      disabled
+                      className="w-full flex items-center justify-center gap-2 py-4 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-sm font-bold shadow-none cursor-not-allowed opacity-90"
+                    >
+                      <span>Ordering is temporarily unavailable</span>
+                    </button>
+                    <p className="text-center text-xs text-amber-800">
+                      Our kitchen is resting. Your cart items are safely saved.
+                    </p>
+                  </div>
+                ) : isBelowMinimum ? (
                   <button
                     disabled
                     className="w-full flex items-center justify-center gap-2 py-4 rounded-full bg-gray-200 text-gray-400 text-sm font-bold shadow-none cursor-not-allowed opacity-80"

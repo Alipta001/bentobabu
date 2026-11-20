@@ -9,6 +9,7 @@ import { DietaryBadge } from "@/components/ui/DietaryBadge";
 import { useAppSelector } from "@/store/hooks";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useToast } from "@/context/ToastContext";
+import { useOrderingStatus } from "@/context/OrderingStatusContext";
 import { getOptimizedImageUrl } from "@/utils/mediaUrl";
 
 interface ProductCardProps {
@@ -19,6 +20,7 @@ interface ProductCardProps {
 function ProductCardComponent({ product, priority = false }: ProductCardProps) {
   const { addItem, setQuantity } = useCartSync();
   const { showToast } = useToast();
+  const { acceptingOrders } = useOrderingStatus();
   const [justAdded, setJustAdded] = useState(false);
 
   const productId = product.id || product._id;
@@ -163,7 +165,11 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
           </div>
 
           {/* Cart Stepper or Add Button */}
-          {!product.isAvailable ? (
+          {!acceptingOrders ? (
+            <span className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+              Ordering Paused
+            </span>
+          ) : !product.isAvailable ? (
             <span className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500 border border-gray-200">
               Unavailable Today
             </span>

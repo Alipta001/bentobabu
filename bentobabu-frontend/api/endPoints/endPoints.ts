@@ -89,4 +89,7 @@ export const API_ENDPOINTS = {
     MY_REVIEWS: "/reviews/my",
     UPLOAD_IMAGE: "/reviews/upload-image",
   },
+  SETTINGS: {
+    ORDERING_STATUS: "/settings/ordering-status",
+  },
 } as const;

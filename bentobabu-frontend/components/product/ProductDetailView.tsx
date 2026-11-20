@@ -23,6 +23,7 @@ import { ProductCard } from "@/components/product/ProductCard";
 import { ProductReviewsSection } from "@/components/product/ProductReviewsSection";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useToast } from "@/context/ToastContext";
+import { useOrderingStatus } from "@/context/OrderingStatusContext";
 import { getOptimizedImageUrl } from "@/utils/mediaUrl";
 
 interface ProductDetailViewProps {
@@ -36,6 +37,7 @@ export function ProductDetailView({
 }: ProductDetailViewProps) {
   const { addItem, cartItems } = useCartSync();
   const { showToast } = useToast();
+  const { acceptingOrders } = useOrderingStatus();
   const [activeImage, setActiveImage] = useState(
     product.imageUrl || product.galleryImages?.[0] || ""
   );
@@ -337,16 +339,20 @@ export function ProductDetailView({
               {/* Add to Cart CTA */}
               <button
                 onClick={handleAddToCart}
-                disabled={!product.isAvailable}
+                disabled={!acceptingOrders || !product.isAvailable}
                 className={`flex-1 flex items-center justify-center gap-2 py-3.5 px-6 rounded-full text-sm font-bold shadow-md transition-all duration-200 ${
-                  !product.isAvailable
+                  !acceptingOrders
+                    ? "bg-amber-100 text-amber-900 border border-amber-300 cursor-not-allowed opacity-90"
+                    : !product.isAvailable
                     ? "bg-gray-200 text-gray-500 cursor-not-allowed border border-gray-300"
                     : addedSuccess
                     ? "bg-emerald-700 text-white cursor-pointer"
                     : "bg-[#354B35] text-[#F7F3EA] hover:bg-[#253525] cursor-pointer"
                 }`}
               >
-                {!product.isAvailable ? (
+                {!acceptingOrders ? (
+                  <span>Ordering is temporarily unavailable</span>
+                ) : !product.isAvailable ? (
                   <span>Unavailable on Today&apos;s Menu</span>
                 ) : addedSuccess ? (
                   <>

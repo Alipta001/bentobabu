@@ -30,6 +30,7 @@ import {
   useDeliveryConfig,
 } from "@/hooks/useQueries";
 import { useAuth } from "@/context/AuthContext";
+import { useOrderingStatus } from "@/context/OrderingStatusContext";
 import { cartService } from "@/services/cartService";
 import { orderService } from "@/services/orderService";
 import { paymentService } from "@/services/paymentService";
@@ -79,6 +80,7 @@ export default function CheckoutPage() {
   const dispatch = useAppDispatch();
   const cartItems = useAppSelector((state) => state.cart.items);
   const appliedCoupon = useAppSelector((state) => state.cart.appliedCoupon);
+  const { acceptingOrders } = useOrderingStatus();
 
   const { user: userProfile, status: authStatus, isLoading: isUserLoading } = useAuth();
   const {
@@ -513,12 +515,25 @@ export default function CheckoutPage() {
 
       dispatch(clearCart());
       router.push(`/order-success/${createdOrder.id}`);
-    } catch (err: unknown) {
-      setErrorMessage(
-        err instanceof Error
-          ? err.message
-          : "Failed to place your order. Please check address and serviceability."
-      );
+    } catch (err: any) {
+      const isOrderingDisabled =
+        err?.response?.status === 503 ||
+        err?.response?.data?.code === "ORDERING_DISABLED" ||
+        err?.response?.data?.message?.includes("not accepting new orders");
+
+      if (isOrderingDisabled) {
+        setErrorMessage(
+          err?.response?.data?.message ||
+            "Our kitchen is currently resting. We're not accepting new orders right now. Your cart and entered address details have been safely saved."
+        );
+      } else {
+        setErrorMessage(
+          err?.response?.data?.message ||
+            (err instanceof Error
+              ? err.message
+              : "Failed to place your order. Please check address and serviceability.")
+        );
+      }
       setIsSubmitting(false);
     }
   };
@@ -1022,6 +1037,15 @@ export default function CheckoutPage() {
                     </div>
                   )}
 
+                  {!acceptingOrders && (
+                    <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex items-start gap-2.5 text-xs text-amber-900 animate-in fade-in">
+                      <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <span>
+                        Ordering is temporarily unavailable. Our kitchen is taking a break. Your selected items and delivery address are safely saved.
+                      </span>
+                    </div>
+                  )}
+
                   {summaryError && !isBelowMinimum && (
                     <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2 text-xs text-rose-800">
                       <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -1032,10 +1056,18 @@ export default function CheckoutPage() {
                   {/* Place Order CTA */}
                   <button
                     type="submit"
-                    disabled={isSubmitting || isBelowMinimum || !!summaryError || (serviceability && !serviceability.serviceable)}
+                    disabled={
+                      isSubmitting ||
+                      !acceptingOrders ||
+                      isBelowMinimum ||
+                      !!summaryError ||
+                      (serviceability && !serviceability.serviceable)
+                    }
                     className="w-full flex items-center justify-center gap-2 py-4 rounded-full bg-[#354B35] text-[#F7F3EA] text-sm font-bold shadow-md hover:bg-[#253525] disabled:opacity-50 cursor-pointer transition-all"
                   >
-                    {isSubmitting ? (
+                    {!acceptingOrders ? (
+                      <span>Ordering is temporarily unavailable</span>
+                    ) : isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin text-[#B99A60]" />
                         <span>Confirming Order...</span>

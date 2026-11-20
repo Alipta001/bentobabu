@@ -200,7 +200,9 @@ const supportRoutes = require('./app/routes/supportRoutes');
 const adminSupportRoutes = require('./app/routes/adminSupportRoutes');
 const reviewRoutes = require('./app/routes/reviewRoutes');
 const adminReviewRoutes = require('./app/routes/adminReviewRoutes');
+const settingsRoutes = require('./app/routes/settingsRoutes');
 
+app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/categories', categoryRoutes);
 app.use('/api/v1/products', productRoutes);

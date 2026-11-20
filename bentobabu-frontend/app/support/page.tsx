@@ -131,15 +131,15 @@ export default function SupportPage() {
 
   // Load initial public config & FAQs
   useEffect(() => {
-    supportService.getConfig().then(setConfig).catch(() => {});
-    supportService.getFaqs().then(setFaqs).catch(() => {});
+    supportService.getConfig().then(setConfig).catch(() => { });
+    supportService.getFaqs().then(setFaqs).catch(() => { });
   }, []);
 
   // Load tickets and orders when user is authenticated
   useEffect(() => {
     if (isAuthenticated) {
       loadTickets();
-      orderService.getAll().then(setMyOrders).catch(() => {});
+      orderService.getAll().then(setMyOrders).catch(() => { });
     }
   }, [isAuthenticated]);
 
@@ -379,22 +379,20 @@ export default function SupportPage() {
             <button
               type="button"
               onClick={() => setActiveTab("faqs")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                activeTab === "faqs"
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${activeTab === "faqs"
                   ? "bg-[#243324] text-white shadow-xs"
                   : "bg-white text-gray-600 hover:bg-gray-100"
-              }`}
+                }`}
             >
               Frequently Asked Questions ({faqs.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("tickets")}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                activeTab === "tickets"
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 ${activeTab === "tickets"
                   ? "bg-[#243324] text-white shadow-xs"
                   : "bg-white text-gray-600 hover:bg-gray-100"
-              }`}
+                }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
               <span>My Support Tickets</span>
@@ -429,11 +427,10 @@ export default function SupportPage() {
                         key={cat}
                         type="button"
                         onClick={() => setSelectedFaqCategory(cat)}
-                        className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                          selectedFaqCategory === cat
+                        className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap cursor-pointer transition-colors ${selectedFaqCategory === cat
                             ? "bg-[#C86D51] text-white"
                             : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
-                        }`}
+                          }`}
                       >
                         {cat === "ALL" ? "All FAQs" : cat.replace(/_/g, " ")}
                       </button>
@@ -467,9 +464,8 @@ export default function SupportPage() {
                         >
                           <span>{faq.question}</span>
                           <ChevronDown
-                            className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${
-                              isOpen ? "rotate-180 text-[#C86D51]" : ""
-                            }`}
+                            className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180 text-[#C86D51]" : ""
+                              }`}
                           />
                         </button>
                         {isOpen && (
@@ -584,7 +580,7 @@ export default function SupportPage() {
                 <span>Helpline Phone</span>
               </div>
               <p className="text-gray-600 font-mono font-semibold">
-                {config?.phone || "+91 98765 43210"}
+                {config?.phone || "+91 85840 85669"}
               </p>
               <div className="flex items-center gap-1 text-[11px] text-gray-500">
                 <Clock className="w-3 h-3" />
@@ -852,11 +848,10 @@ export default function SupportPage() {
                       </div>
 
                       <div
-                        className={`p-3.5 rounded-2xl max-w-[85%] leading-relaxed ${
-                          isStaff
+                        className={`p-3.5 rounded-2xl max-w-[85%] leading-relaxed ${isStaff
                             ? "bg-[#F5F2EB] text-[#241C1A] rounded-tl-xs"
                             : "bg-[#243324] text-[#EDE8DE] rounded-tr-xs"
-                        }`}
+                          }`}
                       >
                         <p className="whitespace-pre-wrap">{msg.message}</p>
 

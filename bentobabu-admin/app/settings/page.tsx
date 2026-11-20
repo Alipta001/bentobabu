@@ -19,6 +19,8 @@ import {
   Upload,
   ExternalLink,
   Globe,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { useAdminSettings, useUpdateSettings } from "@/hooks/useAdminQueries";
 import { mediaService } from "@/services/mediaService";
@@ -31,6 +33,44 @@ function SettingsForm({ initialSettings }: { initialSettings: BusinessSettings }
   const [uploadingFssai, setUploadingFssai] = useState(false);
   const [uploadingGst, setUploadingGst] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Live Ordering Status Modal & Toggle state
+  const [orderingModalOpen, setOrderingModalOpen] = useState(false);
+  const [targetOrderingState, setTargetOrderingState] = useState<boolean | null>(null);
+  const [isSavingOrdering, setIsSavingOrdering] = useState(false);
+  const [orderingFeedback, setOrderingFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  const requestOrderingToggle = (newState: boolean) => {
+    setTargetOrderingState(newState);
+    setOrderingModalOpen(true);
+  };
+
+  const confirmOrderingToggle = async () => {
+    if (targetOrderingState === null) return;
+    setIsSavingOrdering(true);
+    setOrderingFeedback(null);
+    try {
+      await updateMutation.mutateAsync({ isOrderingEnabled: targetOrderingState });
+      setFormData((prev) => ({ ...prev, isOrderingEnabled: targetOrderingState }));
+      setOrderingFeedback({
+        type: "success",
+        message: targetOrderingState
+          ? "Live Ordering Status switched ON: Kitchen is accepting new customer orders."
+          : "Live Ordering Status switched OFF: New customer orders are paused. Existing orders continue normally.",
+      });
+      setOrderingModalOpen(false);
+    } catch (err: any) {
+      setOrderingFeedback({
+        type: "error",
+        message: err?.message || "Failed to update Live Ordering Status.",
+      });
+    } finally {
+      setIsSavingOrdering(false);
+    }
+  };
 
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -76,50 +116,191 @@ function SettingsForm({ initialSettings }: { initialSettings: BusinessSettings }
         </div>
       )}
 
-      {/* Live Kitchen Status / Kill Switch */}
+      {/* Live Ordering Status / Global Switch */}
       <div
         className={`p-6 rounded-2xl border transition-all ${
           formData.isOrderingEnabled
-            ? "bg-emerald-50/60 border-emerald-200"
-            : "bg-rose-50/60 border-rose-200"
+            ? "bg-emerald-50/70 border-emerald-300 shadow-xs"
+            : "bg-rose-50/70 border-rose-300 shadow-xs"
         }`}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
                 formData.isOrderingEnabled
                   ? "bg-emerald-600 text-white"
                   : "bg-rose-600 text-white"
               }`}
             >
-              <Power className="w-5 h-5" />
+              <Power className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="font-serif text-base font-bold text-[#1E2B1E]">
-                Live Ordering Status
-              </h3>
-              <p className="text-xs text-[#354B35]/80 mt-0.5">
-                {formData.isOrderingEnabled
-                  ? "Kitchen is actively accepting customer orders from the web portal"
-                  : "Orders paused: Customers will see a friendly kitchen maintenance notice"}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h3 className="font-serif text-lg font-bold text-[#1E2B1E]">
+                  Live Ordering Status
+                </h3>
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide uppercase shadow-xs ${
+                    formData.isOrderingEnabled
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                      : "bg-rose-100 text-rose-800 border border-rose-300"
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      formData.isOrderingEnabled ? "bg-emerald-600 animate-pulse" : "bg-rose-600"
+                    }`}
+                  />
+                  {formData.isOrderingEnabled ? "ON — Accepting Orders" : "OFF — Ordering Paused"}
+                </span>
+              </div>
+              <p className="text-xs text-[#354B35]/80 mt-1">
+                Control whether customers can place new orders through the BentoBabu website.
               </p>
             </div>
           </div>
 
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={formData.isOrderingEnabled}
-              onChange={(e) =>
-                setFormData({ ...formData, isOrderingEnabled: e.target.checked })
-              }
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-          </label>
+          <div className="flex items-center gap-3 self-end sm:self-center">
+            <button
+              type="button"
+              onClick={() => requestOrderingToggle(!formData.isOrderingEnabled)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                formData.isOrderingEnabled
+                  ? "bg-rose-600 hover:bg-rose-700 text-white"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white"
+              }`}
+            >
+              {formData.isOrderingEnabled ? "Turn OFF Ordering" : "Turn ON Ordering"}
+            </button>
+          </div>
         </div>
+
+        {/* State description bullets */}
+        <div className="mt-4 pt-3.5 border-t border-[#354B35]/10 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+          {formData.isOrderingEnabled ? (
+            <>
+              <div className="flex items-center gap-2 text-emerald-800 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Kitchen accepts new customer orders.</span>
+              </div>
+              <div className="flex items-center gap-2 text-emerald-800 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Checkout is available. New orders can be created.</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2 text-rose-800 font-medium">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>New customer orders are blocked.</span>
+              </div>
+              <div className="flex items-center gap-2 text-rose-800 font-medium">
+                <ShieldCheck className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Existing orders continue normally through kitchen and delivery.</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {orderingFeedback && (
+          <div
+            className={`mt-4 p-3 rounded-xl border text-xs font-semibold flex items-center gap-2 animate-in fade-in ${
+              orderingFeedback.type === "success"
+                ? "bg-emerald-100 border-emerald-300 text-emerald-900"
+                : "bg-rose-100 border-rose-300 text-rose-900"
+            }`}
+          >
+            {orderingFeedback.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-700" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-700" />
+            )}
+            <span>{orderingFeedback.message}</span>
+          </div>
+        )}
       </div>
+
+      {/* Confirmation Modal */}
+      {orderingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-[#E5DFD3] shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  targetOrderingState
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-rose-100 text-rose-700"
+                }`}
+              >
+                <Power className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-serif text-base font-bold text-[#1E2B1E]">
+                  {targetOrderingState ? "Turn ON Live Ordering?" : "Turn OFF Live Ordering?"}
+                </h4>
+                <p className="text-xs text-[#354B35]/70">
+                  {targetOrderingState ? "Resume accepting new orders" : "Pause new order placement"}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[#222922] leading-relaxed">
+              {targetOrderingState
+                ? "Are you sure you want to resume accepting new customer orders? Customers will be able to place new orders through checkout immediately."
+                : "Are you sure you want to stop accepting new orders? Customers will no longer be able to place new orders. Existing orders will continue normally."}
+            </p>
+
+            <div className="bg-[#F9F7F1] p-3 rounded-xl border border-[#E5DFD3] text-[11px] text-[#354B35] space-y-1">
+              <div className="font-semibold text-[#1E2B1E]">Operational impact:</div>
+              {targetOrderingState ? (
+                <>
+                  <div>• Checkout becomes available immediately across the customer portal.</div>
+                  <div>• Kitchen resumes accepting new incoming order notifications.</div>
+                </>
+              ) : (
+                <>
+                  <div>• Customers can still browse the menu, meal boxes, and videos.</div>
+                  <div>• All existing orders in preparation or delivery continue without interruption.</div>
+                  <div>• Razorpay payment webhooks and order tracking continue normally.</div>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isSavingOrdering}
+                onClick={() => setOrderingModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-[#354B35] hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSavingOrdering}
+                onClick={confirmOrderingToggle}
+                className={`px-5 py-2 rounded-xl text-xs font-bold text-white transition-all shadow-xs cursor-pointer flex items-center gap-1.5 ${
+                  targetOrderingState
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-rose-600 hover:bg-rose-700"
+                }`}
+              >
+                {isSavingOrdering ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>
+                    {targetOrderingState ? "Confirm & Turn ON" : "Confirm & Turn OFF"}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Brand & Store Profile */}
       <div className="bg-white p-6 rounded-2xl border border-[#E5DFD3] shadow-xs space-y-4">

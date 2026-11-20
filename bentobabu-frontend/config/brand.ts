@@ -52,8 +52,8 @@ export const brandConfig: BrandConfig = {
   },
   contact: {
     email: "care@bentobabu.in",
-    phone: "+91 98765 43210",
-    whatsapp: "+91 98765 43210",
+    phone: "+91 85840 85669",
+    whatsapp: "+91 85840 85669",
     address: "Chandanpukur Bazar, Barrackpore, West Bengal 700120",
     operatingHours: "7:00 AM – 10:30 PM (Daily)",
   },

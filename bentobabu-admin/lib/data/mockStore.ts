@@ -242,7 +242,7 @@ export const INITIAL_ADMIN_ORDERS: Order[] = [
     createdAt: "2026-11-08T01:30:00Z",
     customerName: "Arjun Verma",
     customerEmail: "arjun.verma@example.com",
-    customerPhone: "+91 98765 43210",
+    customerPhone: "+91 85840 85669",
     items: [
       {
         productId: "prod-1",
@@ -423,7 +423,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     id: "cust-1",
     name: "Arjun Verma",
     email: "arjun.verma@example.com",
-    phone: "+91 98765 43210",
+    phone: "+91 85840 85669",
     totalOrders: 6,
     totalSpent: 4820,
     createdAt: "2026-01-15T10:00:00Z",
@@ -597,7 +597,7 @@ export const INITIAL_SETTINGS: BusinessSettings = {
   businessName: "Bento Babu",
   tagline: "Pure Ingredients, Mindful Nutrition",
   supportEmail: "care@bentobabu.in",
-  supportPhone: "+91 98765 43210",
+  supportPhone: "+91 85840 85669",
   kitchenName: "BentoBabu Central Kitchen",
   kitchenLandmark: "Apollo Pharmacy / Apollo 24|7",
   kitchenAddress: "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal 700120",

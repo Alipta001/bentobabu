@@ -35,12 +35,12 @@ export interface BackendSystemSettings {
 const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
   businessName: s.BUSINESS_NAME || "Bento Babu",
   tagline: "Mindful Indian Bento & Clean Meal Boxes",
-  supportEmail: s.SUPPORT_EMAIL || "support@bentobabu.in",
-  supportPhone: s.SUPPORT_PHONE || "9876543210",
+  supportEmail: s.SUPPORT_EMAIL || "bentobabuofficial@gmail.com",
+  supportPhone: s.SUPPORT_PHONE || "+91 8584085669",
   kitchenName: s.KITCHEN_NAME || "BentoBabu Central Kitchen",
   kitchenLandmark: s.KITCHEN_LANDMARK || "Apollo Pharmacy / Apollo 24|7",
   kitchenAddress: s.KITCHEN_ADDRESS || "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India",
-  kitchenPincode: s.KITCHEN_PINCODE || "700120",
+  kitchenPincode: s.KITCHEN_PINCODE || "700122",
   kitchenLatitude: typeof s.KITCHEN_LATITUDE === "number" ? s.KITCHEN_LATITUDE : 22.7666909,
   kitchenLongitude: typeof s.KITCHEN_LONGITUDE === "number" ? s.KITCHEN_LONGITUDE : 88.3788318,
   operatingHours: `${s.OPENING_TIME || "10:00"} - ${s.CLOSING_TIME || "22:00"}`,
@@ -55,8 +55,8 @@ const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
   fssaiCertificateUrl: s.FSSAI_CERTIFICATE_URL || "",
   gstin: s.GSTIN || "",
   gstCertificateUrl: s.GST_CERTIFICATE_URL || "",
-  websiteUrl: s.WEBSITE_URL || "https://bentobabu.in",
-  businessAddress: s.BUSINESS_ADDRESS || "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700120, India",
+  websiteUrl: s.WEBSITE_URL || "https://bentobabu.com",
+  businessAddress: s.BUSINESS_ADDRESS || "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India",
 });
 
 export const settingsService = {

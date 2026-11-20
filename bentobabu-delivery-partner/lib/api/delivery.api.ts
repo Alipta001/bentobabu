@@ -14,7 +14,7 @@ export const VERIFIED_CENTRAL_KITCHEN: CentralKitchenDetails = {
   pincode: "700120",
   latitude: 22.7666909,
   longitude: 88.3788318,
-  phone: "+91 98765 43210",
+  phone: "+91 85840 85669",
   googleMapsUrl: "https://www.google.com/maps?q=22.7666909,88.3788318",
   googleMapsDirectionsUrl: "https://www.google.com/maps/dir/?api=1&destination=22.7666909%2C88.3788318",
 };
