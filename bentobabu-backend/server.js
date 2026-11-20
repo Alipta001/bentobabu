@@ -89,9 +89,19 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token', 'X-XSRF-Token', 'X-Auth-Context'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'X-CSRF-Token',
+    'X-XSRF-Token',
+    'X-Auth-Context',
+    'Idempotency-Key',
+    'X-Idempotency-Key',
+  ],
   exposedHeaders: ['Set-Cookie', 'X-CSRF-Token', 'X-Auth-Context'],
   maxAge: 86400, // 24 hours
+  optionsSuccessStatus: 204,
 };
 
 app.use(cors(corsOptions));
