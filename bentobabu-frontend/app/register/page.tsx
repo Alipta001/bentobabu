@@ -83,6 +83,11 @@ function RegisterForm() {
       return;
     }
 
+    if (!isMobileVerified) {
+      setError("Please verify your mobile number with the OTP widget before registering.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -239,7 +244,7 @@ function RegisterForm() {
             disabled={isLoading}
             className="w-full py-3.5 rounded-full bg-[#354B35] text-[#F7F3EA] text-xs font-bold shadow-md hover:bg-[#253525] disabled:opacity-50 cursor-pointer transition-all flex items-center justify-center gap-2"
           >
-            <span>{isLoading ? "Creating Account..." : "Register Account"}</span>
+            <span>{isLoading ? "Creating Account..." : (!isMobileVerified ? "Verify Mobile to Register" : "Register Account")}</span>
             <ArrowRight className="w-4 h-4 text-[#B99A60]" />
           </button>
         </form>

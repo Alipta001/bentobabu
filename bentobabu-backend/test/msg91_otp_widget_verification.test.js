@@ -136,7 +136,7 @@ const runTests = async () => {
   console.log('🚀 Starting BentoBabu MSG91 OTP Widget Verification Suite');
   console.log('======================================================\n');
 
-  // Setup Mock Resend
+  // Setup Mock Resend & Mock SMS Sender
   let sentEmails = [];
   setResendClient({
     emails: {
@@ -145,6 +145,13 @@ const runTests = async () => {
         return { data: { id: `mock-email-${Date.now()}` }, error: null };
       },
     },
+  });
+
+  const { setSmsSender } = require('../app/utils/sms');
+  let sentSmsList = [];
+  setSmsSender(async (smsOptions) => {
+    sentSmsList.push(smsOptions);
+    return { success: true, messageId: `mock-sms-${Date.now()}` };
   });
 
   // In-memory data store for tests
@@ -617,17 +624,35 @@ const runTests = async () => {
     console.log('  ✓ Pre-verification cannot be reused; single-use guarantee verified');
 
     // -------------------------------------------------------------------------
-    // Scenario 10: Email OTP verification continues to function normally
+    // Scenario 10: Email OTP verification for MSG91 pre-verified mobile (No SMS dispatch)
     // -------------------------------------------------------------------------
-    console.log(`[Test ${testNumber()}] Scenario 10: Email OTP verification continues to function normally`);
+    console.log(`[Test ${testNumber()}] Scenario 10: Verified MSG91 mobile does not trigger mock SMS and sends Email OTP`);
     const emailCustomer = `customer_${Date.now()}@test-msg91.com`;
+    const verifiedCustomerPhone = '9876543211';
+
+    // 1. Mobile verification via MSG91 widget
+    setCustomVerifier(async () => ({ type: 'success', message: `91${verifiedCustomerPhone}` }));
+    await makeMockRequest({
+      method: 'POST',
+      path: '/api/v1/auth/verify-mobile-widget',
+      body: {
+        mobile: verifiedCustomerPhone,
+        accessToken: `widget_token_scenario_10_${Date.now()}`,
+      },
+    });
+
+    // Reset dispatched tracking
+    sentSmsList = [];
+    sentEmails = [];
+
+    // 2. Customer submits registration
     const regRes = await makeMockRequest({
       method: 'POST',
       path: '/api/v1/auth/register',
       body: {
         name: 'Rohan Sharma',
         email: emailCustomer,
-        phone: '9876543211',
+        phone: verifiedCustomerPhone,
         password: 'Password123!',
       },
     });
@@ -637,11 +662,14 @@ const runTests = async () => {
     assert.strictEqual(regRes.body.data.requiresVerification, true);
     assert.strictEqual(regRes.body.data.channel, 'email');
 
+    // Assert: Backend does NOT independently generate or dispatch a second SMS OTP
+    assert.strictEqual(sentSmsList.length, 0, 'Backend must NOT dispatch legacy SMS OTP during registration when mobile is verified via widget');
+    assert.ok(sentEmails.length > 0, 'Backend must dispatch Email OTP for account verification');
+
     const challengeId = regRes.body.data.challengeId;
     assert.ok(challengeId, 'Expected challengeId in registration response');
 
     // Find challenge in DB and get plain OTP from sent emails
-    assert.ok(sentEmails.length > 0, 'Email should have been dispatched');
     const lastEmail = sentEmails[sentEmails.length - 1];
     const otpMatch = lastEmail.html ? lastEmail.html.match(/\b\d{6}\b/) : null;
     assert.ok(otpMatch, 'Expected 6-digit OTP in email content');
@@ -661,7 +689,33 @@ const runTests = async () => {
 
     const userInDb = usersStore.find((u) => u.email === emailCustomer);
     assert.strictEqual(userInDb.isEmailVerified, true, 'User should be marked as email verified');
-    console.log('  ✓ Email OTP verification operates with 100% fidelity alongside mobile widget');
+    assert.strictEqual(userInDb.isPhoneVerified, true, 'User should be marked as phone verified');
+    console.log('  ✓ Verified MSG91 mobile does NOT trigger legacy SMS dispatch and successfully completes Email OTP');
+
+    // -------------------------------------------------------------------------
+    // Scenario 10b: Unverified mobile registration rejection (HTTP 400 MOBILE_VERIFICATION_REQUIRED)
+    // -------------------------------------------------------------------------
+    console.log(`[Test ${testNumber()}] Scenario 10b: Unverified mobile registration is strictly rejected`);
+    sentSmsList = [];
+    sentEmails = [];
+    const unverifiedPhone = '9876543299';
+    const unverifiedRegRes = await makeMockRequest({
+      method: 'POST',
+      path: '/api/v1/auth/register',
+      body: {
+        name: 'Unverified Mobile User',
+        email: `unverified_mobile_${Date.now()}@test-msg91.com`,
+        phone: unverifiedPhone,
+        password: 'Password123!',
+      },
+    });
+
+    assert.strictEqual(unverifiedRegRes.statusCode, 400, 'Unverified mobile registration must return HTTP 400');
+    assert.strictEqual(unverifiedRegRes.body.success, false);
+    assert.strictEqual(unverifiedRegRes.body.code, 'MOBILE_VERIFICATION_REQUIRED');
+    assert.strictEqual(sentSmsList.length, 0, 'Must not dispatch any SMS OTP when mobile is unverified');
+    assert.strictEqual(sentEmails.length, 0, 'Must not dispatch any Email OTP when mobile is unverified');
+    console.log('  ✓ Unverified mobile registration strictly rejected with HTTP 400 MOBILE_VERIFICATION_REQUIRED');
 
     // -------------------------------------------------------------------------
     // Scenario 11: Unverified mobile / account restrictions (HTTP 403)
@@ -804,6 +858,7 @@ const runTests = async () => {
     OtpChallenge.findOneAndUpdate = origChallengeFindOneAndUpdate;
     OtpChallenge.updateMany = origChallengeUpdateMany;
     OtpChallenge.deleteMany = origChallengeDeleteMany;
+    setSmsSender(undefined);
   }
 };
 

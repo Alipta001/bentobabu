@@ -167,16 +167,23 @@ class AuthController {
       // 3. Hash password
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
-      // 4. Create or update unverified user
+      // 4. Enforce mandatory MSG91 OTP Widget mobile pre-verification
       // Atomically consumes pre-verification so it is single-use and bound to this registration attempt
       const isMobilePreVerified = await Msg91WidgetService.consumePhonePreVerification(cleanPhone);
+      if (!isMobilePreVerified) {
+        console.warn(`[Registration][${correlationId}] Registration rejected: Mobile number not verified via MSG91 widget: ${maskPhoneNumber(cleanPhone)}`);
+        return res.status(400).json({
+          success: false,
+          message: 'Mobile number must be verified via the OTP widget before registering.',
+          code: 'MOBILE_VERIFICATION_REQUIRED',
+        });
+      }
+
       let user;
       if (existingUser && !(existingUser.isEmailVerified || existingUser.isPhoneVerified)) {
         existingUser.name = name.trim();
         existingUser.password = hashedPassword;
-        if (isMobilePreVerified) {
-          existingUser.isPhoneVerified = true;
-        }
+        existingUser.isPhoneVerified = true;
         await existingUser.save();
         await OtpChallenge.deleteMany({ user: existingUser._id, isConsumed: false });
         user = existingUser;
@@ -190,14 +197,16 @@ class AuthController {
           role: 'CUSTOMER',
           isActive: true,
           isEmailVerified: false,
-          isPhoneVerified: Boolean(isMobilePreVerified),
+          isPhoneVerified: true,
         });
         console.log(`[Registration][${correlationId}] New unverified customer account created for destination: ${maskEmail(cleanEmail)}`);
       }
 
-      // 5. Generate opaque challenge token and hash OTP with separate OTP_HASH_SECRET
-      const channel = activeEnv.otpEmailEnabled ? 'email' : 'sms';
-      const identifier = channel === 'email' ? cleanEmail : cleanPhone;
+      // 5. Generate opaque challenge token and hash OTP for email verification
+      // Mobile verification is already completed via MSG91 OTP widget; registration challenge is strictly email OTP.
+      // The backend does not independently generate or dispatch a second SMS OTP.
+      const channel = 'email';
+      const identifier = cleanEmail;
       const challengeToken = generateChallengeToken();
       const challengeTokenHash = hashChallengeToken(challengeToken);
       const otp = generateNumericOtp(activeEnv.otpLength);
@@ -219,24 +228,15 @@ class AuthController {
       });
       console.log(`[Registration][${correlationId}] OTP challenge created for channel: ${channel}`);
 
-      // 6. Deliver OTP via configured channel
-      let sendResult;
-      if (channel === 'email') {
-        const providerName = activeEnv.emailProvider === 'resend' ? 'resend-api' : (activeEnv.emailProvider || 'resend-api');
-        console.log(`[Registration][${correlationId}] Email dispatch started via ${providerName} to: ${maskEmail(cleanEmail)}`);
-        sendResult = await sendSignupOtpEmail({
-          to: cleanEmail,
-          name: user.name,
-          otp,
-          expiryMinutes: activeEnv.otpExpiryMinutes,
-        });
-      } else {
-        console.log(`[Registration][${correlationId}] SMS dispatch started to: ${maskPhoneNumber(cleanPhone)}`);
-        sendResult = await sendSms({
-          to: cleanPhone,
-          message: `Your BentoBabu verification code is ${otp}. Valid for ${activeEnv.otpExpiryMinutes} minutes. Do not share it with anyone.`,
-        });
-      }
+      // 6. Deliver OTP via email channel (Resend)
+      const providerName = activeEnv.emailProvider === 'resend' ? 'resend-api' : (activeEnv.emailProvider || 'resend-api');
+      console.log(`[Registration][${correlationId}] Email dispatch started via ${providerName} to: ${maskEmail(cleanEmail)}`);
+      const sendResult = await sendSignupOtpEmail({
+        to: cleanEmail,
+        name: user.name,
+        otp,
+        expiryMinutes: activeEnv.otpExpiryMinutes,
+      });
 
       if (!sendResult || !sendResult.success) {
         console.warn(`[Registration][${correlationId}] OTP delivery failed via ${channel}: ${sendResult?.error || 'Unknown error'}`);
@@ -247,7 +247,7 @@ class AuthController {
         }
         return res.status(502).json({
           success: false,
-          message: `Failed to deliver verification code via ${channel}. Please try again later.`,
+          message: `Failed to deliver verification code via email. Please try again later.`,
         });
       }
 
@@ -343,7 +343,8 @@ class AuthController {
         });
       }
 
-      const isAlreadyVerified = user.isEmailVerified || user.isPhoneVerified;
+      // Check if the specific channel for this challenge is already verified
+      const isAlreadyVerified = challenge.channel === 'email' ? user.isEmailVerified : user.isPhoneVerified;
       if (isAlreadyVerified) {
         return res.status(400).json({
           success: false,
@@ -477,7 +478,8 @@ class AuthController {
         });
       }
 
-      const isAlreadyVerified = user.isEmailVerified || user.isPhoneVerified;
+      // Check if the specific channel for this challenge is already verified
+      const isAlreadyVerified = challenge.channel === 'email' ? user.isEmailVerified : user.isPhoneVerified;
       if (isAlreadyVerified) {
         return res.status(400).json({
           success: false,
