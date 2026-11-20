@@ -138,16 +138,17 @@ const parseDurationToMs = (duration, defaultMs = 30 * 1000) => {
 /**
  * Standard cookie configuration for access tokens (HttpOnly)
  */
-const getAccessTokenCookieOptions = () => {
+const getAccessTokenCookieOptions = (path = '/') => {
+  const activeEnv = validateEnv();
   const opts = {
     httpOnly: true,
-    secure: env.cookieSecure,
-    sameSite: env.cookieSameSite,
-    path: '/',
-    maxAge: parseDurationToMs(env.accessTokenExpiresIn, 30 * 1000),
+    secure: activeEnv.cookieSecure,
+    sameSite: activeEnv.cookieSameSite,
+    path,
+    maxAge: parseDurationToMs(activeEnv.accessTokenExpiresIn, 15 * 60 * 1000),
   };
-  if (env.cookieDomain) {
-    opts.domain = env.cookieDomain;
+  if (activeEnv.cookieDomain) {
+    opts.domain = activeEnv.cookieDomain;
   }
   return opts;
 };
@@ -157,15 +158,16 @@ const getAccessTokenCookieOptions = () => {
  * Scoped to /api/v1/auth for security while enabling automatic token rotation and logout
  */
 const getRefreshCookieOptions = (path = '/api/v1/auth') => {
+  const activeEnv = validateEnv();
   const opts = {
     httpOnly: true,
-    secure: env.cookieSecure,
-    sameSite: env.cookieSameSite,
+    secure: activeEnv.cookieSecure,
+    sameSite: activeEnv.cookieSameSite,
     path,
-    maxAge: parseDurationToMs(env.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000),
+    maxAge: parseDurationToMs(activeEnv.refreshTokenExpiresIn, 7 * 24 * 60 * 60 * 1000),
   };
-  if (env.cookieDomain) {
-    opts.domain = env.cookieDomain;
+  if (activeEnv.cookieDomain) {
+    opts.domain = activeEnv.cookieDomain;
   }
   return opts;
 };
@@ -174,15 +176,16 @@ const getRefreshCookieOptions = (path = '/api/v1/auth') => {
  * Standard cookie configuration for CSRF tokens
  */
 const getCsrfCookieOptions = () => {
+  const activeEnv = validateEnv();
   const opts = {
     httpOnly: false, // Accessible to JavaScript for double-submit header attachment
-    secure: env.cookieSecure,
-    sameSite: env.cookieSameSite,
+    secure: activeEnv.cookieSecure,
+    sameSite: activeEnv.cookieSameSite,
     path: '/',
     maxAge: 2 * 60 * 60 * 1000, // 2 hours
   };
-  if (env.cookieDomain) {
-    opts.domain = env.cookieDomain;
+  if (activeEnv.cookieDomain) {
+    opts.domain = activeEnv.cookieDomain;
   }
   return opts;
 };
@@ -191,16 +194,17 @@ const getCsrfCookieOptions = () => {
  * Options for clearing cookies with exact matching security attributes
  */
 const getClearCookieOptions = (path = '/') => {
+  const activeEnv = validateEnv();
   const opts = {
     httpOnly: true,
-    secure: env.cookieSecure,
-    sameSite: env.cookieSameSite,
+    secure: activeEnv.cookieSecure,
+    sameSite: activeEnv.cookieSameSite,
     path,
     expires: new Date(0),
     maxAge: 0,
   };
-  if (env.cookieDomain) {
-    opts.domain = env.cookieDomain;
+  if (activeEnv.cookieDomain) {
+    opts.domain = activeEnv.cookieDomain;
   }
   return opts;
 };

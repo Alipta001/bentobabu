@@ -447,6 +447,14 @@ const maskEmailAddress = (email) => {
  * Dispatches an email notification via Resend HTTPS API
  */
 const sendEmail = async ({ to, subject, html, text }) => {
+  if (process.env.MOCK_NOTIFICATIONS === 'true') {
+    return {
+      success: true,
+      messageId: `mock_email_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      duration: 1,
+    };
+  }
+
   const client = getResendClient();
   const activeEnv = validateEnv();
 

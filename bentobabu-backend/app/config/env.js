@@ -21,6 +21,75 @@ const requiredInProduction = [
   'ADMIN_FRONTEND_URL',
 ];
 
+/**
+ * Safely resolves and validates COOKIE_DOMAIN.
+ * Returns undefined when unset, empty, or set to an invalid/internal identifier (e.g. Render instance ID),
+ * ensuring the Domain attribute is completely omitted for a standard host-only cookie.
+ */
+const resolveCookieDomain = (rawDomain) => {
+  if (rawDomain === undefined || rawDomain === null) return undefined;
+  if (typeof rawDomain !== 'string') return undefined;
+
+  let domain = rawDomain.trim();
+  domain = domain.replace(/^["']+|["']+$/g, '').trim();
+
+  if (!domain) return undefined;
+
+  const lower = domain.toLowerCase();
+  if (['undefined', 'null', 'false', 'none', 'off', '0'].includes(lower)) {
+    return undefined;
+  }
+
+  // Strip protocol and path if accidentally provided as a URL
+  if (domain.includes('://') || domain.startsWith('//')) {
+    try {
+      const parsed = new URL(domain.startsWith('//') ? 'https:' + domain : domain);
+      domain = parsed.hostname;
+    } catch {
+      return undefined;
+    }
+  } else {
+    domain = domain.split('/')[0].split(':')[0].trim();
+  }
+
+  // Never set Domain for localhost or IP addresses (RFC 6265 requires host-only cookies)
+  if (domain === 'localhost' || domain === '127.0.0.1' || /^(\d{1,3}\.){3}\d{1,3}$/.test(domain)) {
+    return undefined;
+  }
+
+  // Reject Render internal identifiers & service names
+  if (
+    (process.env.RENDER_INSTANCE_ID && domain === process.env.RENDER_INSTANCE_ID) ||
+    (process.env.RENDER_SERVICE_ID && domain === process.env.RENDER_SERVICE_ID) ||
+    domain.startsWith('srv-') ||
+    domain.endsWith('.render.internal') ||
+    domain.endsWith('.internal') ||
+    domain.endsWith('.local')
+  ) {
+    return undefined;
+  }
+
+  // Reject hexadecimal container/instance IDs (e.g. 0acd26faaad1c56167b99f9f84718ca9)
+  if (/^[0-9a-fA-F]{24,64}$/.test(domain)) {
+    return undefined;
+  }
+
+  // Must contain at least one dot to be a valid multi-level domain (e.g. .bentobabu.com or bentobabu.com)
+  const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+  if (!cleanDomain.includes('.')) {
+    return undefined;
+  }
+
+  // Validate domain format
+  const domainRegex = /^(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i;
+  const testTarget = domain.startsWith('.') ? domain : '.' + domain;
+  if (!domainRegex.test(testTarget)) {
+    return undefined;
+  }
+
+  return domain;
+};
+
 const validateEnv = () => {
   const isProd = process.env.NODE_ENV === 'production';
   const missing = [];
@@ -89,7 +158,7 @@ const validateEnv = () => {
     refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
     cookieSecure: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : isProd,
     cookieSameSite: process.env.COOKIE_SAME_SITE || 'lax',
-    cookieDomain: process.env.COOKIE_DOMAIN || undefined,
+    cookieDomain: resolveCookieDomain(process.env.COOKIE_DOMAIN),
     accessTokenCookieName: process.env.ACCESS_TOKEN_COOKIE_NAME || 'bb_access_token',
     refreshTokenCookieName: process.env.REFRESH_TOKEN_COOKIE_NAME || 'bb_refresh_token',
     csrfSecret: process.env.CSRF_SECRET || process.env.JWT_ACCESS_SECRET || 'dev_csrf_secret_salt_32bytes',
@@ -164,4 +233,4 @@ const isDeliveryOtpRequired = () => {
   return true;
 };
 
-module.exports = { validateEnv, isDeliveryOtpRequired };
+module.exports = { validateEnv, isDeliveryOtpRequired, resolveCookieDomain };

@@ -129,10 +129,10 @@ export default function RegisterPage() {
   // OTP Cooldown timer
   useEffect(() => {
     if (otpCooldown <= 0) return;
-    const interval = setInterval(() => {
+    const timer = setTimeout(() => {
       setOtpCooldown((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
-    return () => clearInterval(interval);
+    return () => clearTimeout(timer);
   }, [otpCooldown]);
 
   // Handler: Send OTP to Email

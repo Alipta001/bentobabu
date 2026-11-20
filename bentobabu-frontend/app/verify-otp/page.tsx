@@ -96,10 +96,10 @@ function VerifyOtpContent() {
   // Cooldown countdown timer
   useEffect(() => {
     if (cooldown <= 0) return;
-    const timer = setInterval(() => {
+    const timer = setTimeout(() => {
       setCooldown((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
-    return () => clearInterval(timer);
+    return () => clearTimeout(timer);
   }, [cooldown]);
 
   // Focus first input box on load

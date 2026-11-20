@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -116,6 +116,12 @@ export default function CheckoutPage() {
   const [summaryError, setSummaryError] = useState("");
   const [checkoutSummary, setCheckoutSummary] = useState<CheckoutSummary | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
+
+  // Reset idempotency key whenever checkout parameters change so that different orders get unique keys
+  useEffect(() => {
+    idempotencyKeyRef.current = null;
+  }, [selectedAddressId, selectedSlot, paymentMethod, appliedCoupon?.code, cartItems.length]);
 
   // Redirect unauthenticated guest user to login preserving full checkout path & query params
   useEffect(() => {
@@ -389,13 +395,22 @@ export default function CheckoutPage() {
     setIsSubmitting(true);
 
     try {
+      // Generate or reuse idempotency key for this checkout attempt
+      if (!idempotencyKeyRef.current) {
+        idempotencyKeyRef.current = `chk_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      }
+
       // 1. Authoritative order placement on backend (/orders)
       const createdOrder = await orderService.create({
         addressId: selectedAddressId,
         deliverySlotId: selectedSlot ? (selectedSlot.id || selectedSlot._id) : undefined,
         couponCode: appliedCoupon?.code,
         paymentMethod,
+        idempotencyKey: idempotencyKeyRef.current,
       });
+
+      // Reset idempotency key after successful order creation
+      idempotencyKeyRef.current = null;
 
       // 2. Online Payment Gateway (Razorpay)
       if (paymentMethod === "RAZORPAY") {

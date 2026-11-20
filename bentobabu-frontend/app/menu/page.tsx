@@ -66,7 +66,7 @@ export default function MenuPage() {
   useEffect(() => {
     if (selectedCategory && categories.length > 0) {
       const match = categories.find((c) => c.slug === selectedCategory);
-      if (match) {
+      if (match && match.id !== selectedCategory) {
         setSelectedCategory(match.id);
       }
     }

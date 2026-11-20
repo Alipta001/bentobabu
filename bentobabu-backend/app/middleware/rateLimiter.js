@@ -22,6 +22,7 @@ class ResilientStore {
           try {
             client = await initRedis();
           } catch {
+
             // ignore
           }
         }
@@ -37,7 +38,7 @@ class ResilientStore {
   init(options) {
     this.options = options;
     this.memoryStore.init(options);
-    Promise.resolve(this.redisStore.init(options)).catch(() => {});
+    Promise.resolve(this.redisStore.init(options)).catch(() => { });
   }
 
   async get(key) {
@@ -91,14 +92,18 @@ class ResilientStore {
   }
 }
 
-const isDevOrTest = process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development';
+const isDevOrTest =
+  process.env.NODE_ENV === 'test' ||
+  process.env.NODE_ENV === 'development' ||
+  process.env.NODE_ENV === 'staging' ||
+  process.env.STAGING_LOAD_TEST === 'true';
 
 /**
  * Global rate limiter to protect against brute-force and DoS attacks
  */
 const globalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: isDevOrTest ? 5000 : 200, // Limit each IP
+  limit: isDevOrTest ? 50000 : 200, // Limit each IP
   standardHeaders: true, // draft-6/draft-7 RateLimit-* headers
   legacyHeaders: false, // Disable X-RateLimit-* headers
   store: new ResilientStore('rl:global:'),
@@ -114,7 +119,7 @@ const globalRateLimiter = rateLimit({
  */
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: isDevOrTest ? 1000 : 30,
+  limit: isDevOrTest ? 10000 : 30,
   standardHeaders: true,
   legacyHeaders: false,
   store: new ResilientStore('rl:auth:'),

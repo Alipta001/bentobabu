@@ -29,6 +29,21 @@ const connectDB = async (uri) => {
       serverSelectionTimeoutMS: 15000,
     });
     console.log(`[MongoDB] Connected successfully to host: ${conn.connection.host}, database: ${conn.connection.name}`);
+
+    // Register connection health & reconnection event monitors once
+    if (!mongoose.connection._hasHealthListeners) {
+      mongoose.connection._hasHealthListeners = true;
+      mongoose.connection.on('disconnected', () => {
+        console.warn('[MongoDB] Lost connection to database. Attempting automatic reconnection...');
+      });
+      mongoose.connection.on('reconnected', () => {
+        console.log('[MongoDB] Successfully reconnected to database.');
+      });
+      mongoose.connection.on('error', (err) => {
+        console.error('[MongoDB] Runtime database connection error:', err.message);
+      });
+    }
+
     return conn;
   } catch (err) {
     console.error(`[MongoDB] Connection failure connecting to ${sanitizedUri}:`, err.message);

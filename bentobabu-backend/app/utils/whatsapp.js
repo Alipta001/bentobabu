@@ -70,6 +70,13 @@ const buildWhatsAppTemplatePayload = (to, templateName, components = []) => {
  * Sends WhatsApp message via Meta Cloud API
  */
 const sendWhatsApp = async ({ toPhone, eventType, parameters = [] }) => {
+  if (process.env.MOCK_NOTIFICATIONS === 'true') {
+    return {
+      success: true,
+      messageId: `mock_wa_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    };
+  }
+
   if (customWhatsAppSender) {
     return await customWhatsAppSender({ toPhone, eventType, parameters });
   }

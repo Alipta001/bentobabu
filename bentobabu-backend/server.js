@@ -269,6 +269,15 @@ const gracefulShutdown = (signal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
+// Process-level unhandled rejection & exception handlers to prevent unexpected process crashes
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Process] Unhandled Promise Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Uncaught Exception:', err.message, err.stack);
+});
+
 // Start Server only after MongoDB successfully connects
 const startServer = async (port = env.port, host = env.host) => {
   try {

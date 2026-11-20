@@ -31,7 +31,7 @@ export function useKPISummary() {
   return useQuery({
     queryKey: ["admin", "kpis"],
     queryFn: () => analyticsService.getKPISummary(),
-    refetchInterval: 15000,
+    refetchInterval: (query) => (query.state.error ? false : 15000),
   });
 }
 
@@ -51,7 +51,7 @@ export function useAdminOrders(params?: { status?: string; search?: string }) {
   return useQuery({
     queryKey: ["admin", "orders", params],
     queryFn: () => orderService.getAll(params),
-    refetchInterval: 12000,
+    refetchInterval: (query) => (query.state.error ? false : 12000),
   });
 }
 
@@ -616,7 +616,7 @@ export function useAdminNotifications(params?: {
   return useQuery({
     queryKey: ["admin", "notifications", params],
     queryFn: () => notificationService.getNotifications(params),
-    refetchInterval: 15000,
+    refetchInterval: (query) => (query.state.error ? false : 15000),
   });
 }
 
@@ -624,7 +624,7 @@ export function useNotificationStats() {
   return useQuery({
     queryKey: ["admin", "notificationStats"],
     queryFn: () => notificationService.getStats(),
-    refetchInterval: 20000,
+    refetchInterval: (query) => (query.state.error ? false : 20000),
   });
 }
 
@@ -647,7 +647,7 @@ export function useMediaUsage() {
   return useQuery({
     queryKey: ["admin", "mediaUsage"],
     queryFn: () => mediaService.getUsage(),
-    refetchInterval: 30000,
+    refetchInterval: (query) => (query.state.error ? false : 30000),
   });
 }
 
@@ -808,7 +808,7 @@ export function useDeliveryOperationsOverview() {
   return useQuery({
     queryKey: ["admin", "deliveryOperations", "overview"],
     queryFn: () => deliveryOperationsService.getOverview(),
-    refetchInterval: 8000,
+    refetchInterval: (query) => (query.state.error ? false : 8000),
   });
 }
 
@@ -816,7 +816,7 @@ export function useMonitoredPartners(params?: GetPartnersParams) {
   return useQuery({
     queryKey: ["admin", "deliveryOperations", "partners", params],
     queryFn: () => deliveryOperationsService.getPartners(params),
-    refetchInterval: 8000,
+    refetchInterval: (query) => (query.state.error ? false : 8000),
   });
 }
 
@@ -825,7 +825,7 @@ export function useMonitoredPartnerDetail(id: string | null) {
     queryKey: ["admin", "deliveryOperations", "partnerDetail", id],
     queryFn: () => (id ? deliveryOperationsService.getPartnerDetail(id) : null),
     enabled: !!id,
-    refetchInterval: 10000,
+    refetchInterval: (query) => (query.state.error ? false : 10000),
   });
 }
 

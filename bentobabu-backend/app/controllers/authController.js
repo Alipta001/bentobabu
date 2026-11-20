@@ -1286,6 +1286,14 @@ class AuthController {
         );
       }
 
+      // Clear all role-specific auth cookies
+      for (const pair of Object.values(AUTH_COOKIE_NAMES)) {
+        res.clearCookie(pair.access, getClearCookieOptions('/'));
+        res.clearCookie(pair.refresh, getClearCookieOptions('/api/v1/auth/refresh'));
+        res.clearCookie(pair.refresh, getClearCookieOptions('/api/v1/auth'));
+        res.clearCookie(pair.refresh, getClearCookieOptions('/'));
+      }
+
       res.clearCookie(activeEnv.accessTokenCookieName, getClearCookieOptions('/'));
       res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/api/v1/auth/refresh'));
       res.clearCookie(activeEnv.refreshTokenCookieName, getClearCookieOptions('/'));
@@ -1309,13 +1317,23 @@ class AuthController {
    * GET /api/v1/auth/me
    * Retrieves profile of authenticated user
    */
-  static async getMe(req, res) {
-    return res.status(200).json({
-      success: true,
-      data: {
-        user: req.user.toJSON(),
-      },
-    });
+  static async getMe(req, res, next) {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: 'User session not found',
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        data: {
+          user: typeof req.user.toJSON === 'function' ? req.user.toJSON() : req.user,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
   }
 
   /**

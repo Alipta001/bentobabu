@@ -348,6 +348,17 @@ const orderSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    idempotencyKey: {
+      type: String,
+      default: null,
+      trim: true,
+      sparse: true,
+      index: true,
+    },
+    idempotencyPayloadHash: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -368,6 +379,10 @@ const orderSchema = new mongoose.Schema(
 
 // Compound indexes for user order listing and administrative filtering
 orderSchema.index({ user: 1, createdAt: -1 });
+orderSchema.index(
+  { user: 1, idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
+);
 orderSchema.index({ orderStatus: 1, createdAt: -1 });
 orderSchema.index({ paymentStatus: 1, createdAt: -1 });
 

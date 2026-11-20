@@ -830,6 +830,7 @@ class OrderOperationsController {
           {
             _id: id,
             orderStatus: { $in: ['PICKED_UP', 'OUT_FOR_DELIVERY'] },
+            ...(otpRequired ? { failedOtpAttempts: { $lt: 5 } } : {}),
             ...(req.user.role === 'DELIVERY' ? { assignedDeliveryPartner: req.user.id } : {}),
           },
           {

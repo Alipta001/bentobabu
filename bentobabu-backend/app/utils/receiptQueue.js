@@ -38,6 +38,11 @@ function logQueueEvent(action, payload = {}) {
  * @returns {Promise<{ enqueued: boolean, queuedVia: string }>}
  */
 async function enqueueReceipt(orderId, options = {}) {
+  if (process.env.STAGING_LOAD_TEST === 'true' || process.env.MOCK_RECEIPTS === 'true') {
+    logQueueEvent('JOB_SKIPPED_LOAD_TEST', { orderId: String(orderId) });
+    return { enqueued: true, queuedVia: 'MOCK_LOAD_TEST' };
+  }
+
   const cleanId = typeof orderId === 'object' && orderId._id ? orderId._id.toString() : String(orderId);
 
   // Lazy load orderReceiptService to avoid circular dependency

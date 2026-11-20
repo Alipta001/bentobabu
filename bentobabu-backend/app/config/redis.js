@@ -246,6 +246,10 @@ const recordFailedLogin = async (identifier) => {
 
   // Fallback to in-memory store if Redis is offline
   cleanMemoryFailedLogins();
+  if (memoryFailedLogins.size > 5000) {
+    const keysToDelete = Array.from(memoryFailedLogins.keys()).slice(0, 1000);
+    for (const k of keysToDelete) memoryFailedLogins.delete(k);
+  }
   const existing = memoryFailedLogins.get(cleanId);
   const count = (existing && existing.expiresAt > Date.now() ? existing.count : 0) + 1;
   const expiresAt = Date.now() + FAILED_LOGIN_WINDOW_SEC * 1000;
@@ -283,6 +287,10 @@ const checkFailedLoginStatus = async (identifier) => {
 
   // Fallback to in-memory store if Redis is offline
   cleanMemoryFailedLogins();
+  if (memoryFailedLogins.size > 5000) {
+    const keysToDelete = Array.from(memoryFailedLogins.keys()).slice(0, 1000);
+    for (const k of keysToDelete) memoryFailedLogins.delete(k);
+  }
   const existing = memoryFailedLogins.get(cleanId);
   if (existing && existing.expiresAt > Date.now()) {
     const isLocked = existing.count >= MAX_FAILED_ATTEMPTS;

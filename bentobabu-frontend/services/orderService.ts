@@ -169,17 +169,24 @@ export const orderService = {
     deliverySlotId?: string;
     couponCode?: string;
     paymentMethod: "RAZORPAY" | "COD" | "razorpay" | "cod";
+    idempotencyKey?: string;
   }): Promise<Order> {
     const formattedPayload = {
       addressId: payload.addressId,
       deliverySlotId: payload.deliverySlotId || undefined,
       couponCode: payload.couponCode ? payload.couponCode.trim().toUpperCase() : undefined,
       paymentMethod: payload.paymentMethod.toUpperCase(),
+      ...(payload.idempotencyKey ? { idempotencyKey: payload.idempotencyKey } : {}),
     };
+
+    const headers: Record<string, string> = {};
+    if (payload.idempotencyKey) {
+      headers["Idempotency-Key"] = payload.idempotencyKey;
+    }
 
     const response = await apiClient.post<
       ApiResponse<any> | any
-    >(API_ENDPOINTS.ORDERS.CREATE, formattedPayload);
+    >(API_ENDPOINTS.ORDERS.CREATE, formattedPayload, { headers });
 
     const raw = response.data;
     const orderData = extractOrderPayload(raw);
