@@ -264,8 +264,29 @@ export function Header() {
             </Link>
           </nav>
 
-          {/* Action Area: Account, Notifications, Cart */}
+          {/* Action Area: Cart, Notifications, Account Profile */}
           <div className="flex items-center gap-2.5 sm:gap-3">
+            {/* 1. Shopping Cart Button */}
+            <Link
+              href="/cart"
+              className="relative flex items-center gap-2 h-10 px-3.5 sm:px-4 rounded-full bg-[#354B35] hover:bg-[#253525] text-[#F7F3EA] shadow-xs hover:shadow-md transition-all group shrink-0 cursor-pointer"
+              aria-label="View Shopping Cart"
+            >
+              <ShoppingBag className="w-4 h-4 text-[#DFC89B] group-hover:scale-110 transition-transform duration-200" />
+              <span className="hidden sm:inline text-xs font-semibold tracking-wide">
+                Cart
+              </span>
+              {isMounted && totalCartCount > 0 ? (
+                <span className="inline-flex items-center justify-center bg-[#B99A60] text-[#1E2B1E] text-[11px] font-bold h-5 min-w-[20px] px-1.5 rounded-full shadow-xs">
+                  {totalCartCount}
+                </span>
+              ) : null}
+            </Link>
+
+            {/* 2. Notification Bell (authenticated customer) */}
+            {isMounted && status === "authenticated" && user && <NotificationBell />}
+
+            {/* 3. Customer Profile Name / Profile Menu (or Sign In / Sign Up when logged out) */}
             {status === "loading" ? (
               <div className="hidden sm:flex items-center gap-2">
                 <div
@@ -278,16 +299,16 @@ export function Header() {
                 <button
                   type="button"
                   onClick={() => setAccountMenuOpen((prev) => !prev)}
-                  className="hidden sm:flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-full border border-[#E5DFC5] bg-white hover:bg-[#F7F3EA] hover:border-[#354B35]/30 text-[#354B35] text-xs font-medium transition-all shadow-xs cursor-pointer"
+                  className="hidden sm:flex items-center gap-2 pl-3 sm:pl-3.5 pr-2 py-1 rounded-full border border-[#E5DFC5] bg-white hover:bg-[#F7F3EA] hover:border-[#354B35]/30 text-[#354B35] text-xs font-medium transition-all shadow-xs cursor-pointer"
                   aria-expanded={accountMenuOpen}
                   aria-label="User account menu"
                 >
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#354B35] to-[#4B644B] text-[#DFC89B] flex items-center justify-center font-bold text-xs shadow-xs">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="max-w-[100px] truncate font-semibold text-[#222922]">
+                  <span className="max-w-[100px] md:max-w-[120px] truncate font-semibold text-[#222922]">
                     {user.name}
                   </span>
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#354B35] to-[#4B644B] text-[#DFC89B] flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+                    {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+                  </div>
                   <ChevronDown
                     className={`w-3.5 h-3.5 text-[#8A9A86] transition-transform duration-200 ${
                       accountMenuOpen ? "rotate-180 text-[#8C713B]" : ""
@@ -366,26 +387,6 @@ export function Header() {
                 </Link>
               </div>
             )}
-
-            {/* Notification Bell */}
-            {isMounted && status === "authenticated" && user && <NotificationBell />}
-
-            {/* Shopping Cart Button */}
-            <Link
-              href="/cart"
-              className="relative flex items-center gap-2 h-10 px-3.5 sm:px-4 rounded-full bg-[#354B35] hover:bg-[#253525] text-[#F7F3EA] shadow-xs hover:shadow-md transition-all group shrink-0 cursor-pointer"
-              aria-label="View Shopping Cart"
-            >
-              <ShoppingBag className="w-4 h-4 text-[#DFC89B] group-hover:scale-110 transition-transform duration-200" />
-              <span className="hidden sm:inline text-xs font-semibold tracking-wide">
-                Cart
-              </span>
-              {isMounted && totalCartCount > 0 ? (
-                <span className="inline-flex items-center justify-center bg-[#B99A60] text-[#1E2B1E] text-[11px] font-bold h-5 min-w-[20px] px-1.5 rounded-full shadow-xs">
-                  {totalCartCount}
-                </span>
-              ) : null}
-            </Link>
 
             {/* Mobile Hamburger Toggle */}
             <button
