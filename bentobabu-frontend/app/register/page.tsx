@@ -234,11 +234,12 @@ function RegisterForm() {
 
         <GoogleSignInButton returnTo={returnTo} mode="signup" />
 
-        <div className="relative flex items-center justify-center">
-          <div className="border-t border-[#E5DFC5] w-full" />
-          <span className="bg-white px-3 text-[11px] font-medium text-[#8A9A86] uppercase tracking-wider relative">
+        <div className="relative flex items-center">
+          <div className="flex-grow border-t border-[#E5DFC5]" />
+          <span className="shrink-0 px-3.5 text-[11px] font-medium text-[#8A9A86] uppercase tracking-wider">
             or register with email
           </span>
+          <div className="flex-grow border-t border-[#E5DFC5]" />
         </div>
 
         <form onSubmit={handleRegister} className="space-y-4">

@@ -64,10 +64,13 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
         // Clear existing children before rendering button
         if (buttonRef.current) {
           buttonRef.current.innerHTML = "";
+          const parentWidth = buttonRef.current.offsetWidth || 360;
+          const buttonWidth = Math.min(400, Math.max(240, parentWidth));
+
           window.google.accounts.id.renderButton(buttonRef.current, {
             theme: "outline",
             size: "large",
-            width: "100%",
+            width: buttonWidth,
             text: mode === "signup" ? "signup_with" : "signin_with",
             shape: "pill",
             logo_alignment: "left",
