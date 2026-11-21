@@ -15,12 +15,46 @@ const mapDietary = (tags: string[] = []): DietaryType => {
   return "vegetarian";
 };
 
+// Image URL deduplication helpers using canonical Cloudinary keys
+export function getCanonicalImageKey(url: string | null | undefined): string {
+  if (!url || typeof url !== "string") return "";
+  const cleanUrl = url.split("?")[0].trim();
+  const uploadIndex = cleanUrl.indexOf("/upload/");
+  if (uploadIndex !== -1) {
+    const afterUpload = cleanUrl.substring(uploadIndex + 8);
+    const parts = afterUpload.split("/");
+    const nonTransformParts = parts.filter(
+      (p) => !/^v\d+$/.test(p) && !p.includes(",") && !/^[a-z]_[a-z0-9_]+$/i.test(p)
+    );
+    if (nonTransformParts.length > 0) {
+      return nonTransformParts.join("/").replace(/\.[a-zA-Z0-9]+$/, "");
+    }
+  }
+  return cleanUrl;
+}
+
+export function deduplicateUrls(urls: (string | null | undefined)[]): string[] {
+  if (!Array.isArray(urls)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of urls) {
+    if (!item || typeof item !== "string") continue;
+    const key = getCanonicalImageKey(item);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
 export const normalizeProduct = (item: any): Product => {
-  const images = Array.isArray(item.images) && item.images.length > 0
+  const rawImages = Array.isArray(item.images) && item.images.length > 0
     ? item.images
     : item.imageUrl
     ? [item.imageUrl]
     : ["https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80"];
+
+  const images = deduplicateUrls(rawImages);
 
   const dietary = item.dietary || mapDietary(item.dietaryTags);
   const rawNutrition = item.nutrition || item.nutritionalInfo || {};
@@ -41,6 +75,13 @@ export const normalizeProduct = (item: any): Product => {
     : categoryId
     ? [categoryId]
     : [];
+
+  const prepTime =
+    typeof item.preparationTime === "number"
+      ? item.preparationTime
+      : typeof item.preparationTimeMinutes === "number"
+      ? item.preparationTimeMinutes
+      : undefined;
 
   return {
     id: item.id || item._id || "",
@@ -64,8 +105,8 @@ export const normalizeProduct = (item: any): Product => {
     isBestseller: item.isBestseller ?? item.isFeatured ?? false,
     isFeatured: item.isFeatured ?? false,
     isChefSpecial: item.isChefSpecial ?? false,
-    preparationTime: item.preparationTime || item.preparationTimeMinutes || 20,
-    preparationTimeMinutes: item.preparationTimeMinutes || item.preparationTime || 20,
+    preparationTime: prepTime,
+    preparationTimeMinutes: prepTime,
     stockQuantity: typeof item.stockQuantity === "number" ? item.stockQuantity : 50,
     servingSize: item.servingSize || "1 Bento Box (400g)",
     nutrition,

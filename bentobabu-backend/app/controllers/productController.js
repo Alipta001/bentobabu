@@ -325,6 +325,8 @@ class ProductController {
         isAvailable,
         isFeatured,
         isActive,
+        preparationTime,
+        preparationTimeMinutes,
       } = req.body;
 
       if (!name || typeof name !== 'string' || !name.trim()) {
@@ -375,11 +377,25 @@ class ProductController {
       const initialStock = Number.isInteger(stockQuantity) && stockQuantity >= 0 ? stockQuantity : 0;
       const initialAvailability = initialStock === 0 ? false : (isAvailable !== undefined ? Boolean(isAvailable) : true);
 
-      // Determine images array and imagesData
-      let resolvedImages = Array.isArray(images) ? images : [];
-      let resolvedImagesData = Array.isArray(imagesData) ? imagesData : [];
+      // Validate preparationTime if provided
+      const rawPrepTime = preparationTime !== undefined ? preparationTime : preparationTimeMinutes;
+      let parsedPrepTime = null;
+      if (rawPrepTime !== undefined && rawPrepTime !== null && rawPrepTime !== '') {
+        const p = Number(rawPrepTime);
+        if (!Number.isInteger(p) || p < 1 || p > 300) {
+          return res.status(400).json({
+            success: false,
+            message: 'Preparation time must be an integer between 1 and 300 minutes',
+          });
+        }
+        parsedPrepTime = p;
+      }
+
+      // Determine images array and imagesData with deduplication
+      let resolvedImages = Array.isArray(images) ? Product.deduplicateUrls(images) : [];
+      let resolvedImagesData = Array.isArray(imagesData) ? Product.deduplicateImagesData(imagesData) : [];
       if (resolvedImages.length === 0 && resolvedImagesData.length > 0) {
-        resolvedImages = resolvedImagesData.map((img) => img.secureUrl).filter(Boolean);
+        resolvedImages = Product.deduplicateUrls(resolvedImagesData.map((img) => img.secureUrl).filter(Boolean));
       }
 
       const product = await Product.create({
@@ -398,6 +414,7 @@ class ProductController {
         mealTypes: Array.isArray(mealTypes) ? mealTypes : [],
         nutrition: nutrition && typeof nutrition === 'object' ? nutrition : undefined,
         allergens: Array.isArray(allergens) ? allergens : [],
+        preparationTime: parsedPrepTime,
         stockQuantity: initialStock,
         isAvailable: initialAvailability,
         isFeatured: Boolean(isFeatured),
@@ -471,6 +488,8 @@ class ProductController {
         nutrition,
         allergens,
         isFeatured,
+        preparationTime,
+        preparationTimeMinutes,
       } = req.body;
 
       if (name !== undefined) {
@@ -518,7 +537,8 @@ class ProductController {
 
       // Handle imagesData replacement and Cloudinary cleanup
       if (imagesData !== undefined && Array.isArray(imagesData)) {
-        const newPublicIds = new Set(imagesData.map((img) => img.publicId).filter(Boolean));
+        const cleanImagesData = Product.deduplicateImagesData(imagesData);
+        const newPublicIds = new Set(cleanImagesData.map((img) => img.publicId).filter(Boolean));
         const oldImages = product.imagesData || [];
 
         // Clean up removed image assets
@@ -533,15 +553,15 @@ class ProductController {
           }
         }
 
-        product.imagesData = imagesData;
-        product.images = imagesData.map((img) => img.secureUrl).filter(Boolean);
+        product.imagesData = cleanImagesData;
+        product.images = Product.deduplicateUrls(cleanImagesData.map((img) => img.secureUrl).filter(Boolean));
 
         // Link new media items to product
         if (newPublicIds.size > 0) {
           await Media.updateMany({ publicId: { $in: Array.from(newPublicIds) } }, { product: product._id });
         }
       } else if (images !== undefined && Array.isArray(images)) {
-        product.images = images;
+        product.images = Product.deduplicateUrls(images);
       }
 
       // Handle video replacement and R2 cleanup
@@ -580,6 +600,22 @@ class ProductController {
       if (nutrition !== undefined && typeof nutrition === 'object') product.nutrition = nutrition;
       if (allergens !== undefined && Array.isArray(allergens)) product.allergens = allergens;
       if (isFeatured !== undefined) product.isFeatured = Boolean(isFeatured);
+
+      const rawPrepTime = preparationTime !== undefined ? preparationTime : preparationTimeMinutes;
+      if (rawPrepTime !== undefined) {
+        if (rawPrepTime === null || rawPrepTime === '') {
+          product.preparationTime = null;
+        } else {
+          const p = Number(rawPrepTime);
+          if (!Number.isInteger(p) || p < 1 || p > 300) {
+            return res.status(400).json({
+              success: false,
+              message: 'Preparation time must be an integer between 1 and 300 minutes',
+            });
+          }
+          product.preparationTime = p;
+        }
+      }
 
       await product.save();
 

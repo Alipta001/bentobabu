@@ -67,6 +67,7 @@ export interface Product {
   stockQuantity: number;
   lowStockThreshold: number;
   sku: string;
+  preparationTime?: number;
   preparationTimeMinutes?: number;
   servingSize?: string;
   nutritionalInfo?: NutritionalInfo;

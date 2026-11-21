@@ -120,6 +120,13 @@ const productSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    preparationTime: {
+      type: Number,
+      min: [1, 'Preparation time must be at least 1 minute'],
+      max: [300, 'Preparation time cannot exceed 300 minutes'],
+      default: null,
+      index: true,
+    },
     stockQuantity: {
       type: Number,
       default: 0,
@@ -172,11 +179,83 @@ const productSchema = new mongoose.Schema(
   }
 );
 
+// Image URL and metadata deduplication helpers
+function getCanonicalImageKey(urlOrObj) {
+  if (!urlOrObj) return '';
+  if (typeof urlOrObj === 'object') {
+    if (urlOrObj.publicId && typeof urlOrObj.publicId === 'string' && urlOrObj.publicId.trim()) {
+      return urlOrObj.publicId.trim();
+    }
+    if (urlOrObj.secureUrl && typeof urlOrObj.secureUrl === 'string') {
+      return getCanonicalImageKey(urlOrObj.secureUrl);
+    }
+    return '';
+  }
+  if (typeof urlOrObj !== 'string') return '';
+  const cleanUrl = urlOrObj.split('?')[0].trim();
+  const uploadIndex = cleanUrl.indexOf('/upload/');
+  if (uploadIndex !== -1) {
+    const afterUpload = cleanUrl.substring(uploadIndex + 8);
+    const parts = afterUpload.split('/');
+    const nonTransformParts = parts.filter(
+      (p) => !/^v\d+$/.test(p) && !p.includes(',') && !/^[a-z]_[a-z0-9_]+$/i.test(p)
+    );
+    if (nonTransformParts.length > 0) {
+      return nonTransformParts.join('/').replace(/\.[a-zA-Z0-9]+$/, '');
+    }
+  }
+  return cleanUrl;
+}
+
+function deduplicateUrls(urls) {
+  if (!Array.isArray(urls)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const item of urls) {
+    if (!item || typeof item !== 'string') continue;
+    const key = getCanonicalImageKey(item);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+function deduplicateImagesData(imagesData) {
+  if (!Array.isArray(imagesData)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const item of imagesData) {
+    if (!item) continue;
+    const key = getCanonicalImageKey(item);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+productSchema.pre('validate', function (next) {
+  if (Array.isArray(this.images)) {
+    this.images = deduplicateUrls(this.images);
+  }
+  if (Array.isArray(this.imagesData)) {
+    this.imagesData = deduplicateImagesData(this.imagesData);
+  }
+  if (typeof next === 'function') {
+    return next();
+  }
+});
+
 // Search and filtering compound indexes
 productSchema.index({ name: 'text', description: 'text' });
 productSchema.index({ category: 1, isAvailable: 1, isActive: 1 });
 productSchema.index({ isFeatured: 1, isAvailable: 1, isActive: 1 });
 
 const Product = mongoose.model('Product', productSchema);
+
+Product.getCanonicalImageKey = getCanonicalImageKey;
+Product.deduplicateUrls = deduplicateUrls;
+Product.deduplicateImagesData = deduplicateImagesData;
 
 module.exports = Product;

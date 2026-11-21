@@ -27,12 +27,70 @@ export interface BackendProduct {
     fibre?: number;
   };
   allergens?: string[];
+  preparationTime?: number;
+  preparationTimeMinutes?: number;
   stockQuantity?: number;
   lowStockThreshold?: number;
   isAvailable?: boolean;
   isActive?: boolean;
   isFeatured?: boolean;
   createdAt?: string;
+}
+
+// Image URL and metadata deduplication helpers
+export function getCanonicalImageKey(urlOrObj: string | ProductMediaImage | null | undefined): string {
+  if (!urlOrObj) return "";
+  if (typeof urlOrObj === "object") {
+    if (urlOrObj.publicId && typeof urlOrObj.publicId === "string" && urlOrObj.publicId.trim()) {
+      return urlOrObj.publicId.trim();
+    }
+    if (urlOrObj.secureUrl && typeof urlOrObj.secureUrl === "string") {
+      return getCanonicalImageKey(urlOrObj.secureUrl);
+    }
+    return "";
+  }
+  if (typeof urlOrObj !== "string") return "";
+  const cleanUrl = urlOrObj.split("?")[0].trim();
+  const uploadIndex = cleanUrl.indexOf("/upload/");
+  if (uploadIndex !== -1) {
+    const afterUpload = cleanUrl.substring(uploadIndex + 8);
+    const parts = afterUpload.split("/");
+    const nonTransformParts = parts.filter(
+      (p) => !/^v\d+$/.test(p) && !p.includes(",") && !/^[a-z]_[a-z0-9_]+$/i.test(p)
+    );
+    if (nonTransformParts.length > 0) {
+      return nonTransformParts.join("/").replace(/\.[a-zA-Z0-9]+$/, "");
+    }
+  }
+  return cleanUrl;
+}
+
+export function deduplicateUrls(urls: (string | null | undefined)[]): string[] {
+  if (!Array.isArray(urls)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of urls) {
+    if (!item || typeof item !== "string") continue;
+    const key = getCanonicalImageKey(item);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+export function deduplicateImagesData(imagesData: ProductMediaImage[]): ProductMediaImage[] {
+  if (!Array.isArray(imagesData)) return [];
+  const seen = new Set<string>();
+  const result: ProductMediaImage[] = [];
+  for (const item of imagesData) {
+    if (!item) continue;
+    const key = getCanonicalImageKey(item);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
 }
 
 export const mapBackendProduct = (p: BackendProduct): Product => {
@@ -50,29 +108,40 @@ export const mapBackendProduct = (p: BackendProduct): Product => {
     dietary = "non-vegetarian";
   }
 
-  return {
-    id: (p.id || p._id || p.slug) as string,
-    slug: p.slug,
-    name: p.name,
-    description: p.description,
-    price: p.price,
-    originalPrice: p.compareAtPrice,
-    categoryIds: catId ? [catId] : [],
-    dietary,
-    imageUrl: p.images?.[0] || "/images/placeholder.png",
-    galleryImages: p.images || [],
-    imagesData: p.imagesData || [],
-    video: p.video || undefined,
-    isAvailable: p.isAvailable ?? true,
-    isActive: p.isActive ?? true,
-    isBestseller: p.isFeatured ?? false,
-    isDailyMenu: p.mealTypes?.includes("DAILY_MENU") ?? false,
-    stockQuantity: p.stockQuantity ?? 0,
-    lowStockThreshold: p.lowStockThreshold ?? 5,
-    sku: `BB-${(p.slug || "DISH").slice(0, 8).toUpperCase()}`,
-    servingSize: p.portionSize || "1 portion",
-    ingredients: p.ingredients || [],
-    allergens: p.allergens || [],
+    const uniqueImages = deduplicateUrls(p.images || []);
+    const uniqueImagesData = deduplicateImagesData(p.imagesData || []);
+    const prepTime =
+      typeof p.preparationTime === "number"
+        ? p.preparationTime
+        : typeof p.preparationTimeMinutes === "number"
+        ? p.preparationTimeMinutes
+        : undefined;
+
+    return {
+      id: (p.id || p._id || p.slug) as string,
+      slug: p.slug,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      originalPrice: p.compareAtPrice,
+      categoryIds: catId ? [catId] : [],
+      dietary,
+      imageUrl: uniqueImages[0] || "/images/placeholder.png",
+      galleryImages: uniqueImages,
+      imagesData: uniqueImagesData,
+      video: p.video || undefined,
+      isAvailable: p.isAvailable ?? true,
+      isActive: p.isActive ?? true,
+      isBestseller: p.isFeatured ?? false,
+      isDailyMenu: p.mealTypes?.includes("DAILY_MENU") ?? false,
+      stockQuantity: p.stockQuantity ?? 0,
+      lowStockThreshold: p.lowStockThreshold ?? 5,
+      sku: `BB-${(p.slug || "DISH").slice(0, 8).toUpperCase()}`,
+      preparationTime: prepTime,
+      preparationTimeMinutes: prepTime,
+      servingSize: p.portionSize || "1 portion",
+      ingredients: p.ingredients || [],
+      allergens: p.allergens || [],
     nutritionalInfo: p.nutrition
       ? {
           calories: p.nutrition.calories ?? 0,
@@ -136,6 +205,9 @@ export const productService = {
       }
     }
 
+    const prepTime = data.preparationTime ?? data.preparationTimeMinutes;
+    const rawImages = data.imageUrl ? [data.imageUrl, ...(data.galleryImages || [])] : data.galleryImages || [];
+
     const payload = {
       name: data.name,
       slug,
@@ -143,9 +215,11 @@ export const productService = {
       category: catId,
       price: data.price,
       compareAtPrice: data.originalPrice || undefined,
-      images: data.imageUrl ? [data.imageUrl, ...(data.galleryImages || [])] : data.galleryImages || [],
-      imagesData: data.imagesData,
+      images: deduplicateUrls(rawImages),
+      imagesData: deduplicateImagesData(data.imagesData || []),
       video: data.video,
+      preparationTime: prepTime,
+      preparationTimeMinutes: prepTime,
       portionSize: data.servingSize || "1 Bento",
       dietaryTags: data.dietary === "non-vegetarian" ? ["NON_VEG"] : [data.dietary?.toUpperCase() || "VEG"],
       mealTypes: data.isDailyMenu ? ["DAILY_MENU", "LUNCH", "DINNER"] : ["LUNCH", "DINNER"],
@@ -192,10 +266,16 @@ export const productService = {
       payload.category = cId;
     }
     if (data.imageUrl || data.galleryImages) {
-      payload.images = data.imageUrl ? [data.imageUrl, ...(data.galleryImages || [])] : data.galleryImages;
+      const rawImages = data.imageUrl ? [data.imageUrl, ...(data.galleryImages || [])] : data.galleryImages || [];
+      payload.images = deduplicateUrls(rawImages);
     }
     if (data.imagesData !== undefined) {
-      payload.imagesData = data.imagesData;
+      payload.imagesData = deduplicateImagesData(data.imagesData);
+    }
+    const prepTime = data.preparationTime ?? data.preparationTimeMinutes;
+    if (prepTime !== undefined) {
+      payload.preparationTime = prepTime;
+      payload.preparationTimeMinutes = prepTime;
     }
     if (data.video !== undefined) {
       payload.video = data.video;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -25,6 +25,7 @@ import { useCartSync } from "@/hooks/useCartSync";
 import { useToast } from "@/context/ToastContext";
 import { useOrderingStatus } from "@/context/OrderingStatusContext";
 import { getOptimizedImageUrl } from "@/utils/mediaUrl";
+import { deduplicateUrls } from "@/services/productService";
 
 interface ProductDetailViewProps {
   product: Product;
@@ -38,9 +39,26 @@ export function ProductDetailView({
   const { addItem, cartItems } = useCartSync();
   const { showToast } = useToast();
   const { acceptingOrders } = useOrderingStatus();
+
+  const images = useMemo(() => {
+    const raw = product.galleryImages && product.galleryImages.length > 0
+      ? product.galleryImages
+      : product.images && product.images.length > 0
+      ? product.images
+      : [product.imageUrl];
+    return deduplicateUrls(raw.filter(Boolean));
+  }, [product.galleryImages, product.images, product.imageUrl]);
+
   const [activeImage, setActiveImage] = useState(
-    product.imageUrl || product.galleryImages?.[0] || ""
+    images[0] || product.imageUrl || ""
   );
+
+  useEffect(() => {
+    if (images.length > 0 && (!activeImage || !images.includes(activeImage))) {
+      setActiveImage(images[0]);
+    }
+  }, [images, activeImage]);
+
   const [viewMode, setViewMode] = useState<"photo" | "video">("photo");
   const [quantity, setQuantity] = useState(1);
   const [addedSuccess, setAddedSuccess] = useState(false);
@@ -50,10 +68,6 @@ export function ProductDetailView({
   const isLowStock = !isSoldOut && (product.stockQuantity ?? 99) <= (product.lowStockThreshold || 5);
 
   const cartItem = cartItems.find((item) => item.product.id === product.id);
-
-  const images = product.galleryImages?.length
-    ? product.galleryImages
-    : [product.imageUrl];
 
   const handleAddToCart = () => {
     addItem(product, quantity);
@@ -247,7 +261,11 @@ export function ProductDetailView({
             <div className="grid grid-cols-2 gap-3 py-3 border-y border-[#F0ECE1] text-xs text-[#222922]">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#B99A60]" />
-                <span>Prep: {product.preparationTimeMinutes || 15} minutes</span>
+                <span>
+                  {product.preparationTimeMinutes || product.preparationTime
+                    ? `Prep: ${product.preparationTimeMinutes || product.preparationTime} minutes`
+                    : "Freshly prepared to order"}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-[#354B35]" />

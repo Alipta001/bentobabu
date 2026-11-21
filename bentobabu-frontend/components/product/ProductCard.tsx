@@ -109,10 +109,10 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
         )}
 
         {/* Prep Time Tag Bottom Right */}
-        {product.preparationTimeMinutes && (
+        {Boolean(product.preparationTimeMinutes || product.preparationTime) && (
           <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-medium px-2 py-1 rounded-full flex items-center gap-1">
             <Clock className="w-3 h-3 text-[#B99A60]" />
-            <span>{product.preparationTimeMinutes}m prep</span>
+            <span>{product.preparationTimeMinutes || product.preparationTime}m prep</span>
           </div>
         )}
       </Link>

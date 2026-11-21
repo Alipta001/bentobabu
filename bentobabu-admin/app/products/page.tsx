@@ -55,6 +55,7 @@ function ProductsContent() {
     stockQuantity: 25,
     lowStockThreshold: 8,
     sku: "BB-NEW-01",
+    preparationTime: 15,
     preparationTimeMinutes: 15,
     servingSize: "380g",
     nutritionalInfo: { calories: 420, protein: 30, carbs: 45, fats: 10, fiber: 8 },
@@ -96,6 +97,7 @@ function ProductsContent() {
       stockQuantity: 25,
       lowStockThreshold: 8,
       sku: `BB-${Math.floor(100 + Math.random() * 900)}`,
+      preparationTime: 15,
       preparationTimeMinutes: 15,
       servingSize: "380g",
       nutritionalInfo: { calories: 400, protein: 25, carbs: 45, fats: 10, fiber: 8 },
@@ -126,7 +128,8 @@ function ProductsContent() {
       stockQuantity: p.stockQuantity,
       lowStockThreshold: p.lowStockThreshold,
       sku: p.sku,
-      preparationTimeMinutes: p.preparationTimeMinutes || 15,
+      preparationTime: p.preparationTime ?? p.preparationTimeMinutes ?? 15,
+      preparationTimeMinutes: p.preparationTimeMinutes ?? p.preparationTime ?? 15,
       servingSize: p.servingSize || "350g",
       nutritionalInfo: p.nutritionalInfo || {
         calories: 350,
@@ -247,6 +250,9 @@ function ProductsContent() {
                           </div>
                           <div className="text-[11px] text-[#667266]">
                             SKU: {p.sku} • {p.servingSize || "1 portion"}
+                            {Boolean(p.preparationTimeMinutes || p.preparationTime) && (
+                              <span> • {p.preparationTimeMinutes || p.preparationTime}m prep</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -489,7 +495,7 @@ function ProductsContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-[#1F271F]">Stock Count</label>
                   <input
@@ -529,6 +535,26 @@ function ProductsContent() {
                       setFormData({ ...formData, servingSize: e.target.value })
                     }
                     placeholder="e.g. 400g"
+                    className="w-full p-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-[#1F271F]">Prep Time (min)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="300"
+                    value={formData.preparationTimeMinutes ?? formData.preparationTime ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value ? Number(e.target.value) : undefined;
+                      setFormData({
+                        ...formData,
+                        preparationTime: val,
+                        preparationTimeMinutes: val,
+                      });
+                    }}
+                    placeholder="e.g. 20"
                     className="w-full p-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5]"
                   />
                 </div>
