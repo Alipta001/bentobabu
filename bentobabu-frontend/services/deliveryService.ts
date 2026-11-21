@@ -44,8 +44,21 @@ export const deliveryService = {
         }>
       >(API_ENDPOINTS.DELIVERY.SERVICEABILITY(pincode.trim()));
 
-      const raw = response.data;
-      const data = raw && "data" in raw ? raw.data : (raw as any);
+      const raw = response.data as any;
+      const data = raw && "data" in raw && raw.data ? raw.data : raw;
+
+      const isServiceable = Boolean(raw.serviceable ?? data?.serviceable ?? false);
+
+      if (!isServiceable || raw.code === "UNSERVICEABLE_LOCATION") {
+        return {
+          serviceable: false,
+          message:
+            raw.message ||
+            `Delivery is currently not available for PIN code ${pincode.trim()}`,
+          deliveryFee: 0,
+          minimumOrderAmount: 0,
+        };
+      }
 
       const fee =
         typeof data.deliveryCharge === "number"
@@ -61,9 +74,15 @@ export const deliveryService = {
         message: raw.message || "Delivery is available to your location!",
         zone: data.zone,
         deliveryFee: fee,
-        minimumOrderAmount: typeof data.minimumOrderAmount === "number" ? data.minimumOrderAmount : 0,
+        minimumOrderAmount:
+          typeof data.minimumOrderAmount === "number"
+            ? data.minimumOrderAmount
+            : 0,
         freeDeliveryThreshold: data.freeDeliveryThreshold,
-        estimatedDeliveryTime: data.estimatedDeliveryTime || data.zone?.estimatedDeliveryTime || "35 - 45 mins",
+        estimatedDeliveryTime:
+          data.estimatedDeliveryTime ||
+          data.zone?.estimatedDeliveryTime ||
+          "35 - 45 mins",
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Delivery not serviceable to this PIN code.";

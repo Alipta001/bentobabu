@@ -110,14 +110,14 @@ export function ServiceExpansionModal({
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#243324] text-[#DFC89B] text-xs font-semibold mb-3 border border-[#4A654A]">
             <Sparkles className="w-3.5 h-3.5 text-[#B99A60]" />
-            <span>Expanding Across Bengal</span>
+            <span>Service not available in your place</span>
           </div>
 
           <h2
             id="expansion-modal-title"
             className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight"
           >
-            Good food should reach every doorstep!
+            Will you want our service there? Vote
           </h2>
         </div>
 
@@ -142,12 +142,12 @@ export function ServiceExpansionModal({
                 id="expansion-modal-desc"
                 className="text-sm sm:text-base text-[#4A554A] leading-relaxed"
               >
-                Oops! BentoBabu isn&apos;t delivering to your area just yet. But we&apos;re planning to grow, and your opinion matters.
+                Service is not available in your place right now. But we&apos;re planning to expand, and your vote guides where our kitchen delivers next!
               </p>
 
               {/* Question */}
               <div className="text-sm sm:text-base font-semibold text-[#222922] font-serif">
-                Would you love to have BentoBabu in your area?
+                Will you want our service there? Vote below to register your demand!
               </div>
 
               {/* Error feedback */}
@@ -164,7 +164,7 @@ export function ServiceExpansionModal({
                   type="button"
                   onClick={handleVote}
                   disabled={isSubmitting}
-                  className="w-full sm:flex-1 py-3.5 px-5 rounded-2xl bg-[#354B35] hover:bg-[#243324] text-white font-semibold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 focus:outline-hidden focus:ring-2 focus:ring-[#B99A60]"
+                  className="w-full sm:flex-1 py-3.5 px-5 rounded-2xl bg-[#354B35] hover:bg-[#243324] text-white font-semibold text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 focus:outline-hidden focus:ring-2 focus:ring-[#B99A60] cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
@@ -173,7 +173,7 @@ export function ServiceExpansionModal({
                     </>
                   ) : (
                     <>
-                      <span>Yes! Bring BentoBabu Here</span>
+                      <span>Vote: Bring BentoBabu Here</span>
                       <Heart className="w-4 h-4 text-red-400 fill-red-400" />
                     </>
                   )}

@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { MapPin, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { MapPin, CheckCircle2, AlertCircle, Loader2, Heart } from "lucide-react";
 import { deliveryService, ServiceabilityResult } from "@/services/deliveryService";
+import { ServiceExpansionModal } from "@/components/service-expansion/ServiceExpansionModal";
 
 interface ServiceabilityCheckProps {
   initialPincode?: string;
@@ -16,6 +17,7 @@ export function ServiceabilityCheck({
   const [pincode, setPincode] = useState(initialPincode);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ServiceabilityResult | null>(null);
+  const [isExpansionOpen, setIsExpansionOpen] = useState(false);
 
   const handleCheck = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -27,6 +29,9 @@ export function ServiceabilityCheck({
       setResult(res);
       if (onServiceabilityConfirmed) {
         onServiceabilityConfirmed(res);
+      }
+      if (!res.serviceable) {
+        setIsExpansionOpen(true);
       }
     } finally {
       setLoading(false);
@@ -53,6 +58,9 @@ export function ServiceabilityCheck({
               deliveryService.checkServiceability(val).then((res) => {
                 setResult(res);
                 if (onServiceabilityConfirmed) onServiceabilityConfirmed(res);
+                if (!res.serviceable) {
+                  setIsExpansionOpen(true);
+                }
               });
             } else {
               setResult(null);
@@ -71,7 +79,7 @@ export function ServiceabilityCheck({
 
       {result && (
         <div
-          className={`p-3 rounded-xl text-xs space-y-1 ${
+          className={`p-3 rounded-xl text-xs space-y-2 ${
             result.serviceable
               ? "bg-emerald-50 border border-emerald-200 text-emerald-900"
               : "bg-red-50 border border-red-200 text-red-800"
@@ -85,6 +93,19 @@ export function ServiceabilityCheck({
             )}
             <span>{result.message}</span>
           </div>
+
+          {!result.serviceable && (
+            <div className="pt-1 border-t border-red-200">
+              <button
+                type="button"
+                onClick={() => setIsExpansionOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#354B35] text-white text-xs font-medium hover:bg-[#243324] transition-colors cursor-pointer"
+              >
+                <Heart className="w-3.5 h-3.5 text-red-400 fill-red-400" />
+                <span>Vote for BentoBabu in this area</span>
+              </button>
+            </div>
+          )}
 
           {result.serviceable && (
             <div className="text-[11px] text-emerald-700 flex flex-wrap gap-3 pt-1 border-t border-emerald-200/50">
@@ -101,6 +122,13 @@ export function ServiceabilityCheck({
           )}
         </div>
       )}
+
+      {/* Service Expansion Voting Modal */}
+      <ServiceExpansionModal
+        isOpen={isExpansionOpen}
+        onClose={() => setIsExpansionOpen(false)}
+        pincode={pincode}
+      />
     </div>
   );
 }

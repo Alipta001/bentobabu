@@ -245,6 +245,23 @@ export default function CheckoutPage() {
     useServiceability(activePincode);
   const { data: deliveryConfig } = useDeliveryConfig();
 
+  // Track the last PIN code prompted to auto-trigger expansion modal without annoyance
+  const lastPromptedPincodeRef = useRef<string>("");
+
+  // Auto-trigger Service Expansion Voting Popup when an unserviceable PIN code is entered
+  useEffect(() => {
+    const cleanPin = activePincode?.trim() || "";
+    if (serviceability && !serviceability.serviceable && cleanPin.length === 6) {
+      if (lastPromptedPincodeRef.current !== cleanPin) {
+        lastPromptedPincodeRef.current = cleanPin;
+        setIsExpansionModalOpen(true);
+      }
+    } else if (serviceability?.serviceable) {
+      lastPromptedPincodeRef.current = "";
+      setIsExpansionModalOpen(false);
+    }
+  }, [serviceability, activePincode]);
+
   // Stable cart fingerprint: re-fetch checkout summary whenever items or quantities change
   const cartFingerprint = useMemo(
     () =>
@@ -395,7 +412,7 @@ export default function CheckoutPage() {
         serviceability.message ||
           "Delivery is currently not available to this PIN code. Please select a serviceable address."
       );
-      if (activePincode && !serviceExpansionService.hasVotedForPincode(activePincode)) {
+      if (activePincode) {
         setIsExpansionModalOpen(true);
       }
       return;
@@ -535,7 +552,7 @@ export default function CheckoutPage() {
         );
       } else {
         if (err?.response?.data?.code === "UNSERVICEABLE_LOCATION") {
-          if (activePincode && !serviceExpansionService.hasVotedForPincode(activePincode)) {
+          if (activePincode) {
             setIsExpansionModalOpen(true);
           }
         }
