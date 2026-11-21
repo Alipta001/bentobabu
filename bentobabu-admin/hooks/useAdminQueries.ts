@@ -311,6 +311,72 @@ export function useInventoryHistory(productId: string) {
   });
 }
 
+export function useDailyInventory(serviceDate?: string, status?: string) {
+  return useQuery({
+    queryKey: ["admin", "dailyInventory", serviceDate, status],
+    queryFn: () => inventoryService.getDaily({ serviceDate, status }),
+  });
+}
+
+export function useSetDailyCapacity() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      productId: string;
+      capacity: number;
+      serviceDate?: string;
+      reason?: string;
+    }) => inventoryService.setDailyCapacity(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "dailyInventory"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "kpis"] });
+    },
+  });
+}
+
+export function useDailyRestock() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      productId: string;
+      additionalQuantity: number;
+      serviceDate?: string;
+      note?: string;
+    }) => inventoryService.restockDaily(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "dailyInventory"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "dailyRestockHistory"] });
+    },
+  });
+}
+
+export function useToggleDailyAvailability() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      productId: string;
+      isManuallyDisabled: boolean;
+      serviceDate?: string;
+      reason?: string;
+    }) => inventoryService.toggleDailyAvailability(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "dailyInventory"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+  });
+}
+
+export function useDailyRestockHistory(productId: string, serviceDate?: string) {
+  return useQuery({
+    queryKey: ["admin", "dailyRestockHistory", productId, serviceDate],
+    queryFn: () => inventoryService.getDailyRestockHistory(productId, serviceDate),
+    enabled: !!productId,
+  });
+}
+
 // ==========================================
 // ==========================================
 // DAILY & WEEKLY MENU SCHEDULING

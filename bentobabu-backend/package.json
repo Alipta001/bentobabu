@@ -29,6 +29,7 @@
     "test:email-only-registration": "node test/email_only_registration.test.js",
     "test:phase1-critical-fixes": "node test/phase1_critical_delivery_fixes.test.js",
     "test:expansion-analytics": "node test/service_expansion_voting_and_analytics.test.js",
+    "test:inventory": "node test/daily_inventory_and_restocking.test.js",
     "test:all": "npm test"
   },
   "author": "Alipta Ghosh",

@@ -57,6 +57,11 @@ export const ADMIN_API_ENDPOINTS = {
   },
   INVENTORY: {
     LIST: "/admin/inventory",
+    DAILY: "/admin/inventory/daily",
+    SET_CAPACITY: "/admin/inventory/daily/set-capacity",
+    RESTOCK: "/admin/inventory/daily/restock",
+    TOGGLE_AVAILABILITY: "/admin/inventory/daily/toggle-availability",
+    DAILY_HISTORY: (productId: string) => `/admin/inventory/daily/${productId}/history`,
     LOW_STOCK: "/admin/inventory/low-stock",
     OUT_OF_STOCK: "/admin/inventory/out-of-stock",
     DETAIL: (productId: string) => `/admin/inventory/${productId}`,

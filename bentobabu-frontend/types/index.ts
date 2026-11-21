@@ -76,6 +76,8 @@ export interface Product {
   preparationTimeMinutes?: number;
   preparationTime?: number;
   stockQuantity?: number;
+  lowStockThreshold?: number;
+  isSoldOut?: boolean;
   servingSize?: string;
   nutritionalInfo?: NutritionalInfo;
   nutrition?: NutritionalInfo;

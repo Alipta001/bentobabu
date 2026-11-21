@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { DailyMenu, Product } = require('../models');
+const DailyInventoryService = require('../services/dailyInventoryService');
 const {
   getKolkataDateString,
   isValidDateString,
@@ -23,6 +24,10 @@ class DailyMenuController {
     ]);
 
     const availabilityMap = new Map();
+    const invMap = await DailyInventoryService.getInventoryMapForDate(
+      allActiveProducts.map((p) => p._id),
+      dateStr
+    );
 
     if (dailyMenu && Array.isArray(dailyMenu.items)) {
       dailyMenu.items.forEach((it) => {
@@ -35,12 +40,17 @@ class DailyMenuController {
 
     const items = allActiveProducts.map((p) => {
       const pId = p._id.toString();
-      // Master availability rule: if product master is unavailable, it cannot be available on daily menu.
-      // If master is available, respect dailyMenu's specific availability override.
-      let isAvailable = Boolean(p.isAvailable);
+      const inv = invMap.get(pId);
+      const isManuallyDisabled = inv?.isManuallyDisabled || !p.isAvailable;
+      const effectiveStock = inv !== undefined ? inv.remainingStock : p.stockQuantity;
+
+      // Master availability rule: if product master or daily inventory is manually disabled, cannot be available
+      let isAvailable = !isManuallyDisabled;
       if (isAvailable && availabilityMap.has(pId)) {
         isAvailable = Boolean(availabilityMap.get(pId));
       }
+
+      const isSoldOut = effectiveStock <= 0;
 
       return {
         product: {
@@ -52,11 +62,14 @@ class DailyMenuController {
           price: p.price,
           images: p.images,
           dietaryTags: p.dietaryTags,
-          stockQuantity: p.stockQuantity,
+          stockQuantity: effectiveStock,
+          remainingStock: effectiveStock,
+          isSoldOut,
           masterIsAvailable: p.isAvailable,
           isActive: p.isActive,
         },
-        isAvailable,
+        isAvailable: isAvailable && !isSoldOut,
+        isSoldOut,
       };
     });
 

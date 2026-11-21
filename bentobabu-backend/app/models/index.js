@@ -24,6 +24,7 @@ const DeviceToken = require('./DeviceToken');
 const SupportTicket = require('./SupportTicket');
 const SupportFaq = require('./SupportFaq');
 const ServiceExpansionVote = require('./ServiceExpansionVote');
+const DailyInventory = require('./DailyInventory');
 
 module.exports = {
   User,
@@ -52,5 +53,6 @@ module.exports = {
   SupportTicket,
   SupportFaq,
   ServiceExpansionVote,
+  DailyInventory,
 };
 

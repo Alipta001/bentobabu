@@ -14,6 +14,7 @@ const NotificationDispatcher = require('../utils/notificationDispatcher');
 const { validateEnv } = require('../config/env');
 const { redisDelPattern } = require('../config/redis');
 const { getKolkataDateString } = require('../utils/businessDate');
+const DailyInventoryService = require('../services/dailyInventoryService');
 const orderReceiptService = require('../utils/orderReceiptService');
 const receiptQueue = require('../utils/receiptQueue');
 
@@ -118,6 +119,14 @@ class PaymentController {
         { returnDocument: 'after' }
       );
       if (stockLock) {
+        const orderDateStr = getKolkataDateString(lockedOrder.createdAt);
+        const itemsToRelease = lockedOrder.items
+          .filter((it) => it.product && it.quantity)
+          .map((it) => ({ productId: it.product, quantity: it.quantity }));
+        try {
+          await DailyInventoryService.releaseStockAtomic(itemsToRelease, orderDateStr);
+        } catch (_) {}
+
         for (const item of lockedOrder.items) {
           if (item.product && item.quantity) {
             await Product.updateOne(

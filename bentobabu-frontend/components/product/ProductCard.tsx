@@ -31,9 +31,13 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
     return item?.quantity || 0;
   });
 
+  const isSoldOut = (product.stockQuantity ?? 1) <= 0;
+  const isLowStock = !isSoldOut && (product.stockQuantity ?? 99) <= (product.lowStockThreshold || 5);
+
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isSoldOut || !product.isAvailable) return;
     addItem(product, 1);
     setJustAdded(true);
     showToast({
@@ -51,6 +55,11 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
   const handleIncrement = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    const maxStock = product.stockQuantity ?? 99;
+    if (quantityInCart >= maxStock) {
+      alert(`Only ${maxStock} packet(s) available for today.`);
+      return;
+    }
     setQuantity(product.id, quantityInCart + 1);
   };
 
@@ -162,6 +171,11 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
                 Net: {product.servingSize}
               </span>
             )}
+            {isLowStock && (
+              <span className="text-[10px] font-bold text-amber-800 block">
+                Only {product.stockQuantity} left!
+              </span>
+            )}
           </div>
 
           {/* Cart Stepper or Add Button */}
@@ -173,9 +187,9 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
             <span className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500 border border-gray-200">
               Unavailable Today
             </span>
-          ) : (product.stockQuantity ?? 1) <= 0 ? (
-            <span className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500 border border-gray-200">
-              Out of Stock
+          ) : isSoldOut ? (
+            <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+              Sold Out
             </span>
           ) : quantityInCart > 0 ? (
             <div className="flex items-center gap-2 bg-[#354B35] text-[#F7F3EA] rounded-full p-1 shadow-sm">

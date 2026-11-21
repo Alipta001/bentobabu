@@ -16,6 +16,7 @@ const NotificationDispatcher = require('../utils/notificationDispatcher');
 const { redisDelPattern } = require('../config/redis');
 const { getKolkataDateString } = require('../utils/businessDate');
 const AdminSettingsController = require('./adminSettingsController');
+const DailyInventoryService = require('../services/dailyInventoryService');
 const { generateOrderReceiptPdf } = require('../utils/receiptGenerator');
 const orderReceiptService = require('../utils/orderReceiptService');
 const receiptQueue = require('../utils/receiptQueue');
@@ -144,6 +145,11 @@ class OrderController {
       const productMap = new Map();
       products.forEach((p) => productMap.set(p._id.toString(), p));
 
+      const dailyInvMap = await DailyInventoryService.getInventoryMapForDate(
+        productIds,
+        todayKolkata
+      );
+
       let itemTotalPaise = 0;
       const itemSnapshots = [];
 
@@ -156,7 +162,9 @@ class OrderController {
           });
         }
 
-        if (!prod.isAvailable) {
+        const inv = dailyInvMap.get(prod._id.toString());
+        const isManuallyDisabled = inv?.isManuallyDisabled || !prod.isAvailable;
+        if (isManuallyDisabled) {
           return res.status(400).json({
             success: false,
             message: `"${prod.name}" is currently unavailable and cannot be ordered. Please remove it from your cart.`,
@@ -164,7 +172,7 @@ class OrderController {
         }
 
         const isAvailableToday =
-          Boolean(prod.isAvailable) &&
+          !isManuallyDisabled &&
           (!dailyMap.has(prod._id.toString()) || dailyMap.get(prod._id.toString()) === true);
 
         if (!isAvailableToday) {
@@ -174,10 +182,22 @@ class OrderController {
           });
         }
 
-        if (item.quantity > prod.stockQuantity) {
+        const effectiveAvailable = inv !== undefined ? inv.remainingStock : prod.stockQuantity;
+        if (item.quantity > effectiveAvailable) {
           return res.status(400).json({
             success: false,
-            message: `Insufficient stock for "${prod.name}". Available: ${prod.stockQuantity}, Requested: ${item.quantity}`,
+            code: 'ITEM_CAPACITY_EXCEEDED',
+            message:
+              effectiveAvailable <= 0
+                ? `"${prod.name}" is sold out for today. Please remove it from your cart.`
+                : `Insufficient stock for "${prod.name}". Only ${effectiveAvailable} packet(s) available for today. (Requested: ${item.quantity})`,
+            data: {
+              productId: prod._id,
+              productName: prod.name,
+              requestedQuantity: item.quantity,
+              availableQuantity: effectiveAvailable,
+              serviceDate: todayKolkata,
+            },
           });
         }
 
@@ -698,39 +718,36 @@ class OrderController {
         let itemTotalPaise = 0;
         const itemSnapshots = [];
 
-        for (const item of cart.items) {
-          const prodUpdateOpts = session
-            ? { returnDocument: 'after', session }
-            : { returnDocument: 'after' };
+        const serviceDateToday = getKolkataDateString();
+        const itemsToReserve = cart.items.map((it) => {
+          const prod = cartProductMap.get(it.product.toString());
+          return {
+            productId: it.product,
+            productName: prod ? prod.name : 'Food Item',
+            quantity: it.quantity,
+          };
+        });
 
-          const product = await Product.findOneAndUpdate(
-            {
-              _id: item.product,
-              stockQuantity: { $gte: item.quantity },
-              isActive: true,
-            },
-            { $inc: { stockQuantity: -item.quantity } },
-            prodUpdateOpts
-          );
+        // Atomic reservation on DailyInventory with concurrency protection
+        await DailyInventoryService.reserveStockAtomic(itemsToReserve, serviceDateToday, session);
 
-          if (!product) {
-            throw new Error(`Insufficient stock or product inactive for item in cart`);
-          }
-
+        for (const it of itemsToReserve) {
           reservedStockItems.push({
-            productId: product._id,
-            quantity: item.quantity,
+            productId: it.productId,
+            quantity: it.quantity,
+            serviceDate: serviceDateToday,
           });
 
+          const product = cartProductMap.get(it.productId.toString());
           const pricePaise = Math.round(product.price * 100);
-          const subtotalPaise = pricePaise * item.quantity;
+          const subtotalPaise = pricePaise * it.quantity;
           itemTotalPaise += subtotalPaise;
 
           itemSnapshots.push({
             product: product._id,
             productName: product.name,
             image: product.images && product.images.length > 0 ? product.images[0] : '',
-            quantity: item.quantity,
+            quantity: it.quantity,
             unitPrice: product.price,
             subtotal: subtotalPaise / 100,
           });
@@ -988,7 +1005,12 @@ class OrderController {
             await CouponUsage.deleteOne({ _id: couponUsageDoc._id });
           }
           for (const item of reservedStockItems) {
-            await Product.updateOne({ _id: item.productId }, { $inc: { stockQuantity: item.quantity } });
+            try {
+              await DailyInventoryService.releaseStockAtomic([item], item.serviceDate || getKolkataDateString());
+            } catch (_) { }
+            try {
+              await Product.updateOne({ _id: item.productId }, { $inc: { stockQuantity: item.quantity } });
+            } catch (_) { }
           }
           if (reservedSlotId) {
             await DeliverySlot.updateOne({ _id: reservedSlotId }, { $inc: { bookedCount: -1 } });
@@ -996,6 +1018,15 @@ class OrderController {
           if (reservedCouponId) {
             await Coupon.updateOne({ _id: reservedCouponId }, { $inc: { usedCount: -1 } });
           }
+        }
+
+        if (error.code === 'ITEM_CAPACITY_EXCEEDED') {
+          return res.status(400).json({
+            success: false,
+            code: 'ITEM_CAPACITY_EXCEEDED',
+            message: error.message,
+            data: error.data,
+          });
         }
 
         if (idempotencyKey && (error.code === 11000 || error.message?.includes('duplicate key') || error.message?.includes('idempotencyKey'))) {
@@ -1319,7 +1350,16 @@ class OrderController {
         });
       }
 
-      // Exactly-once release of reserved product stock
+      // Exactly-once release of reserved product stock and daily inventory
+      const orderDateStr = getKolkataDateString(order.createdAt);
+      const itemsToRelease = order.items
+        .filter((it) => it.product && it.quantity)
+        .map((it) => ({ productId: it.product, quantity: it.quantity }));
+
+      try {
+        await DailyInventoryService.releaseStockAtomic(itemsToRelease, orderDateStr);
+      } catch (_) { }
+
       for (const item of order.items) {
         await Product.updateOne(
           { _id: item.product },

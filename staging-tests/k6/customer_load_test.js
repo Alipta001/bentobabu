@@ -148,7 +148,7 @@ export default function () {
           csrfToken = body.data.csrfToken;
           defaultHeaders['X-CSRF-Token'] = csrfToken;
         }
-      } catch {}
+      } catch { }
     } else {
       journeySuccess = false;
     }
@@ -235,7 +235,7 @@ export default function () {
         if (found) {
           targetProductId = found._id || found.id;
         }
-      } catch {}
+      } catch { }
     }
   });
 
@@ -311,7 +311,7 @@ export default function () {
       try {
         const body = res.json();
         targetAddressId = body.data[0]._id || body.data[0].id;
-      } catch {}
+      } catch { }
     }
   });
 
@@ -360,7 +360,7 @@ export default function () {
           const body = orderRes.json();
           const ord = body.data?.order || body.data;
           createdOrderId = ord._id || ord.id;
-        } catch {}
+        } catch { }
       } else {
         failedOrders.add(1);
         if (orderRes.status !== 201 && orderRes.status !== 200) {

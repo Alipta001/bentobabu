@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { Cart, Product, DailyMenu, SystemSetting } = require('../models');
 const { getKolkataDateString } = require('../utils/businessDate');
+const DailyInventoryService = require('../services/dailyInventoryService');
 
 class CartController {
   /**
@@ -16,6 +17,11 @@ class CartController {
     }
 
     const todayStr = getKolkataDateString();
+    const inv = await DailyInventoryService.getOrCreateDailyInventory(productId, todayStr);
+    if (inv && inv.isManuallyDisabled) {
+      return false;
+    }
+
     const dailyMenu = await DailyMenu.findOne({ date: todayStr, isPublished: true }).lean();
 
     if (dailyMenu && Array.isArray(dailyMenu.items)) {
@@ -75,15 +81,22 @@ class CartController {
     let allOrderable = true;
     const calculatedItems = [];
 
+    const productIds = populatedCart.items.filter((it) => it.product).map((it) => it.product._id);
+    const dailyInvMap = await DailyInventoryService.getInventoryMapForDate(productIds, todayStr);
+
     for (const item of populatedCart.items) {
       if (!item.product) continue;
 
       const p = item.product;
+      const inv = dailyInvMap.get(p._id.toString());
+      const effectiveStock = inv !== undefined ? inv.remainingStock : (p.stockQuantity || 0);
+      const isManuallyDisabled = inv?.isManuallyDisabled || !p.isAvailable;
+
       const isAvailableToday =
-        Boolean(p.isAvailable) &&
+        !isManuallyDisabled &&
         (!dailyMap.has(p._id.toString()) || dailyMap.get(p._id.toString()) === true);
 
-      const isSufficientStock = p.stockQuantity >= item.quantity;
+      const isSufficientStock = effectiveStock >= item.quantity;
       const isOrderable = p.isActive && isAvailableToday && isSufficientStock;
 
       if (!isOrderable) {
@@ -106,7 +119,7 @@ class CartController {
           slug: p.slug,
           images: p.images,
           price: p.price,
-          stockQuantity: p.stockQuantity,
+          stockQuantity: effectiveStock,
           isAvailable: isAvailableToday,
           isActive: p.isActive,
           dietaryTags: p.dietaryTags,
@@ -117,12 +130,14 @@ class CartController {
         isOrderable,
         orderableReason: !p.isActive
           ? 'Product is no longer available'
-          : !p.isAvailable
+          : isManuallyDisabled
           ? 'Product is currently unavailable'
           : !isAvailableToday
           ? "Product is not available on today's menu"
           : !isSufficientStock
-          ? `Only ${p.stockQuantity} item(s) in stock`
+          ? effectiveStock <= 0
+            ? 'Sold out for today'
+            : `Only ${effectiveStock} packet(s) left in stock`
           : null,
       });
     }
@@ -270,10 +285,18 @@ class CartController {
         });
       }
 
-      if (product.stockQuantity < qty) {
+      const todayStr = getKolkataDateString();
+      const dailyInv = await DailyInventoryService.getOrCreateDailyInventory(productId, todayStr);
+      const effectiveStock = dailyInv ? dailyInv.remainingStock : product.stockQuantity;
+
+      if (effectiveStock < qty) {
         return res.status(400).json({
           success: false,
-          message: `Insufficient stock. Only ${product.stockQuantity} item(s) available`,
+          code: 'ITEM_CAPACITY_EXCEEDED',
+          message:
+            effectiveStock <= 0
+              ? `"${product.name}" is sold out for today.`
+              : `Insufficient stock. Only ${effectiveStock} packet(s) available for today.`,
         });
       }
 
@@ -288,10 +311,11 @@ class CartController {
 
       if (existingIndex > -1) {
         const newTotalQuantity = cart.items[existingIndex].quantity + qty;
-        if (newTotalQuantity > product.stockQuantity) {
+        if (newTotalQuantity > effectiveStock) {
           return res.status(400).json({
             success: false,
-            message: `Cannot add more. Total in cart (${newTotalQuantity}) would exceed available stock (${product.stockQuantity})`,
+            code: 'ITEM_CAPACITY_EXCEEDED',
+            message: `Cannot add more. Total in cart (${newTotalQuantity}) would exceed available stock (${effectiveStock})`,
           });
         }
         cart.items[existingIndex].quantity = newTotalQuantity;
@@ -362,10 +386,18 @@ class CartController {
         });
       }
 
-      if (qty > product.stockQuantity) {
+      const todayStr = getKolkataDateString();
+      const dailyInv = await DailyInventoryService.getOrCreateDailyInventory(productId, todayStr);
+      const effectiveStock = dailyInv ? dailyInv.remainingStock : product.stockQuantity;
+
+      if (qty > effectiveStock) {
         return res.status(400).json({
           success: false,
-          message: `Requested quantity exceeds available stock of ${product.stockQuantity}`,
+          code: 'ITEM_CAPACITY_EXCEEDED',
+          message:
+            effectiveStock <= 0
+              ? `"${product.name}" is sold out for today.`
+              : `Requested quantity exceeds available stock of ${effectiveStock}`,
         });
       }
 

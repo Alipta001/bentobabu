@@ -45,6 +45,10 @@ export function ProductDetailView({
   const [quantity, setQuantity] = useState(1);
   const [addedSuccess, setAddedSuccess] = useState(false);
 
+  const isSoldOut = (product.stockQuantity ?? 1) <= 0;
+  const maxStock = Math.max(1, product.stockQuantity ?? 99);
+  const isLowStock = !isSoldOut && (product.stockQuantity ?? 99) <= (product.lowStockThreshold || 5);
+
   const cartItem = cartItems.find((item) => item.product.id === product.id);
 
   const images = product.galleryImages?.length
@@ -314,12 +318,26 @@ export function ProductDetailView({
 
           {/* Interactive Controls & CTA */}
           <div className="pt-4 border-t border-[#F0ECE1] space-y-3">
+            {/* Real-time Inventory Alerts */}
+            {isSoldOut ? (
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold text-rose-800 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse"></span>
+                <span>This item has reached daily kitchen capacity and is sold out for today.</span>
+              </div>
+            ) : isLowStock ? (
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-600"></span>
+                <span>Hurry! Only {product.stockQuantity} packet(s) remaining for today.</span>
+              </div>
+            ) : null}
+
             <div className="flex items-center gap-4">
               {/* Quantity Stepper */}
               <div className="flex items-center gap-3 bg-[#F7F3EA] border border-[#E5DFC5] rounded-full px-3 py-1.5">
                 <button
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5"
+                  disabled={isSoldOut}
+                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 disabled:opacity-40"
                   aria-label="Decrease quantity"
                 >
                   <Minus className="w-3.5 h-3.5 text-[#222922]" />
@@ -328,8 +346,9 @@ export function ProductDetailView({
                   {quantity}
                 </span>
                 <button
-                  onClick={() => setQuantity((q) => q + 1)}
-                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5"
+                  onClick={() => setQuantity((q) => Math.min(maxStock, q + 1))}
+                  disabled={isSoldOut || quantity >= maxStock}
+                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 disabled:opacity-40"
                   aria-label="Increase quantity"
                 >
                   <Plus className="w-3.5 h-3.5 text-[#222922]" />
@@ -339,12 +358,14 @@ export function ProductDetailView({
               {/* Add to Cart CTA */}
               <button
                 onClick={handleAddToCart}
-                disabled={!acceptingOrders || !product.isAvailable}
+                disabled={!acceptingOrders || !product.isAvailable || isSoldOut}
                 className={`flex-1 flex items-center justify-center gap-2 py-3.5 px-6 rounded-full text-sm font-bold shadow-md transition-all duration-200 ${
                   !acceptingOrders
                     ? "bg-amber-100 text-amber-900 border border-amber-300 cursor-not-allowed opacity-90"
                     : !product.isAvailable
                     ? "bg-gray-200 text-gray-500 cursor-not-allowed border border-gray-300"
+                    : isSoldOut
+                    ? "bg-rose-100 text-rose-800 border border-rose-300 cursor-not-allowed"
                     : addedSuccess
                     ? "bg-emerald-700 text-white cursor-pointer"
                     : "bg-[#354B35] text-[#F7F3EA] hover:bg-[#253525] cursor-pointer"
@@ -354,6 +375,8 @@ export function ProductDetailView({
                   <span>Ordering is temporarily unavailable</span>
                 ) : !product.isAvailable ? (
                   <span>Unavailable on Today&apos;s Menu</span>
+                ) : isSoldOut ? (
+                  <span>Sold Out for Today</span>
                 ) : addedSuccess ? (
                   <>
                     <Check className="w-4 h-4" />

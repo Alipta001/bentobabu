@@ -10,6 +10,54 @@ export interface StockAdjustmentPayload {
   reason: string;
 }
 
+export interface RestockHistoryEntry {
+  _id?: string;
+  id?: string;
+  quantityAdded: number;
+  previousTotalStock: number;
+  newTotalStock: number;
+  admin?: string | { name: string; email: string };
+  adminName?: string;
+  note?: string;
+  timestamp: string;
+}
+
+export interface DailyInventoryItem {
+  productId: string;
+  product: {
+    id: string;
+    name: string;
+    slug: string;
+    category?: { id: string; name: string };
+    price: number;
+    images?: string[];
+    servingSize?: string;
+    lowStockThreshold: number;
+    masterIsAvailable: boolean;
+  };
+  serviceDate: string;
+  initialStock: number;
+  restockedQuantity: number;
+  totalStock: number;
+  reservedQuantity: number;
+  soldQuantity: number;
+  remainingStock: number;
+  isSoldOut: boolean;
+  isManuallyDisabled: boolean;
+  status: "AVAILABLE" | "LOW_STOCK" | "SOLD_OUT" | "MANUALLY_UNAVAILABLE";
+}
+
+export interface DailyInventorySummary {
+  totalDishes: number;
+  totalCapacity: number;
+  totalReserved: number;
+  totalRemaining: number;
+  availableCount: number;
+  lowStockCount: number;
+  soldOutCount: number;
+  manuallyDisabledCount: number;
+}
+
 export interface InventoryLogItem {
   _id: string;
   id?: string;
@@ -114,5 +162,118 @@ export const inventoryService = {
       history: res.data?.data?.history || [],
       totalLogs: res.data?.data?.pagination?.totalLogs || 0,
     };
+  },
+
+  async getDaily(params?: { serviceDate?: string; status?: string }): Promise<{
+    serviceDate: string;
+    summary: DailyInventorySummary;
+    items: DailyInventoryItem[];
+  }> {
+    const res = await adminApiClient.get<{
+      success: boolean;
+      data: {
+        serviceDate: string;
+        summary: DailyInventorySummary;
+        items: DailyInventoryItem[];
+      };
+    }>(ADMIN_API_ENDPOINTS.INVENTORY.DAILY, {
+      params,
+    });
+
+    return (
+      res.data?.data || {
+        serviceDate: params?.serviceDate || "",
+        summary: {
+          totalDishes: 0,
+          totalCapacity: 0,
+          totalReserved: 0,
+          totalRemaining: 0,
+          availableCount: 0,
+          lowStockCount: 0,
+          soldOutCount: 0,
+          manuallyDisabledCount: 0,
+        },
+        items: [],
+      }
+    );
+  },
+
+  async setDailyCapacity(payload: {
+    productId: string;
+    capacity: number;
+    serviceDate?: string;
+    reason?: string;
+  }) {
+    const res = await adminApiClient.post<{
+      success: boolean;
+      message: string;
+      data: any;
+    }>(ADMIN_API_ENDPOINTS.INVENTORY.SET_CAPACITY, payload);
+    return res.data;
+  },
+
+  async restockDaily(payload: {
+    productId: string;
+    additionalQuantity: number;
+    serviceDate?: string;
+    note?: string;
+  }) {
+    const res = await adminApiClient.post<{
+      success: boolean;
+      message: string;
+      data: any;
+    }>(ADMIN_API_ENDPOINTS.INVENTORY.RESTOCK, payload);
+    return res.data;
+  },
+
+  async toggleDailyAvailability(payload: {
+    productId: string;
+    isManuallyDisabled: boolean;
+    serviceDate?: string;
+    reason?: string;
+  }) {
+    const res = await adminApiClient.post<{
+      success: boolean;
+      message: string;
+      data: any;
+    }>(ADMIN_API_ENDPOINTS.INVENTORY.TOGGLE_AVAILABILITY, payload);
+    return res.data;
+  },
+
+  async getDailyRestockHistory(
+    productId: string,
+    serviceDate?: string
+  ): Promise<{
+    serviceDate: string;
+    initialStock: number;
+    restockedQuantity: number;
+    totalStock: number;
+    remainingStock: number;
+    history: RestockHistoryEntry[];
+  }> {
+    const res = await adminApiClient.get<{
+      success: boolean;
+      data: {
+        serviceDate: string;
+        initialStock: number;
+        restockedQuantity: number;
+        totalStock: number;
+        remainingStock: number;
+        history: RestockHistoryEntry[];
+      };
+    }>(ADMIN_API_ENDPOINTS.INVENTORY.DAILY_HISTORY(productId), {
+      params: { serviceDate },
+    });
+
+    return (
+      res.data?.data || {
+        serviceDate: serviceDate || "",
+        initialStock: 0,
+        restockedQuantity: 0,
+        totalStock: 0,
+        remainingStock: 0,
+        history: [],
+      }
+    );
   },
 };
