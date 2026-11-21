@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -11,9 +13,10 @@ import {
   MapPin,
 } from "lucide-react";
 import { brandConfig } from "@/config/brand";
-import { INITIAL_CATEGORIES } from "@/lib/data/categories";
+import { useCategories } from "@/hooks/useQueries";
 
 export function Footer() {
+  const { data: categories = [] } = useCategories();
   return (
     <footer className="bg-[#243324] text-[#EDE8DE] pt-16 pb-12 border-t border-[#354B35]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -180,16 +183,24 @@ export function Footer() {
               Collections
             </h3>
             <ul className="space-y-2 text-xs text-[#EDE8DE]/80">
-              {INITIAL_CATEGORIES.slice(0, 5).map((c) => (
-                <li key={c.id}>
-                  <Link
-                    href={`/categories/${c.slug}`}
-                    className="hover:text-white transition-colors"
-                  >
-                    {c.name}
+              {categories.length > 0 ? (
+                categories.slice(0, 5).map((c) => (
+                  <li key={c.id || c.slug}>
+                    <Link
+                      href={`/categories/${c.slug}`}
+                      className="hover:text-white transition-colors"
+                    >
+                      {c.name}
+                    </Link>
+                  </li>
+                ))
+              ) : (
+                <li>
+                  <Link href="/menu" className="hover:text-white transition-colors">
+                    Explore Menu
                   </Link>
                 </li>
-              ))}
+              )}
             </ul>
           </div>
 

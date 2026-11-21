@@ -29,11 +29,13 @@ class InventoryController {
         prodFilter.name = { $regex: search.trim(), $options: 'i' };
       }
       if (categoryId && mongoose.isValidObjectId(categoryId)) {
-        prodFilter.category = categoryId;
+        const catObjId = new mongoose.Types.ObjectId(categoryId);
+        prodFilter.$or = [{ categories: catObjId }, { category: catObjId }];
       }
 
       const products = await Product.find(prodFilter)
         .populate('category', 'name slug')
+        .populate('categories', 'name slug')
         .sort({ category: 1, name: 1 })
         .lean();
 
@@ -302,7 +304,8 @@ class InventoryController {
       }
 
       if (categoryId && mongoose.isValidObjectId(categoryId)) {
-        filter.category = categoryId;
+        const catObjId = new mongoose.Types.ObjectId(categoryId);
+        filter.$or = [{ categories: catObjId }, { category: catObjId }];
       }
 
       if (lowStock === 'true' || lowStock === true) {
@@ -314,6 +317,7 @@ class InventoryController {
       const [products, totalProducts] = await Promise.all([
         Product.find(filter)
           .populate('category', 'name slug')
+          .populate('categories', 'name slug')
           .sort(sort)
           .skip(skip)
           .limit(limitNum)

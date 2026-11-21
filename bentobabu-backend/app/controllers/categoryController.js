@@ -11,20 +11,31 @@ class CategoryController {
    */
   static async getCategories(req, res, next) {
     try {
+      const skipCache = req.query.skipCache === 'true' || req.headers['x-skip-cache'] === 'true';
       const CACHE_KEY = 'cache:categories:all';
-      const cached = await redisGet(CACHE_KEY);
-      if (cached) {
-        return res.status(200).json({
-          success: true,
-          data: cached,
-        });
+
+      if (!skipCache && req.query.includeInactive !== 'true') {
+        const cached = await redisGet(CACHE_KEY);
+        if (cached) {
+          return res.status(200).json({
+            success: true,
+            data: cached,
+          });
+        }
       }
 
-      const categories = await Category.find({ isActive: true })
-        .sort({ displayOrder: 1, name: 1 })
-        .select('name slug description image displayOrder isActive');
+      const query = {};
+      if (req.query.includeInactive !== 'true') {
+        query.isActive = true;
+      }
 
-      await redisSet(CACHE_KEY, categories, 3600); // 1 hour TTL
+      const categories = await Category.find(query)
+        .sort({ displayOrder: 1, name: 1 })
+        .select('name slug description image imageData displayOrder isActive');
+
+      if (!skipCache && req.query.includeInactive !== 'true') {
+        await redisSet(CACHE_KEY, categories, 3600); // 1 hour TTL
+      }
 
       res.status(200).json({
         success: true,
@@ -273,6 +284,73 @@ class CategoryController {
         success: true,
         message: `Category ${isActive ? 'activated' : 'deactivated'} successfully`,
         data: category,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE /api/v1/categories/:id
+   * ADMIN only: Safely delete category and clean up product associations
+   */
+  static async deleteCategory(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid category identifier format',
+        });
+      }
+
+      const category = await Category.findById(id);
+      if (!category) {
+        return res.status(404).json({
+          success: false,
+          message: 'Category not found',
+        });
+      }
+
+      const { Product } = require('../models');
+
+      // Remove deleted category from any products referencing it in their categories array
+      await Product.updateMany(
+        { categories: category._id },
+        { $pull: { categories: category._id } }
+      );
+
+      // For products where this category was the primary category, fallback to next category or null
+      const affectedProducts = await Product.find({ category: category._id });
+      for (const prod of affectedProducts) {
+        if (Array.isArray(prod.categories) && prod.categories.length > 0) {
+          prod.category = prod.categories[0];
+        } else {
+          prod.category = null;
+        }
+        await prod.save();
+      }
+
+      // Clean up Cloudinary asset if any
+      if (category.imageData?.publicId) {
+        try {
+          await deleteAsset(category.imageData.publicId);
+          await Media.updateOne({ publicId: category.imageData.publicId }, { status: 'DELETED' });
+        } catch (delErr) {
+          console.error('[CategoryController] Error deleting category image:', delErr);
+        }
+      }
+
+      await Category.findByIdAndDelete(id);
+
+      await redisDel('cache:categories:all');
+      await redisDelPattern('cache:products:*');
+      await redisDelPattern('cache:admin:dashboard:*');
+
+      res.status(200).json({
+        success: true,
+        message: 'Category deleted successfully',
       });
     } catch (error) {
       next(error);

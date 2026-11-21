@@ -18,7 +18,6 @@ import { VideoCard } from "@/components/video/VideoCard";
 import { FaqAccordion } from "@/components/home/FaqAccordion";
 import { NewsletterForm } from "@/components/home/NewsletterForm";
 import { brandConfig } from "@/config/brand";
-import { INITIAL_CATEGORIES } from "@/lib/data/categories";
 import { INITIAL_PRODUCTS } from "@/lib/data/products";
 import { Category, Product, VideoContent } from "@/types";
 import { normalizeProduct } from "@/services/productService";
@@ -42,12 +41,12 @@ async function getHomeData(): Promise<{
       ),
     ]);
 
-    let categories: Category[] = INITIAL_CATEGORIES;
+    let categories: Category[] = [];
     if (categoriesRes.status === "fulfilled" && categoriesRes.value) {
       const d = categoriesRes.value.data;
-      if (Array.isArray(d?.categories) && d.categories.length > 0) {
+      if (Array.isArray(d?.categories)) {
         categories = d.categories;
-      } else if (Array.isArray(d) && d.length > 0) {
+      } else if (Array.isArray(d)) {
         categories = d;
       }
     }
@@ -75,8 +74,8 @@ async function getHomeData(): Promise<{
     return { categories, bestsellers, featuredVideos };
   } catch {
     return {
-      categories: INITIAL_CATEGORIES,
-      bestsellers: INITIAL_PRODUCTS.slice(0, 4),
+      categories: [],
+      bestsellers: [],
       featuredVideos: [],
     };
   }
@@ -248,16 +247,30 @@ export default async function HomePage() {
                 href="/menu"
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#354B35] hover:text-[#755C2B] transition-colors"
               >
-                <span>View All 7 Categories</span>
+                <span>Explore Full Menu</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {categories.map((category) => (
-                <CategoryCard key={category.id} category={category} />
-              ))}
-            </div>
+            {categories.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {categories.map((category) => (
+                  <CategoryCard key={category.id || category.slug} category={category} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-white rounded-3xl border border-[#E5DFC5] p-8">
+                <p className="text-sm text-[#4A584A]">
+                  Fresh culinary collections are currently being prepared by our chefs.
+                </p>
+                <Link
+                  href="/menu"
+                  className="mt-4 inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#354B35] text-white text-xs font-semibold"
+                >
+                  Browse Menu
+                </Link>
+              </div>
+            )}
           </div>
         </section>
 

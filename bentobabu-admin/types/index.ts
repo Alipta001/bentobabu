@@ -55,6 +55,8 @@ export interface Product {
   originalPrice?: number;
   costPrice?: number;
   categoryIds: string[];
+  category?: string | { _id: string; id: string; name: string; slug: string };
+  categories?: (string | { _id: string; id: string; name: string; slug: string })[];
   dietary: DietaryType;
   imageUrl: string;
   galleryImages?: string[];

@@ -43,7 +43,7 @@ function ProductsContent() {
     price: 299,
     originalPrice: 349,
     costPrice: 120,
-    categoryIds: ["gym-fitness"],
+    categoryIds: [],
     dietary: "vegetarian",
     imageUrl:
       "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80",
@@ -85,7 +85,7 @@ function ProductsContent() {
       price: 299,
       originalPrice: 349,
       costPrice: 120,
-      categoryIds: ["gym-fitness"],
+      categoryIds: categories[0]?.id ? [categories[0].id] : [],
       dietary: "vegetarian",
       imageUrl:
         "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80",
@@ -109,6 +109,12 @@ function ProductsContent() {
 
   const handleOpenEdit = (p: Product) => {
     setEditingProduct(p);
+    const initialCategoryIds = Array.isArray(p.categoryIds) && p.categoryIds.length > 0
+      ? p.categoryIds
+      : p.category
+      ? [typeof p.category === "object" ? p.category.id || p.category._id || "" : (p.category as string)]
+      : [];
+
     setFormData({
       slug: p.slug,
       name: p.name,
@@ -117,7 +123,7 @@ function ProductsContent() {
       price: p.price,
       originalPrice: p.originalPrice || p.price,
       costPrice: p.costPrice || Math.round(p.price * 0.45),
-      categoryIds: p.categoryIds,
+      categoryIds: initialCategoryIds.filter(Boolean),
       dietary: p.dietary,
       imageUrl: p.imageUrl,
       imagesData: p.imagesData || [],
@@ -152,6 +158,10 @@ function ProductsContent() {
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) return;
+    if (!formData.categoryIds || formData.categoryIds.length === 0) {
+      alert("Please assign at least one category to this product.");
+      return;
+    }
 
     if (editingProduct) {
       await updateProductMutation.mutateAsync({
@@ -167,7 +177,7 @@ function ProductsContent() {
   return (
     <AdminShell
       title="Product Catalogue Management"
-      subtitle="Create, edit, price and manage nutritional dishes across all 7 targeted collections"
+      subtitle="Create, edit, price and manage nutritional dishes across targeted collections"
     >
       {/* Storage & Quota Monitoring */}
       <StorageUsageCard />
@@ -472,25 +482,71 @@ function ProductsContent() {
                   </select>
                 </div>
 
-                <div className="space-y-1 col-span-3">
-                  <label className="font-bold text-[#1F271F]">Collection / Category *</label>
-                  <select
-                    required
-                    value={formData.categoryIds[0] || ""}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        categoryIds: [e.target.value],
+                <div className="space-y-1.5 col-span-3">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-[#1F271F]">
+                      Assigned Collections / Categories * ({formData.categoryIds.length})
+                    </label>
+                    <span className="text-[11px] text-[#8A9A86]">Select all applicable categories</span>
+                  </div>
+
+                  {/* Selected Categories Chips */}
+                  <div className="flex flex-wrap items-center gap-1.5 min-h-[42px] p-2 bg-[#F7F3EA] rounded-xl border border-[#E5DFC5]">
+                    {formData.categoryIds.length === 0 ? (
+                      <span className="text-xs text-[#8A9A86] italic px-1">
+                        No categories assigned yet. Use the dropdown below to select one or more categories.
+                      </span>
+                    ) : (
+                      formData.categoryIds.map((cid) => {
+                        const cat = categories.find((c) => c.id === cid || c.slug === cid);
+                        return (
+                          <span
+                            key={cid}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#354B35] text-white shadow-xs"
+                          >
+                            <span>{cat?.name || cid}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormData({
+                                  ...formData,
+                                  categoryIds: formData.categoryIds.filter((id) => id !== cid),
+                                });
+                              }}
+                              className="text-[#DFC89B] hover:text-white transition-colors cursor-pointer"
+                              title={`Remove ${cat?.name || cid}`}
+                              aria-label={`Remove category ${cat?.name || cid}`}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </span>
+                        );
                       })
-                    }
-                    className="w-full p-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5]"
+                    )}
+                  </div>
+
+                  {/* Category Selector Dropdown */}
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      if (selectedId && !formData.categoryIds.includes(selectedId)) {
+                        setFormData({
+                          ...formData,
+                          categoryIds: [...formData.categoryIds, selectedId],
+                        });
+                      }
+                    }}
+                    className="w-full p-2.5 rounded-xl bg-white border border-[#E5DFC5] text-xs font-medium text-[#1F271F] focus:outline-none focus:border-[#354B35]"
                   >
-                    <option value="">Select a Category</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
+                    <option value="">+ Add a Category / Collection...</option>
+                    {categories
+                      .filter((c) => !formData.categoryIds.includes(c.id))
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>

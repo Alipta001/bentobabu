@@ -58,6 +58,7 @@ export interface Product {
   originalPrice?: number;
   discountPrice?: number | null;
   category?: string | { _id: string; id: string; name: string; slug: string };
+  categories?: (string | { _id: string; id: string; name: string; slug: string })[];
   categoryIds: string[];
   dietary: DietaryType;
   dietaryTags?: string[];

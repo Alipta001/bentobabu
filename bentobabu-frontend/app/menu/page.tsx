@@ -65,6 +65,10 @@ export default function MenuPage() {
   // Synchronize category from URL query parameters (slug to id)
   useEffect(() => {
     if (selectedCategory && categories.length > 0) {
+      if (selectedCategory.toLowerCase() === "all") {
+        setSelectedCategory("");
+        return;
+      }
       const match = categories.find((c) => c.slug === selectedCategory);
       if (match && match.id !== selectedCategory) {
         setSelectedCategory(match.id);
@@ -72,15 +76,17 @@ export default function MenuPage() {
     }
   }, [selectedCategory, categories]);
 
+  const isAllCategory = !selectedCategory || selectedCategory.toLowerCase() === "all";
+
   const filterPayload: ProductFilterOptions = useMemo(
     () => ({
-      categoryId: selectedCategory || undefined,
+      categoryId: isAllCategory ? undefined : selectedCategory,
       search: debouncedSearch || undefined,
       dietary: selectedDietary.length > 0 ? selectedDietary : undefined,
       maxPrice: maxPrice < 500 ? maxPrice : undefined,
       sortBy,
     }),
-    [selectedCategory, debouncedSearch, selectedDietary, maxPrice, sortBy]
+    [isAllCategory, selectedCategory, debouncedSearch, selectedDietary, maxPrice, sortBy]
   );
 
   const {
@@ -106,7 +112,7 @@ export default function MenuPage() {
   };
 
   const hasActiveFilters =
-    Boolean(selectedCategory) ||
+    Boolean(selectedCategory && selectedCategory.toLowerCase() !== "all") ||
     Boolean(searchQuery) ||
     selectedDietary.length > 0 ||
     maxPrice < 500;
@@ -217,26 +223,29 @@ export default function MenuPage() {
                     <button
                       onClick={() => setSelectedCategory("")}
                       className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                        selectedCategory === ""
+                        isAllCategory
                           ? "bg-[#354B35] text-white"
                           : "text-[#4A584A] hover:bg-[#F7F3EA]"
                       }`}
                     >
                       All Categories
                     </button>
-                    {categories.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => setSelectedCategory(c.id)}
-                        className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
-                          selectedCategory === c.id
-                            ? "bg-[#354B35] text-white"
-                            : "text-[#4A584A] hover:bg-[#F7F3EA]"
-                        }`}
-                      >
-                        {c.name}
-                      </button>
-                    ))}
+                    {categories.map((c) => {
+                      const isCatSelected = selectedCategory === c.id || selectedCategory === c.slug;
+                      return (
+                        <button
+                          key={c.id || c.slug}
+                          onClick={() => setSelectedCategory(c.id || c.slug)}
+                          className={`w-full text-left px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                            isCatSelected
+                              ? "bg-[#354B35] text-white"
+                              : "text-[#4A584A] hover:bg-[#F7F3EA]"
+                          }`}
+                        >
+                          {c.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -315,7 +324,7 @@ export default function MenuPage() {
                       Category
                     </label>
                     <select
-                      value={selectedCategory}
+                      value={isAllCategory ? "" : selectedCategory}
                       onChange={(e) => setSelectedCategory(e.target.value)}
                       className="w-full p-2.5 rounded-xl bg-white border border-[#E5DFC5] text-xs text-[#222922]"
                     >

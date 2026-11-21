@@ -69,12 +69,18 @@ export const normalizeProduct = (item: any): Product => {
     fibre: typeof rawNutrition.fibre === "number" ? rawNutrition.fibre : (typeof rawNutrition.fiber === "number" ? rawNutrition.fiber : 6),
   };
 
-  const categoryId = item.category?._id || item.category?.id || item.category || "";
-  const categoryIds = Array.isArray(item.categoryIds)
-    ? item.categoryIds
-    : categoryId
-    ? [categoryId]
-    : [];
+  const categoryId = item.category?._id || item.category?.id || (typeof item.category === "string" ? item.category : "");
+  let rawCategoryIds: string[] = [];
+  if (Array.isArray(item.categories) && item.categories.length > 0) {
+    rawCategoryIds = item.categories
+      .map((c: any) => c?._id || c?.id || (typeof c === "string" ? c : ""))
+      .filter(Boolean);
+  } else if (Array.isArray(item.categoryIds) && item.categoryIds.length > 0) {
+    rawCategoryIds = item.categoryIds;
+  } else if (categoryId) {
+    rawCategoryIds = [categoryId];
+  }
+  const categoryIds = [...new Set(rawCategoryIds)];
 
   const prepTime =
     typeof item.preparationTime === "number"
@@ -94,6 +100,7 @@ export const normalizeProduct = (item: any): Product => {
     originalPrice: item.originalPrice || item.price,
     discountPrice: item.discountPrice,
     category: item.category,
+    categories: item.categories || (item.category ? [item.category] : []),
     categoryIds,
     dietary,
     dietaryTags: item.dietaryTags || [],
@@ -126,8 +133,9 @@ export const productService = {
         params.search = filters.search.trim();
       }
 
-      if (filters?.categoryId || filters?.category) {
-        params.category = filters.categoryId || filters.category;
+      const cat = filters?.categoryId || filters?.category;
+      if (cat && typeof cat === "string" && cat.toLowerCase() !== "all") {
+        params.category = cat;
       }
 
       if (filters?.date) {

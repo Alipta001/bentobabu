@@ -12,6 +12,7 @@ router.get('/:slug', CategoryController.getCategoryBySlug);
 router.post('/', authenticate, authorize('ADMIN'), CategoryController.createCategory);
 router.patch('/:id', authenticate, authorize('ADMIN'), CategoryController.updateCategory);
 router.patch('/:id/status', authenticate, authorize('ADMIN'), CategoryController.updateCategoryStatus);
+router.delete('/:id', authenticate, authorize('ADMIN'), CategoryController.deleteCategory);
 
 module.exports = router;
 

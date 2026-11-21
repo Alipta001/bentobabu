@@ -287,6 +287,19 @@ export function useToggleCategoryStatus() {
   });
 }
 
+export function useDeleteCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => categoryService.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+}
+
 // ==========================================
 // INVENTORY
 // ==========================================

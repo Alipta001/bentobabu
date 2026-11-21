@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, X, Edit, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, X, Edit, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import {
   useAdminCategories,
   useCreateCategory,
   useToggleCategoryStatus,
+  useDeleteCategory,
 } from "@/hooks/useAdminQueries";
 import { categoryService } from "@/services/categoryService";
 import { Category, ProductMediaImage } from "@/types";
@@ -18,6 +19,7 @@ export default function AdminCategoriesPage() {
   const { data: categories = [], isLoading } = useAdminCategories();
   const createCategoryMutation = useCreateCategory();
   const toggleCategoryMutation = useToggleCategoryStatus();
+  const deleteCategoryMutation = useDeleteCategory();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -96,6 +98,16 @@ export default function AdminCategoriesPage() {
       });
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to update category status.");
+    }
+  };
+
+  const handleDelete = async (cat: Category) => {
+    if (confirm(`Are you sure you want to delete category "${cat.name}"? Products assigned to it will be safely unlinked.`)) {
+      try {
+        await deleteCategoryMutation.mutateAsync(cat.id);
+      } catch (err: unknown) {
+        alert(err instanceof Error ? err.message : "Failed to delete category.");
+      }
     }
   };
 
@@ -195,6 +207,13 @@ export default function AdminCategoriesPage() {
                       title="Edit Category"
                     >
                       <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(cat)}
+                      className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer"
+                      title="Delete Category"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>

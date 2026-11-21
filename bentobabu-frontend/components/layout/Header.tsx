@@ -213,26 +213,34 @@ export function Header() {
                     </Link>
                   </div>
                   <div className="space-y-1">
-                    {categories.map((cat) => (
-                      <Link
-                        key={cat.id}
-                        href={`/categories/${cat.slug}`}
-                        onClick={() => setCollectionsDropdownOpen(false)}
-                        className="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-[#F7F3EA] transition-colors"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-[#EBF0E9] text-[#354B35] group-hover:bg-[#354B35] group-hover:text-[#DFC89B] flex items-center justify-center shrink-0 transition-colors">
-                          <UtensilsCrossed className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-[#222922] group-hover:text-[#354B35] transition-colors">
-                            {cat.name}
+                    {categories.length > 0 ? (
+                      categories.map((cat) => (
+                        <Link
+                          key={cat.id || cat._id || cat.slug}
+                          href={`/categories/${cat.slug}`}
+                          onClick={() => setCollectionsDropdownOpen(false)}
+                          className="group flex items-start gap-3 p-2.5 rounded-xl hover:bg-[#F7F3EA] transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-[#EBF0E9] text-[#354B35] group-hover:bg-[#354B35] group-hover:text-[#DFC89B] flex items-center justify-center shrink-0 transition-colors">
+                            <UtensilsCrossed className="w-4 h-4" />
                           </div>
-                          <div className="text-[11px] text-[#6B776A] truncate">
-                            {cat.tagline || cat.description}
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-[#222922] group-hover:text-[#354B35] transition-colors">
+                              {cat.name}
+                            </div>
+                            {(cat.tagline || cat.description) && (
+                              <div className="text-[11px] text-[#6B776A] truncate">
+                                {cat.tagline || cat.description}
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      </Link>
-                    ))}
+                        </Link>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-xs text-[#6B776A]">
+                        No collections available.
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

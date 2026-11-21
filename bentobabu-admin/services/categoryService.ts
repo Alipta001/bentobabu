@@ -77,4 +77,8 @@ export const categoryService = {
 
     return mapCategory(res.data?.data || (res.data as unknown as BackendCategory));
   },
+
+  async delete(id: string): Promise<void> {
+    await adminApiClient.delete(ADMIN_API_ENDPOINTS.CATEGORIES.DELETE(id));
+  },
 };

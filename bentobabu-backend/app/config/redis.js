@@ -180,6 +180,13 @@ const redisDel = async (...keys) => {
  * Deletes keys matching a wildcard pattern using SCAN
  */
 const redisDelPattern = async (pattern) => {
+  if (!isRedisReady()) {
+    try {
+      await initRedis();
+    } catch (e) {
+      // safe fallback
+    }
+  }
   if (!isRedisReady()) return 0;
   try {
     const keys = [];

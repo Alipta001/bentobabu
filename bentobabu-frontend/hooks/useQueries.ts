@@ -9,7 +9,6 @@ import { deliveryService } from "@/services/deliveryService";
 import { notificationService } from "@/services/notificationService";
 import { videoService } from "@/services/videoService";
 import { CartItem, ProductFilterOptions, Address, VideoFilterOptions } from "@/types";
-import { INITIAL_CATEGORIES } from "@/lib/data/categories";
 import { INITIAL_PRODUCTS } from "@/lib/data/products";
 
 export const QUERY_KEYS = {
@@ -38,7 +37,6 @@ export function useCategories() {
   return useQuery({
     queryKey: QUERY_KEYS.CATEGORIES,
     queryFn: () => categoryService.getAll(),
-    initialData: INITIAL_CATEGORIES,
     staleTime: 5 * 60 * 1000,
   });
 }

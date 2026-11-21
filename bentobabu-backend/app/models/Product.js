@@ -55,9 +55,15 @@ const productSchema = new mongoose.Schema(
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Category',
-      required: [true, 'Category reference is required'],
       index: true,
     },
+    categories: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Category',
+        index: true,
+      },
+    ],
     images: {
       type: [String],
       default: [],
@@ -242,6 +248,24 @@ productSchema.pre('validate', function (next) {
   if (Array.isArray(this.imagesData)) {
     this.imagesData = deduplicateImagesData(this.imagesData);
   }
+
+  // Deduplicate and synchronize category / categories
+  if (Array.isArray(this.categories) && this.categories.length > 0) {
+    const rawIds = this.categories
+      .map((c) => (c?._id ? c._id.toString() : c ? c.toString() : ''))
+      .filter((id) => mongoose.Types.ObjectId.isValid(id));
+    const uniqueIds = [...new Set(rawIds)];
+    this.categories = uniqueIds.map((id) => new mongoose.Types.ObjectId(id));
+    if (!this.category && uniqueIds.length > 0) {
+      this.category = this.categories[0];
+    }
+  } else if (this.category) {
+    const catId = this.category._id ? this.category._id.toString() : this.category.toString();
+    if (mongoose.Types.ObjectId.isValid(catId)) {
+      this.categories = [new mongoose.Types.ObjectId(catId)];
+    }
+  }
+
   if (typeof next === 'function') {
     return next();
   }
@@ -250,6 +274,7 @@ productSchema.pre('validate', function (next) {
 // Search and filtering compound indexes
 productSchema.index({ name: 'text', description: 'text' });
 productSchema.index({ category: 1, isAvailable: 1, isActive: 1 });
+productSchema.index({ categories: 1, isAvailable: 1, isActive: 1 });
 productSchema.index({ isFeatured: 1, isAvailable: 1, isActive: 1 });
 
 const Product = mongoose.model('Product', productSchema);

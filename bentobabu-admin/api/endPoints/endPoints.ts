@@ -54,6 +54,7 @@ export const ADMIN_API_ENDPOINTS = {
     DETAIL: (id: string) => `/categories/${id}`,
     UPDATE: (id: string) => `/categories/${id}`,
     TOGGLE_STATUS: (id: string) => `/categories/${id}/status`,
+    DELETE: (id: string) => `/categories/${id}`,
   },
   INVENTORY: {
     LIST: "/admin/inventory",

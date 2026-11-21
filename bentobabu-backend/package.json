@@ -30,6 +30,7 @@
     "test:phase1-critical-fixes": "node test/phase1_critical_delivery_fixes.test.js",
     "test:expansion-analytics": "node test/service_expansion_voting_and_analytics.test.js",
     "test:inventory": "node test/daily_inventory_and_restocking.test.js",
+    "test:multi-category": "node test/multi_category_assignment_and_filtering.test.js",
     "test:all": "npm test"
   },
   "author": "Alipta Ghosh",

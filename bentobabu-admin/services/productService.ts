@@ -10,6 +10,7 @@ export interface BackendProduct {
   slug: string;
   description: string;
   category: string | { _id: string; id?: string; name: string; slug: string };
+  categories?: (string | { _id: string; id?: string; name: string; slug: string })[];
   images?: string[];
   imagesData?: ProductMediaImage[];
   video?: ProductVideo;
@@ -99,6 +100,15 @@ export const mapBackendProduct = (p: BackendProduct): Product => {
       ? (p.category.id || p.category._id || "")
       : (p.category as string) || "";
 
+  let categoryIds: string[] = [];
+  if (Array.isArray(p.categories) && p.categories.length > 0) {
+    categoryIds = p.categories
+      .map((c) => (typeof c === "object" && c ? c.id || c._id || "" : (c as string) || ""))
+      .filter(Boolean);
+  } else if (catId) {
+    categoryIds = [catId];
+  }
+
   let dietary: DietaryType = "vegetarian";
   if (p.dietaryTags?.includes("VEGAN")) {
     dietary = "vegan";
@@ -124,7 +134,7 @@ export const mapBackendProduct = (p: BackendProduct): Product => {
       description: p.description,
       price: p.price,
       originalPrice: p.compareAtPrice,
-      categoryIds: catId ? [catId] : [],
+      categoryIds: categoryIds.length > 0 ? categoryIds : (catId ? [catId] : []),
       dietary,
       imageUrl: uniqueImages[0] || "/images/placeholder.png",
       galleryImages: uniqueImages,
@@ -157,8 +167,12 @@ export const mapBackendProduct = (p: BackendProduct): Product => {
 
 export const productService = {
   async getAll(params?: { categoryId?: string; search?: string }): Promise<Product[]> {
-    const queryParams: Record<string, string | number | boolean> = { limit: 100 };
-    if (params?.categoryId && params.categoryId !== "all") {
+    const queryParams: Record<string, string | number | boolean> = {
+      limit: 100,
+      skipCache: "true",
+      includeInactive: "true",
+    };
+    if (params?.categoryId && params.categoryId.toLowerCase() !== "all") {
       queryParams.category = params.categoryId;
     }
     if (params?.search && params.search.trim()) {
@@ -190,18 +204,24 @@ export const productService = {
 
   async create(data: Partial<Product> & { name: string; price: number }): Promise<Product> {
     const slug = data.slug || data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-    let catId = data.categoryIds?.[0] || "";
+    const rawCategoryIds = Array.isArray(data.categoryIds) ? data.categoryIds : [];
+    const resolvedCatIds: string[] = [];
 
-    if (catId && !catId.match(/^[0-9a-fA-F]{24}$/)) {
-      try {
-        const cats = await categoryService.getAll();
-        const found = cats.find(
-          (c: { slug: string; id: string; name: string }) =>
-            c.slug === catId || c.id === catId || c.name.toLowerCase() === catId.toLowerCase()
-        );
-        if (found) catId = found.id;
-      } catch {
-        // keep catId
+    if (rawCategoryIds.length > 0) {
+      let cats: { slug: string; id: string; name: string }[] = [];
+      for (let cId of rawCategoryIds) {
+        if (cId && !cId.match(/^[0-9a-fA-F]{24}$/)) {
+          if (cats.length === 0) {
+            try { cats = await categoryService.getAll(); } catch {}
+          }
+          const found = cats.find(
+            (c) => c.slug === cId || c.id === cId || c.name.toLowerCase() === cId.toLowerCase()
+          );
+          if (found) cId = found.id;
+        }
+        if (cId && !resolvedCatIds.includes(cId)) {
+          resolvedCatIds.push(cId);
+        }
       }
     }
 
@@ -212,7 +232,9 @@ export const productService = {
       name: data.name,
       slug,
       description: data.description || data.name,
-      category: catId,
+      category: resolvedCatIds[0] || "",
+      categories: resolvedCatIds,
+      categoryIds: resolvedCatIds,
       price: data.price,
       compareAtPrice: data.originalPrice || undefined,
       images: deduplicateUrls(rawImages),
@@ -252,18 +274,26 @@ export const productService = {
     if (data.description !== undefined) payload.description = data.description;
     if (data.price !== undefined) payload.price = data.price;
     if (data.originalPrice !== undefined) payload.compareAtPrice = data.originalPrice;
-    if (data.categoryIds?.[0]) {
-      let cId = data.categoryIds[0];
-      if (!cId.match(/^[0-9a-fA-F]{24}$/)) {
-        try {
-          const cats = await categoryService.getAll();
-          const found = cats.find((c: { slug: string; id: string }) => c.slug === cId || c.id === cId);
+    if (data.categoryIds !== undefined && Array.isArray(data.categoryIds)) {
+      const resolvedCatIds: string[] = [];
+      let cats: { slug: string; id: string; name: string }[] = [];
+      for (let cId of data.categoryIds) {
+        if (cId && !cId.match(/^[0-9a-fA-F]{24}$/)) {
+          if (cats.length === 0) {
+            try { cats = await categoryService.getAll(); } catch {}
+          }
+          const found = cats.find(
+            (c) => c.slug === cId || c.id === cId || c.name.toLowerCase() === cId.toLowerCase()
+          );
           if (found) cId = found.id;
-        } catch {
-          // fallback
+        }
+        if (cId && !resolvedCatIds.includes(cId)) {
+          resolvedCatIds.push(cId);
         }
       }
-      payload.category = cId;
+      payload.categories = resolvedCatIds;
+      payload.categoryIds = resolvedCatIds;
+      payload.category = resolvedCatIds[0] || null;
     }
     if (data.imageUrl || data.galleryImages) {
       const rawImages = data.imageUrl ? [data.imageUrl, ...(data.galleryImages || [])] : data.galleryImages || [];

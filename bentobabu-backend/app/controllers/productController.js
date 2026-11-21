@@ -13,17 +13,24 @@ class ProductController {
    */
   static async getProducts(req, res, next) {
     try {
+      const skipCache = req.query.skipCache === 'true' || req.headers['x-skip-cache'] === 'true';
       const cacheKey = 'cache:products:list:' + Buffer.from(JSON.stringify(req.query)).toString('base64');
-      const cached = await redisGet(cacheKey);
-      if (cached) {
-        return res.status(200).json(cached);
+      
+      if (!skipCache) {
+        const cached = await redisGet(cacheKey);
+        if (cached) {
+          return res.status(200).json(cached);
+        }
       }
       const page = Math.max(1, parseInt(req.query.page, 10) || 1);
       const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
       const skip = (page - 1) * limit;
 
-      // Base query: Only active products are visible publicly
-      const filter = { isActive: true };
+      // Base query: Only active products are visible publicly, unless includeInactive is requested (e.g. admin)
+      const filter = {};
+      if (req.query.includeInactive !== 'true' && req.query.allStatus !== 'true') {
+        filter.isActive = true;
+      }
 
       // Resolve business date and daily menu availability
       const businessDate =
@@ -75,19 +82,34 @@ class ProductController {
       }
 
       // Category Filter: Supports either Category Slug or Category ObjectId (ignores "all" or empty)
-      if (req.query.category && typeof req.query.category === 'string') {
-        const catParam = req.query.category.trim();
+      const rawCatQuery = req.query.category || req.query.categoryId;
+      if (rawCatQuery && typeof rawCatQuery === 'string') {
+        const catParam = rawCatQuery.trim();
         if (catParam && catParam.toLowerCase() !== 'all') {
+          let catId = null;
           if (mongoose.Types.ObjectId.isValid(catParam)) {
-            filter.category = new mongoose.Types.ObjectId(catParam);
+            catId = new mongoose.Types.ObjectId(catParam);
           } else {
             const categoryDoc = await Category.findOne({ slug: catParam.toLowerCase() });
             if (categoryDoc) {
-              filter.category = categoryDoc._id;
+              catId = categoryDoc._id;
             } else {
               // Non-existent category slug produces empty results safely
-              filter.category = new mongoose.Types.ObjectId();
+              catId = new mongoose.Types.ObjectId();
             }
+          }
+
+          const catCondition = {
+            $or: [{ categories: catId }, { category: catId }],
+          };
+
+          if (filter.$or) {
+            filter.$and = [{ $or: filter.$or }, catCondition];
+            delete filter.$or;
+          } else if (filter.$and) {
+            filter.$and.push(catCondition);
+          } else {
+            filter.$or = catCondition.$or;
           }
         }
       }
@@ -153,6 +175,7 @@ class ProductController {
           .skip(skip)
           .limit(limit)
           .populate('category', 'name slug')
+          .populate('categories', 'name slug')
           .lean(),
         Product.countDocuments(filter),
       ]);
@@ -162,8 +185,16 @@ class ProductController {
         const isAvailableToday =
           Boolean(p.isAvailable) &&
           (!dailyMap.has(pIdStr) || dailyMap.get(pIdStr) === true);
+
+        const populatedCategories = Array.isArray(p.categories) && p.categories.length > 0
+          ? p.categories
+          : p.category ? [p.category] : [];
+        const primaryCategory = p.category || (populatedCategories.length > 0 ? populatedCategories[0] : null);
+
         return {
           ...p,
+          category: primaryCategory,
+          categories: populatedCategories,
           isAvailable: isAvailableToday,
         };
       });
@@ -179,7 +210,9 @@ class ProductController {
         },
       };
 
-      await redisSet(cacheKey, responsePayload, 600); // 10 minutes TTL
+      if (!skipCache && req.query.includeInactive !== 'true' && req.query.allStatus !== 'true') {
+        await redisSet(cacheKey, responsePayload, 600); // 10 minutes TTL
+      }
 
       res.status(200).json(responsePayload);
     } catch (error) {
@@ -264,7 +297,9 @@ class ProductController {
       const product = await Product.findOne({
         slug: slug.toLowerCase().trim(),
         isActive: true,
-      }).populate('category', 'name slug');
+      })
+        .populate('category', 'name slug')
+        .populate('categories', 'name slug');
 
       if (!product) {
         return res.status(404).json({
@@ -288,6 +323,11 @@ class ProductController {
       }
 
       const productResponse = product.toObject ? product.toObject() : { ...product };
+      const populatedCategories = Array.isArray(product.categories) && product.categories.length > 0
+        ? product.categories
+        : product.category ? [product.category] : [];
+      productResponse.category = product.category || (populatedCategories.length > 0 ? populatedCategories[0] : null);
+      productResponse.categories = populatedCategories;
       productResponse.isAvailable = isAvailableToday;
 
       res.status(200).json({
@@ -343,18 +383,57 @@ class ProductController {
         });
       }
 
-      if (!category || !mongoose.Types.ObjectId.isValid(category)) {
+      // Support multiple categories or legacy single category assignment
+      const rawCategories = Array.isArray(req.body.categories) && req.body.categories.length > 0
+        ? req.body.categories
+        : Array.isArray(req.body.categoryIds) && req.body.categoryIds.length > 0
+        ? req.body.categoryIds
+        : category ? [category] : [];
+
+      if (rawCategories.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'A valid Category identifier is required',
+          message: 'At least one valid Category identifier is required',
         });
       }
 
-      const categoryDoc = await Category.findById(category);
-      if (!categoryDoc || !categoryDoc.isActive) {
+      const resolvedCategoryIds = [];
+      const seenIds = new Set();
+
+      for (const item of rawCategories) {
+        if (!item) continue;
+        let catDoc = null;
+        if (typeof item === 'string' && mongoose.Types.ObjectId.isValid(item.trim())) {
+          catDoc = await Category.findById(item.trim());
+        } else if (item && item._id && mongoose.Types.ObjectId.isValid(item._id)) {
+          catDoc = await Category.findById(item._id);
+        } else if (typeof item === 'string') {
+          catDoc = await Category.findOne({
+            $or: [
+              { slug: item.trim().toLowerCase() },
+              { name: new RegExp('^' + item.trim() + '$', 'i') },
+            ],
+          });
+        }
+
+        if (!catDoc || !catDoc.isActive) {
+          return res.status(400).json({
+            success: false,
+            message: `Category "${typeof item === 'string' ? item : item?._id}" does not exist or is inactive`,
+          });
+        }
+
+        const idStr = catDoc._id.toString();
+        if (!seenIds.has(idStr)) {
+          seenIds.add(idStr);
+          resolvedCategoryIds.push(catDoc._id);
+        }
+      }
+
+      if (resolvedCategoryIds.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Referenced category does not exist or is inactive',
+          message: 'At least one valid Category assignment is required',
         });
       }
 
@@ -402,7 +481,8 @@ class ProductController {
         name: name.trim(),
         slug: generatedSlug,
         description: typeof description === 'string' ? description.trim() : '',
-        category: categoryDoc._id,
+        category: resolvedCategoryIds[0],
+        categories: resolvedCategoryIds,
         images: resolvedImages,
         imagesData: resolvedImagesData,
         video: video && typeof video === 'object' && video.secureUrl ? video : undefined,
@@ -437,6 +517,9 @@ class ProductController {
 
       await redisDelPattern('cache:products:*');
       await redisDelPattern('cache:admin:dashboard:*');
+
+      await product.populate('category', 'name slug');
+      await product.populate('categories', 'name slug');
 
       res.status(201).json({
         success: true,
@@ -511,15 +594,64 @@ class ProductController {
         product.slug = newSlug;
       }
 
-      if (category !== undefined) {
-        if (!mongoose.Types.ObjectId.isValid(category)) {
-          return res.status(400).json({ success: false, message: 'Invalid category identifier' });
+      const rawCategoriesToUpdate = req.body.categories !== undefined
+        ? req.body.categories
+        : req.body.categoryIds !== undefined
+        ? req.body.categoryIds
+        : req.body.category !== undefined
+        ? (Array.isArray(req.body.category) ? req.body.category : [req.body.category])
+        : undefined;
+
+      if (rawCategoriesToUpdate !== undefined) {
+        if (!Array.isArray(rawCategoriesToUpdate) || rawCategoriesToUpdate.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'At least one valid Category assignment is required',
+          });
         }
-        const categoryDoc = await Category.findById(category);
-        if (!categoryDoc || !categoryDoc.isActive) {
-          return res.status(400).json({ success: false, message: 'Referenced category does not exist or is inactive' });
+
+        const resolvedCategoryIds = [];
+        const seenIds = new Set();
+
+        for (const item of rawCategoriesToUpdate) {
+          if (!item) continue;
+          let catDoc = null;
+          if (typeof item === 'string' && mongoose.Types.ObjectId.isValid(item.trim())) {
+            catDoc = await Category.findById(item.trim());
+          } else if (item && item._id && mongoose.Types.ObjectId.isValid(item._id)) {
+            catDoc = await Category.findById(item._id);
+          } else if (typeof item === 'string') {
+            catDoc = await Category.findOne({
+              $or: [
+                { slug: item.trim().toLowerCase() },
+                { name: new RegExp('^' + item.trim() + '$', 'i') },
+              ],
+            });
+          }
+
+          if (!catDoc || !catDoc.isActive) {
+            return res.status(400).json({
+              success: false,
+              message: `Category "${typeof item === 'string' ? item : item?._id}" does not exist or is inactive`,
+            });
+          }
+
+          const idStr = catDoc._id.toString();
+          if (!seenIds.has(idStr)) {
+            seenIds.add(idStr);
+            resolvedCategoryIds.push(catDoc._id);
+          }
         }
-        product.category = categoryDoc._id;
+
+        if (resolvedCategoryIds.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'At least one valid Category assignment is required',
+          });
+        }
+
+        product.categories = resolvedCategoryIds;
+        product.category = resolvedCategoryIds[0];
       }
 
       if (price !== undefined) {
@@ -618,6 +750,9 @@ class ProductController {
       }
 
       await product.save();
+
+      await product.populate('category', 'name slug');
+      await product.populate('categories', 'name slug');
 
       await redisDelPattern('cache:products:*');
       await redisDelPattern('cache:admin:dashboard:*');
