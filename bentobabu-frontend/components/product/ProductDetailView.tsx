@@ -26,6 +26,7 @@ import { useToast } from "@/context/ToastContext";
 import { useOrderingStatus } from "@/context/OrderingStatusContext";
 import { getOptimizedImageUrl } from "@/utils/mediaUrl";
 import { deduplicateUrls } from "@/services/productService";
+import { ProductDescription } from "@/components/product/ProductDescription";
 
 interface ProductDetailViewProps {
   product: Product;
@@ -253,9 +254,10 @@ export function ProductDetailView({
               )}
             </div>
 
-            <p className="text-xs sm:text-sm text-[#626F62] leading-relaxed">
-              {product.detailedDescription || product.description}
-            </p>
+            <ProductDescription
+              content={product.detailedDescription || product.description}
+              className="py-1"
+            />
 
             {/* Preparation and Delivery Notes */}
             <div className="grid grid-cols-2 gap-3 py-3 border-y border-[#F0ECE1] text-xs text-[#222922]">

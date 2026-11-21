@@ -11,6 +11,7 @@ import { useCartSync } from "@/hooks/useCartSync";
 import { useToast } from "@/context/ToastContext";
 import { useOrderingStatus } from "@/context/OrderingStatusContext";
 import { getOptimizedImageUrl } from "@/utils/mediaUrl";
+import { stripHtmlTags } from "@/utils/textFormat";
 
 interface ProductCardProps {
   product: Product;
@@ -149,7 +150,7 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
           )}
 
           <p className="text-xs text-[#4F5B4F] line-clamp-2 leading-relaxed">
-            {product.description}
+            {stripHtmlTags(product.description)}
           </p>
         </div>
 

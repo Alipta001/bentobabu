@@ -23,7 +23,11 @@ function generateTicketNumber() {
   return `TKT-${year}-${randomHex}`;
 }
 
+const { sanitizeProductDescription, stripHtmlTags } = require('./sanitizeHtml');
+
 module.exports = {
   sanitizeText,
   generateTicketNumber,
+  sanitizeProductDescription,
+  stripHtmlTags,
 };

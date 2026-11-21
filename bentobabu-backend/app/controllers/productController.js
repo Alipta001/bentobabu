@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { Product, Category, Media, DailyMenu } = require('../models');
 const { slugify } = require('../utils/slugify');
+const { sanitizeProductDescription } = require('../utils/sanitizeHtml');
 const { redisGet, redisSet, redisDelPattern } = require('../config/redis');
 const { deleteAsset } = require('../config/cloudinary');
 const { deleteObject } = require('../config/r2');
@@ -480,7 +481,7 @@ class ProductController {
       const product = await Product.create({
         name: name.trim(),
         slug: generatedSlug,
-        description: typeof description === 'string' ? description.trim() : '',
+        description: typeof description === 'string' ? sanitizeProductDescription(description) : '',
         category: resolvedCategoryIds[0],
         categories: resolvedCategoryIds,
         images: resolvedImages,
@@ -665,7 +666,9 @@ class ProductController {
         product.compareAtPrice = typeof compareAtPrice === 'number' && compareAtPrice >= 0 ? compareAtPrice : null;
       }
 
-      if (description !== undefined) product.description = typeof description === 'string' ? description.trim() : '';
+      if (description !== undefined) {
+        product.description = typeof description === 'string' ? sanitizeProductDescription(description) : '';
+      }
 
       // Handle imagesData replacement and Cloudinary cleanup
       if (imagesData !== undefined && Array.isArray(imagesData)) {

@@ -31,6 +31,7 @@
     "test:expansion-analytics": "node test/service_expansion_voting_and_analytics.test.js",
     "test:inventory": "node test/daily_inventory_and_restocking.test.js",
     "test:multi-category": "node test/multi_category_assignment_and_filtering.test.js",
+    "test:rich-text": "node test/rich_text_description_sanitization.test.js",
     "test:all": "npm test"
   },
   "author": "Alipta Ghosh",

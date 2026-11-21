@@ -24,6 +24,7 @@ import { Product, DietaryType } from "@/types";
 import { MediaImageUpload } from "@/components/media/MediaImageUpload";
 import { MediaVideoUpload } from "@/components/media/MediaVideoUpload";
 import { StorageUsageCard } from "@/components/media/StorageUsageCard";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 
 function ProductsContent() {
   const searchParams = useSearchParams();
@@ -421,16 +422,21 @@ function ProductsContent() {
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-[#1F271F]">Short Description</label>
-                <textarea
-                  rows={2}
-                  required
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-[#1F271F]">
+                    Product Description (Rich Text) *
+                  </label>
+                  <span className="text-[11px] text-[#8A9A86]">
+                    Format headings, bullet lists, bold/italics, and highlight key ingredients
+                  </span>
+                </div>
+                <RichTextEditor
                   value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
+                  onChange={(html) =>
+                    setFormData({ ...formData, description: html })
                   }
-                  className="w-full p-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5]"
+                  placeholder="Describe the meal: highlight heritage ingredients, cooking style, taste notes, and meal pairing..."
                 />
               </div>
 
