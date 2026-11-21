@@ -210,6 +210,22 @@ const supportTicketRateLimiter = rateLimit({
   },
 });
 
+/**
+ * Rate limiter for service expansion voting (prevents vote stuffing)
+ */
+const serviceExpansionRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: isDevOrTest ? 1000 : 30, // 30 votes per 15 min per IP in prod
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: new ResilientStore('rl:expansion:'),
+  passOnStoreError: false,
+  message: {
+    success: false,
+    message: 'Too many voting requests from this network. Please try again after 15 minutes.',
+  },
+});
+
 module.exports = {
   globalRateLimiter,
   authRateLimiter,
@@ -218,4 +234,5 @@ module.exports = {
   mediaUploadRateLimiter,
   pushTestRateLimiter,
   supportTicketRateLimiter,
+  serviceExpansionRateLimiter,
 };

@@ -64,11 +64,23 @@ class ServiceExpansionController {
       }
 
       // 3. Concurrency-safe deduplication / idempotent voting
-      const filter = customerId
-        ? { pincode: cleanPin, customer: customerId }
-        : { pincode: cleanPin, anonymousIdentifier: anonId };
+      // Prevent vote inflation when a guest votes and subsequently logs in (or logs out)
+      let existingVote = null;
 
-      const existingVote = await ServiceExpansionVote.findOne(filter);
+      if (customerId) {
+        // Authenticated voter: check by customer ID first, then by anonymous identifier
+        existingVote = await ServiceExpansionVote.findOne({ pincode: cleanPin, customer: customerId });
+        if (!existingVote && anonId) {
+          existingVote = await ServiceExpansionVote.findOne({ pincode: cleanPin, anonymousIdentifier: anonId });
+          if (existingVote) {
+            // Claim/link existing guest vote to this authenticated customer
+            existingVote.customer = customerId;
+          }
+        }
+      } else {
+        // Guest voter: check by anonymous identifier
+        existingVote = await ServiceExpansionVote.findOne({ pincode: cleanPin, anonymousIdentifier: anonId });
+      }
 
       if (existingVote) {
         // Update vote metadata idempotently without inflating count
@@ -77,6 +89,7 @@ class ServiceExpansionController {
         if (state && state.trim()) existingVote.state = state.trim();
         if (customerName && customerName.trim()) existingVote.customerName = customerName.trim();
         if (customerPhone && customerPhone.trim()) existingVote.customerPhone = customerPhone.trim();
+        if (anonId && !existingVote.anonymousIdentifier) existingVote.anonymousIdentifier = anonId;
         await existingVote.save();
 
         return res.status(200).json({
@@ -101,7 +114,7 @@ class ServiceExpansionController {
         city: (city || '').trim(),
         state: (state || '').trim(),
         customer: customerId || null,
-        anonymousIdentifier: customerId ? null : anonId,
+        anonymousIdentifier: anonId || null,
         customerName: customerName ? customerName.trim() : (req.user?.name || ''),
         customerPhone: customerPhone ? customerPhone.trim() : (req.user?.phone || ''),
         source: source || 'CHECKOUT_UNSERVICEABLE',

@@ -378,6 +378,7 @@ const orderSchema = new mongoose.Schema(
 );
 
 // Compound indexes for user order listing and administrative filtering
+orderSchema.index({ createdAt: -1 });
 orderSchema.index({ user: 1, createdAt: -1 });
 orderSchema.index(
   { user: 1, idempotencyKey: 1 },

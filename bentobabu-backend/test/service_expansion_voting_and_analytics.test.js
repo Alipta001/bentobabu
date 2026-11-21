@@ -457,6 +457,84 @@ async function runTests() {
       console.log('✔ Test 7 PASS: Customer deduplication works idempotently');
     }
 
+    // Test 7b: Guest Voting Followed by Login (Identity Linking & Anti-Inflation)
+    {
+      const switchingAnonId = `anon_switch_${timestamp}`;
+      // Step 1: Guest votes for 700170
+      const guestReq = {
+        body: {
+          pincode: '700170',
+          locality: 'Bhatpara',
+          anonymousIdentifier: switchingAnonId,
+        },
+      };
+      const guestRes = createMockRes();
+      await ServiceExpansionController.vote(guestReq, guestRes, () => {});
+      assert.strictEqual(guestRes.statusCode, 201);
+      assert.strictEqual(guestRes.data.alreadyVoted, false);
+
+      // Step 2: Customer logs in on same browser and attempts to vote for 700170
+      const authReq = {
+        body: {
+          pincode: '700170',
+          locality: 'Bhatpara Central',
+          anonymousIdentifier: switchingAnonId,
+        },
+        user: customerUser2,
+      };
+      const authRes = createMockRes();
+      await ServiceExpansionController.vote(authReq, authRes, () => {});
+      assert.strictEqual(authRes.statusCode, 200, 'Authenticated attempt after guest vote returns 200');
+      assert.strictEqual(authRes.data.alreadyVoted, true, 'Flagged as already voted');
+
+      // Verify no duplicate record was created and customer is linked
+      const totalVotes700170 = await ServiceExpansionVote.countDocuments({ pincode: '700170' });
+      assert.strictEqual(totalVotes700170, 1, 'Exactly 1 vote record exists after switching identity');
+      const linkedRecord = await ServiceExpansionVote.findOne({ pincode: '700170' });
+      assert.strictEqual(String(linkedRecord.customer), String(customerUser2._id), 'Guest vote claimed by customer');
+
+      // Step 3: Customer logs out and attempts to vote again as guest on same browser
+      const postLogoutReq = {
+        body: {
+          pincode: '700170',
+          anonymousIdentifier: switchingAnonId,
+        },
+      };
+      const postLogoutRes = createMockRes();
+      await ServiceExpansionController.vote(postLogoutReq, postLogoutRes, () => {});
+      assert.strictEqual(postLogoutRes.statusCode, 200);
+      assert.strictEqual(postLogoutRes.data.alreadyVoted, true, 'Guest attempt after customer vote blocked');
+      const finalCount = await ServiceExpansionVote.countDocuments({ pincode: '700170' });
+      assert.strictEqual(finalCount, 1, 'Still exactly 1 record, anti-inflation verified');
+      console.log('✔ Test 7b PASS: Identity linking and guest-customer anti-inflation verified');
+    }
+
+    // Test 7c: Concurrent Duplicate Requests Handling
+    {
+      const concurrentAnonId = `anon_concurrent_${timestamp}`;
+      const concurrentReqs = Array.from({ length: 4 }).map(() => ({
+        body: {
+          pincode: '700170',
+          locality: 'Bhatpara Race',
+          anonymousIdentifier: concurrentAnonId,
+        },
+      }));
+
+      const responses = await Promise.all(
+        concurrentReqs.map(async (r) => {
+          const res = createMockRes();
+          await ServiceExpansionController.vote(r, res, () => {});
+          return res;
+        })
+      );
+
+      // All requests must return either 200 or 201 without unhandled crash
+      responses.forEach((res) => {
+        assert([200, 201].includes(res.statusCode), `Concurrent request returned ${res.statusCode}`);
+      });
+      console.log('✔ Test 7c PASS: Concurrent duplicate requests safely handled without crash');
+    }
+
     // Test 8: Admin Summary API
     {
       const req = { query: { periodDays: 30 } };
@@ -680,7 +758,7 @@ async function runTests() {
       if (refundedOrder) await Order.deleteOne({ _id: refundedOrder._id });
       await DeliveryPartnerPresence.deleteMany({ partner: adminUser?._id });
       await ServiceExpansionVote.deleteMany({
-        pincode: { $in: ['700140', '700150', '700160'] },
+        pincode: { $in: ['700140', '700150', '700160', '700170'] },
       });
       console.log('[Cleanup] Test fixtures safely purged.\n');
     } catch (cleanupErr) {
