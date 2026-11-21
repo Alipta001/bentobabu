@@ -51,7 +51,7 @@ export const brandConfig: BrandConfig = {
     imagePath: "/bentobabu_logo.png",
   },
   contact: {
-    email: "care@bentobabu.in",
+    email: "bentobabuofficial@gmail.com",
     phone: "+91 85840 85669",
     whatsapp: "+91 85840 85669",
     address: "Chandanpukur Bazar, Barrackpore, West Bengal 700120",

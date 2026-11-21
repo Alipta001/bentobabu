@@ -596,7 +596,7 @@ export const INITIAL_REVIEWS: Review[] = [
 export const INITIAL_SETTINGS: BusinessSettings = {
   businessName: "Bento Babu",
   tagline: "Pure Ingredients, Mindful Nutrition",
-  supportEmail: "care@bentobabu.in",
+  supportEmail: "bentobabuofficial@gmail.com",
   supportPhone: "+91 85840 85669",
   kitchenName: "BentoBabu Central Kitchen",
   kitchenLandmark: "Apollo Pharmacy / Apollo 24|7",

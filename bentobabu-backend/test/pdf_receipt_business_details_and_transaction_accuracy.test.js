@@ -175,7 +175,7 @@ async function runTests() {
 
     // Negative checks: NO legacy values
     assert.strictEqual(pdfText.includes('700120'), false, 'Must NOT contain legacy PIN code 700120');
-    assert.strictEqual(pdfText.includes('care@bentobabu.in'), false, 'Must NOT contain care@bentobabu.in');
+    assert.strictEqual(pdfText.includes('bentobabuofficial@gmail.com'), false, 'Must NOT contain bentobabuofficial@gmail.com');
     assert.strictEqual(pdfText.includes('bentobabuofficial@gmail.com'), false, 'Must NOT contain bentobabuofficial@gmail.com');
     assert.strictEqual(pdfText.includes('bentobabu.in'), false, 'Must NOT contain bentobabu.in');
     assert.strictEqual(pdfText.includes('+91 +91'), false, 'Must NOT have duplicated country code +91 +91');
@@ -377,7 +377,7 @@ async function runTests() {
         snapshot: {
           businessName: 'Old Entity',
           businessAddress: 'Old Address - 700120',
-          supportEmail: 'care@bentobabu.in',
+          supportEmail: 'bentobabuofficial@gmail.com',
           supportPhone: '+91 98765 43210',
           websiteUrl: 'https://bentobabu.in',
         },

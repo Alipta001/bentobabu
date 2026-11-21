@@ -594,10 +594,10 @@ export default function SupportPage() {
                 <span>Email Support</span>
               </div>
               <a
-                href={`mailto:${config?.email || "care@bentobabu.in"}`}
+                href={`mailto:${config?.email || "bentobabuofficial@gmail.com"}`}
                 className="text-gray-600 hover:text-[#C86D51] font-medium block truncate"
               >
-                {config?.email || "care@bentobabu.in"}
+                {config?.email || "bentobabuofficial@gmail.com"}
               </a>
               <span className="text-[11px] text-gray-500 block">
                 Typical reply in under 2 hours

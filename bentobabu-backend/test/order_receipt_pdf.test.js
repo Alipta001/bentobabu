@@ -521,7 +521,7 @@ async function runTests() {
         snapshot: {
           businessName: 'BentoBabu Original Entity',
           businessAddress: 'Old Registered Commercial Hub, Barrackpore - 700120',
-          supportEmail: 'old_care@bentobabu.in',
+          supportEmail: 'old_bentobabuofficial@gmail.com',
           supportPhone: '+91 99999 00000',
           websiteUrl: 'https://legacy.bentobabu.in',
           fssaiStatus: 'APPLICATION_SUBMITTED',
@@ -537,7 +537,7 @@ async function runTests() {
     // Verify that the historical snapshot was preserved and not replaced with current active settings
     assert.strictEqual(regenResult.order.receipt.snapshot.businessName, 'BentoBabu Original Entity');
     assert.strictEqual(regenResult.order.receipt.snapshot.businessAddress, 'Old Registered Commercial Hub, Barrackpore - 700120');
-    assert.strictEqual(regenResult.order.receipt.snapshot.supportEmail, 'old_care@bentobabu.in');
+    assert.strictEqual(regenResult.order.receipt.snapshot.supportEmail, 'old_bentobabuofficial@gmail.com');
     console.log('✓ Test 12 passed: Historical legal and financial snapshot preserved during regeneration');
 
     // Test 13: B2 credentials are never exposed in API responses

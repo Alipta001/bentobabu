@@ -102,7 +102,7 @@ function generateOrderReceiptPdf(order, settings = {}) {
       }
 
       let rawEmail = snap.supportEmail || settings.SUPPORT_EMAIL || 'bentobabuofficial@gmail.com';
-      if (rawEmail === 'care@bentobabu.in' || rawEmail === 'bentobabuofficial@gmail.com') {
+      if (rawEmail === 'bentobabuofficial@gmail.com' || rawEmail === 'bentobabuofficial@gmail.com') {
         rawEmail = 'bentobabuofficial@gmail.com';
       }
 
