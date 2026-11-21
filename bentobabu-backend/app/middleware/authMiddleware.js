@@ -173,4 +173,50 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { authenticate, authorize };
+/**
+ * Optional Authentication Middleware:
+ * If a valid access token is present, populates req.user.
+ * If no token or invalid, gracefully continues as guest (req.user = null).
+ */
+const optionalAuthenticate = async (req, res, next) => {
+  try {
+    const candidateCookies = [
+      req.cookies?.['bb_customer_access_token'],
+      req.cookies?.[env.accessTokenCookieName],
+      req.cookies?.accessToken,
+      req.cookies?.['bb_access_token'],
+    ];
+    const cookieToken = candidateCookies.find((t) => typeof t === 'string' && t.trim().length > 0) || null;
+    const authHeader = req.headers.authorization;
+    const headerToken =
+      authHeader && authHeader.startsWith('Bearer ')
+        ? authHeader.split(' ')[1]
+        : null;
+
+    const token = cookieToken || headerToken;
+
+    if (!token) {
+      req.user = null;
+      return next();
+    }
+
+    try {
+      const decoded = verifyAccessToken(token);
+      const userId = decoded.userId || decoded.id;
+      const user = await User.findById(userId);
+      if (user && user.isActive) {
+        req.user = user;
+      } else {
+        req.user = null;
+      }
+    } catch {
+      req.user = null;
+    }
+    next();
+  } catch (err) {
+    req.user = null;
+    next();
+  }
+};
+
+module.exports = { authenticate, authorize, optionalAuthenticate };

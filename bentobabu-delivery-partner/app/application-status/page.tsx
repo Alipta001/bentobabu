@@ -283,7 +283,7 @@ function ApplicationStatusContent() {
                   </p>
                 </div>
                 <p className="text-[11px] text-orange-800">
-                  Please contact BentoBabu Onboarding Support at <strong>partner-support@bentobabu.in</strong> or WhatsApp helpline to update the requested documents.
+                  Please contact BentoBabu Onboarding Support at <strong>partner-bentobabuofficial@gmail.com</strong> or WhatsApp helpline to update the requested documents.
                 </p>
               </div>
             )}

@@ -95,4 +95,7 @@ export const API_ENDPOINTS = {
   SETTINGS: {
     ORDERING_STATUS: "/settings/ordering-status",
   },
+  SERVICE_EXPANSION: {
+    VOTE: "/service-expansion/vote",
+  },
 } as const;

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { analyticsService } from "@/services/analyticsService";
+import { analyticsService, AnalyticsFilterParams } from "@/services/analyticsService";
+import { serviceExpansionService, ExpansionFilterParams } from "@/services/serviceExpansionService";
 import { orderService } from "@/services/orderService";
 import { productService } from "@/services/productService";
 import { categoryService } from "@/services/categoryService";
@@ -40,6 +41,95 @@ export function useRevenueAnalytics(period: string = "30d") {
     queryKey: ["admin", "revenueAnalytics", period],
     queryFn: () => analyticsService.getRevenueAnalytics(period),
     staleTime: 60 * 1000,
+  });
+}
+
+export function useDashboardOverview(params?: AnalyticsFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "dashboard", "overview", params],
+    queryFn: () => analyticsService.getOverview(params),
+    staleTime: 30 * 1000,
+    refetchInterval: 30000,
+  });
+}
+
+export function useDashboardRevenue(params?: AnalyticsFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "dashboard", "revenue", params],
+    queryFn: () => analyticsService.getRevenue(params),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useDashboardOrders(params?: AnalyticsFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "dashboard", "orders", params],
+    queryFn: () => analyticsService.getOrders(params),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useDashboardProducts(params?: AnalyticsFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "dashboard", "products", params],
+    queryFn: () => analyticsService.getProducts(params),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useDashboardCustomers(params?: AnalyticsFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "dashboard", "customers", params],
+    queryFn: () => analyticsService.getCustomers(params),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useDashboardLocations(params?: AnalyticsFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "dashboard", "locations", params],
+    queryFn: () => analyticsService.getLocations(params),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useDashboardPayments(params?: AnalyticsFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "dashboard", "payments", params],
+    queryFn: () => analyticsService.getPayments(params),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useDashboardDelivery(params?: AnalyticsFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "dashboard", "delivery", params],
+    queryFn: () => analyticsService.getDelivery(params),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useDashboardPeakHours(params?: AnalyticsFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "dashboard", "peakHours", params],
+    queryFn: () => analyticsService.getPeakHours(params),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useServiceExpansionSummary(periodDays: number = 30) {
+  return useQuery({
+    queryKey: ["admin", "serviceExpansion", "summary", periodDays],
+    queryFn: () => serviceExpansionService.getSummary(periodDays),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useServiceExpansionLocations(params?: ExpansionFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "serviceExpansion", "locations", params],
+    queryFn: () => serviceExpansionService.getLocations(params),
+    staleTime: 15 * 1000,
   });
 }
 

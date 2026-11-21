@@ -176,7 +176,7 @@ async function runTests() {
     // Negative checks: NO legacy values
     assert.strictEqual(pdfText.includes('700120'), false, 'Must NOT contain legacy PIN code 700120');
     assert.strictEqual(pdfText.includes('care@bentobabu.in'), false, 'Must NOT contain care@bentobabu.in');
-    assert.strictEqual(pdfText.includes('support@bentobabu.in'), false, 'Must NOT contain support@bentobabu.in');
+    assert.strictEqual(pdfText.includes('bentobabuofficial@gmail.com'), false, 'Must NOT contain bentobabuofficial@gmail.com');
     assert.strictEqual(pdfText.includes('bentobabu.in'), false, 'Must NOT contain bentobabu.in');
     assert.strictEqual(pdfText.includes('+91 +91'), false, 'Must NOT have duplicated country code +91 +91');
     assert.strictEqual(pdfText.includes('+91 98765'), false, 'Must NOT contain legacy placeholder phone');

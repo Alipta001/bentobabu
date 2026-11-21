@@ -271,7 +271,7 @@ async function generateAndStoreReceipt(orderOrId, options = {}) {
     }
 
     let rawEmail = activeSettings.SUPPORT_EMAIL || 'bentobabuofficial@gmail.com';
-    if (rawEmail === 'care@bentobabu.in' || rawEmail === 'support@bentobabu.in') {
+    if (rawEmail === 'care@bentobabu.in' || rawEmail === 'bentobabuofficial@gmail.com') {
       rawEmail = 'bentobabuofficial@gmail.com';
     }
 

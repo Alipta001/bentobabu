@@ -17,6 +17,17 @@ export const ADMIN_API_ENDPOINTS = {
     ORDERS: "/admin/dashboard/orders",
     PRODUCTS: "/admin/dashboard/products",
     CUSTOMERS: "/admin/dashboard/customers",
+    LOCATIONS: "/admin/dashboard/locations",
+    PAYMENTS: "/admin/dashboard/payments",
+    DELIVERY: "/admin/dashboard/delivery",
+    PEAK_HOURS: "/admin/dashboard/peak-hours",
+  },
+  SERVICE_EXPANSION: {
+    SUMMARY: "/admin/service-expansion/summary",
+    LOCATIONS: "/admin/service-expansion/locations",
+    DETAIL: (id: string) => `/admin/service-expansion/locations/${id}`,
+    UPDATE_STATUS: (id: string) => `/admin/service-expansion/locations/${id}/status`,
+    EXPORT: "/admin/service-expansion/export",
   },
   ORDERS: {
     LIST: "/admin/orders",

@@ -89,11 +89,15 @@ const faqs = [
   },
   {
     q: "Can I customize meals for senior citizens or young school children?",
-    a: "Yes! Our Senior Citizen collection features low-sodium, soft-texture meals such as foxtail millet khichdi and gentle yellow lentils, while our School Meals are 100% refined-flour free, portion-controlled, and crafted with natural sweetness.",
+    a: "For Now NO! We currently offer pre-designed meal plans for adults, fitness enthusiasts, and office-goers. However, we are actively working on expanding our menu to include customized food for senior and kid in the near future.",
+  },
+  {
+    q: "What is preparation time for orders?",
+    a: "All meals are cooked fresh in small batches. Once your order is confirmed, it takes 30 to 45 minutes to prepare and pack your meal before dispatch.",
   },
   {
     q: "What is your delivery turnaround time?",
-    a: "We deliver within 35 to 45 minutes of order confirmation. Each order is dispatched in high-grade eco-friendly insulated packaging that maintains optimal serving temperature without plastic sweating.",
+    a: "We deliver within 45 to 60 minutes of Rider confirmation. Each order is dispatched in high-grade eco-friendly insulated packaging that maintains optimal serving temperature without plastic sweating.",
   },
   {
     q: "Are the nutritional metrics (calories, protein) lab-tested?",

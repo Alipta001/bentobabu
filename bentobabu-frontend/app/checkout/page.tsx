@@ -18,9 +18,12 @@ import {
   Plus,
   Lock,
   Truck,
+  Heart,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { ServiceExpansionModal } from "@/components/service-expansion/ServiceExpansionModal";
+import { serviceExpansionService } from "@/services/serviceExpansionService";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearCart, setCartItems } from "@/store/cartSlice";
 import {
@@ -98,6 +101,7 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   const [selectedSlot, setSelectedSlot] = useState<DeliverySlot | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"RAZORPAY" | "COD">("COD");
+  const [isExpansionModalOpen, setIsExpansionModalOpen] = useState(false);
 
   // New Address Drawer / Mode
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
@@ -391,6 +395,9 @@ export default function CheckoutPage() {
         serviceability.message ||
           "Delivery is currently not available to this PIN code. Please select a serviceable address."
       );
+      if (activePincode && !serviceExpansionService.hasVotedForPincode(activePincode)) {
+        setIsExpansionModalOpen(true);
+      }
       return;
     }
 
@@ -527,6 +534,11 @@ export default function CheckoutPage() {
             "Our kitchen is currently resting. We're not accepting new orders right now. Your cart and entered address details have been safely saved."
         );
       } else {
+        if (err?.response?.data?.code === "UNSERVICEABLE_LOCATION") {
+          if (activePincode && !serviceExpansionService.hasVotedForPincode(activePincode)) {
+            setIsExpansionModalOpen(true);
+          }
+        }
         setErrorMessage(
           err?.response?.data?.message ||
             (err instanceof Error
@@ -856,11 +868,21 @@ export default function CheckoutPage() {
                       <span>Checking delivery serviceability for PIN {activePincode}...</span>
                     </div>
                   ) : serviceability && !serviceability.serviceable ? (
-                    <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span>
-                        PIN code {activePincode} is not currently serviceable by our kitchen. Please choose an address in our delivery zones (e.g. Barrackpore 700120–700123).
-                      </span>
+                    <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>
+                          PIN code {activePincode} is not currently serviceable by our kitchen. Please choose an address in our delivery zones (e.g. Barrackpore 700120–700123).
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsExpansionModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#354B35] text-white font-medium hover:bg-[#243324] transition-colors shrink-0 text-xs self-start sm:self-auto"
+                      >
+                        <Heart className="w-3.5 h-3.5 text-red-400 fill-red-400" />
+                        <span>Vote for this area</span>
+                      </button>
                     </div>
                   ) : serviceability?.serviceable ? (
                     <div className="p-3 rounded-xl bg-[#EBF0E9] text-xs text-[#354B35] flex items-center gap-2">
@@ -1091,6 +1113,18 @@ export default function CheckoutPage() {
             </div>
           </form>
         </div>
+
+        {/* Service Area Expansion Voting Modal */}
+        <ServiceExpansionModal
+          isOpen={isExpansionModalOpen}
+          onClose={() => setIsExpansionModalOpen(false)}
+          pincode={activePincode || ""}
+          locality={activeAddress?.landmark || activeAddress?.addressLine || newAddressData.landmark || newAddressData.street || ""}
+          city={activeAddress?.city || newAddressData.city || ""}
+          state={activeAddress?.state || newAddressData.state || ""}
+          customerName={activeAddress?.fullName || newAddressData.fullName || userProfile?.name || ""}
+          customerPhone={activeAddress?.phone || newAddressData.phone || userProfile?.phone || ""}
+        />
       </main>
 
       <Footer />

@@ -22,7 +22,6 @@ const userSchema = new mongoose.Schema(
       sparse: true,
       unique: true,
       trim: true,
-      default: null,
       match: [/^\d{10}$/, 'Please enter a valid 10-digit Indian mobile number'],
       index: true,
     },
@@ -31,7 +30,6 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
       index: true,
-      default: null,
     },
     authProviders: {
       type: [String],

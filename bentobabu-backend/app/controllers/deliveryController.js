@@ -30,6 +30,7 @@ class DeliveryController {
         return res.status(200).json({
           success: true,
           serviceable: false,
+          code: 'UNSERVICEABLE_LOCATION',
           message: `Delivery is currently not available for PIN code ${cleanPin}`,
         });
       }

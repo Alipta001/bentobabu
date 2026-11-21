@@ -515,3 +515,237 @@ export interface AdminFaqItem {
 }
 
 
+
+// ==========================================
+// BUSINESS INTELLIGENCE & ANALYTICS TYPES
+// ==========================================
+
+export type DateRangePreset =
+  | "today"
+  | "yesterday"
+  | "7d"
+  | "30d"
+  | "thisMonth"
+  | "lastMonth"
+  | "thisYear"
+  | "custom";
+
+export interface KpiCardData {
+  value: number;
+  prevValue: number;
+  growth: number;
+  text: string;
+  hasHistorical: boolean;
+}
+
+export interface DashboardOverviewResponse {
+  period: string;
+  startDate: string;
+  endDate: string;
+  kpis: {
+    totalRevenue: KpiCardData;
+    totalOrders: KpiCardData;
+    completedOrders: KpiCardData;
+    averageOrderValue: KpiCardData;
+    totalCustomers: KpiCardData;
+    newCustomers: KpiCardData;
+    activeCustomers: KpiCardData;
+    cancellationRate: KpiCardData;
+  };
+  operations: {
+    pendingOrders: number;
+    confirmedOrders: number;
+    preparingOrders: number;
+    readyForDispatchOrders: number;
+    outForDeliveryOrders: number;
+    activeProductsCount: number;
+    lowStockCount: number;
+  };
+}
+
+export interface DashboardRevenueResponse {
+  period: string;
+  startDate: string;
+  endDate: string;
+  summary: {
+    totalRevenue: number;
+    grossSales: number;
+    totalPaidOrders: number;
+    averageOrderValue: number;
+    breakdown: {
+      itemSubtotal: number;
+      deliveryCharges: number;
+      discounts: number;
+      taxes: number;
+      actualCollectedAmount: number;
+      refunds: number;
+    };
+  };
+  timeline: Array<{
+    date: string;
+    revenue: number;
+    paidOrdersCount: number;
+    discounts: number;
+    deliveryFees: number;
+    taxes: number;
+    refunds: number;
+  }>;
+}
+
+export interface DashboardOrdersResponse {
+  period: string;
+  totalOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  cancellationRate: number;
+  statusBreakdown: Array<{ status: string; count: number }>;
+  cancellationReasons: Array<{ reason: string; count: number }>;
+  dailyTimeline: Array<{
+    date: string;
+    totalOrders: number;
+    completedOrders: number;
+    cancelledOrders: number;
+    pendingOrders: number;
+  }>;
+}
+
+export interface DashboardProductsResponse {
+  period: string;
+  totalItemSalesRevenue: number;
+  topSellingProducts: Array<{
+    productId: string;
+    name: string;
+    image: string;
+    unitsSold: number;
+    orderCount: number;
+    grossSales: number;
+    contributionPercentage: number;
+  }>;
+  leastSellingProducts: Array<{
+    productId: string;
+    name: string;
+    categoryName: string;
+    image: string;
+    price: number;
+    stockQuantity: number;
+    unitsSold: number;
+    grossSales: number;
+    orderCount: number;
+  }>;
+  categoryPerformance: Array<{
+    categoryId: string;
+    name: string;
+    orders: number;
+    unitsSold: number;
+    revenue: number;
+    contributionPercentage: number;
+  }>;
+}
+
+export interface DashboardCustomersResponse {
+  period: string;
+  totalCustomers: number;
+  purchasingCustomers: number;
+  newRegistrationsInPeriod: number;
+  firstTimePurchasersInPeriod: number;
+  repeatPurchaseRate: number;
+  segmentation: {
+    newCustomers: number;
+    repeatCustomers: number;
+    highValueCustomers: number;
+    inactiveCustomers: number;
+  };
+  topCustomers: Array<{
+    userId: string;
+    name: string;
+    email: string;
+    phone: string;
+    orders: number;
+    totalSpent: number;
+    averageOrderValue: number;
+    lastOrderDate: string;
+  }>;
+}
+
+export interface DashboardLocationsResponse {
+  period: string;
+  serviceableLocations: Array<{
+    pincode: string;
+    city: string;
+    state: string;
+    orderCount: number;
+    totalRevenue: number;
+    averageOrderValue: number;
+  }>;
+  unservedDemand: Array<{
+    pincode: string;
+    locality: string;
+    city: string;
+    votesCount: number;
+    status: string;
+  }>;
+}
+
+export interface DashboardPaymentsResponse {
+  period: string;
+  statusBreakdown: Record<string, { count: number; amount: number }>;
+  methodDistribution: Array<{ method: string; count: number; amount: number }>;
+  refunds: { count: number; amount: number };
+}
+
+export interface DashboardDeliveryResponse {
+  period: string;
+  fleet: { total: number; activeOnline: number };
+  ordersQueue: {
+    awaitingAssignment: number;
+    inTransit: number;
+    deliveredInPeriod: number;
+  };
+  avgDeliveryMinutes: number;
+}
+
+export interface DashboardPeakHoursResponse {
+  period: string;
+  hourlyVelocity: Array<{ hour: number; label: string; orders: number; revenue: number }>;
+  dayOfWeekVelocity: Array<{ dayNum: number; day: string; orders: number; revenue: number }>;
+}
+
+export interface ServiceExpansionSummaryResponse {
+  totalVotes: number;
+  uniquePincodesCount: number;
+  newVotesInPeriod: number;
+  periodDays: number;
+  topRequestedArea: {
+    pincode: string;
+    locality: string;
+    city: string;
+    state: string;
+    votes: number;
+    status: string;
+  } | null;
+}
+
+export interface ServiceExpansionLocationItem {
+  rank: number;
+  pincode: string;
+  locality: string;
+  city: string;
+  state: string;
+  votes: number;
+  status: "NEW" | "UNDER_CONSIDERATION" | "PLANNED" | "LAUNCHED" | "REJECTED";
+  internalNotes?: string;
+  firstVotedAt?: string;
+  lastVotedAt?: string;
+}
+
+export interface ServiceExpansionLocationsResponse {
+  locations: ServiceExpansionLocationItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalItems: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}

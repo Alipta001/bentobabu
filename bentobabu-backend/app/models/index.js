@@ -23,6 +23,7 @@ const DailyMenu = require('./DailyMenu');
 const DeviceToken = require('./DeviceToken');
 const SupportTicket = require('./SupportTicket');
 const SupportFaq = require('./SupportFaq');
+const ServiceExpansionVote = require('./ServiceExpansionVote');
 
 module.exports = {
   User,
@@ -50,5 +51,6 @@ module.exports = {
   DeviceToken,
   SupportTicket,
   SupportFaq,
+  ServiceExpansionVote,
 };
 

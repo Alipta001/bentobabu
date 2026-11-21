@@ -79,7 +79,13 @@ class OrderController {
       if (!zone) {
         return res.status(400).json({
           success: false,
+          code: 'UNSERVICEABLE_LOCATION',
           message: `Delivery is currently not serviceable to PIN code ${address.pincode}`,
+          data: {
+            pincode: address.pincode,
+            city: address.city,
+            state: address.state,
+          },
         });
       }
 
@@ -497,7 +503,13 @@ class OrderController {
     if (!zone) {
       return res.status(400).json({
         success: false,
+        code: 'UNSERVICEABLE_LOCATION',
         message: `Delivery is currently not serviceable to PIN code ${address.pincode}`,
+        data: {
+          pincode: address.pincode,
+          city: address.city,
+          state: address.state,
+        },
       });
     }
 

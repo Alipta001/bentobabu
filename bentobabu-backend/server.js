@@ -201,9 +201,12 @@ const adminSupportRoutes = require('./app/routes/adminSupportRoutes');
 const reviewRoutes = require('./app/routes/reviewRoutes');
 const adminReviewRoutes = require('./app/routes/adminReviewRoutes');
 const settingsRoutes = require('./app/routes/settingsRoutes');
+const serviceExpansionRoutes = require('./app/routes/serviceExpansionRoutes');
+const adminServiceExpansionRoutes = require('./app/routes/adminServiceExpansionRoutes');
 
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/service-expansion', serviceExpansionRoutes);
 app.use('/api/v1/categories', categoryRoutes);
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/reviews', reviewRoutes);
@@ -233,6 +236,7 @@ app.use('/api/v1/admin/videos', adminVideoRoutes);
 app.use('/api/v1/admin/reviews', adminReviewRoutes);
 app.use('/api/v1/support', supportRoutes);
 app.use('/api/v1/admin/support', adminSupportRoutes);
+app.use('/api/v1/admin/service-expansion', adminServiceExpansionRoutes);
 
 // 8. 404 Handler for Unknown Routes
 app.use(notFoundHandler);
