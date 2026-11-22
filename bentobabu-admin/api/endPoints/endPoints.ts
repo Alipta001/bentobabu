@@ -34,9 +34,16 @@ export const ADMIN_API_ENDPOINTS = {
     DETAIL: (id: string) => `/admin/orders/${id}`,
     HISTORY: (id: string) => `/admin/orders/${id}/history`,
     ASSIGN_DELIVERY: (id: string) => `/admin/orders/${id}/assign-delivery`,
-    CANCEL: (id: string) => `/orders/${id}/cancel`,
+    CANCEL: (id: string) => `/admin/orders/${id}/cancel`,
     KITCHEN_STATUS: (id: string) => `/operations/kitchen/orders/${id}/status`,
     DELIVERY_STATUS: (id: string) => `/operations/delivery/orders/${id}/status`,
+  },
+  CANCELLATIONS: {
+    LIST: "/admin/cancellation-requests",
+    DETAIL: (id: string) => `/admin/cancellation-requests/${id}`,
+    APPROVE: (id: string) => `/admin/cancellation-requests/${id}/approve`,
+    REJECT: (id: string) => `/admin/cancellation-requests/${id}/reject`,
+    RETRY_REFUND: (id: string) => `/admin/cancellation-requests/${id}/retry-refund`,
   },
   PRODUCTS: {
     LIST: "/products",

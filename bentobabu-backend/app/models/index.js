@@ -27,6 +27,7 @@ const ServiceExpansionVote = require('./ServiceExpansionVote');
 const DailyInventory = require('./DailyInventory');
 const WeeklyDeliverySchedule = require('./WeeklyDeliverySchedule');
 const DateDeliverySchedule = require('./DateDeliverySchedule');
+const CancellationRequest = require('./CancellationRequest');
 
 module.exports = {
   User,
@@ -58,5 +59,6 @@ module.exports = {
   DailyInventory,
   WeeklyDeliverySchedule,
   DateDeliverySchedule,
+  CancellationRequest,
 };
 

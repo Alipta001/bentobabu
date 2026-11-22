@@ -9,6 +9,7 @@ const {
   DeliverySlot,
   Coupon,
   CouponUsage,
+  CancellationRequest,
 } = require('../models');
 const NotificationDispatcher = require('../utils/notificationDispatcher');
 const { validateEnv } = require('../config/env');
@@ -825,6 +826,19 @@ class PaymentController {
               note: `Refund of ₹${refundAmount || order.grandTotal} processed successfully by Razorpay (Refund ID: ${refundId}).`,
             });
             await order.save();
+
+            // Synchronize refund status to any associated CancellationRequest
+            await CancellationRequest.updateMany(
+              { order: order._id },
+              {
+                $set: {
+                  refundStatus: 'SUCCESS',
+                  razorpayRefundId: refundId || order.paymentDetails.razorpayRefundId,
+                  refundAmount: refundAmount || order.grandTotal,
+                  failureReason: null,
+                },
+              }
+            ).catch((err) => console.error('[Webhook] Error syncing CancellationRequest success:', err.message));
           }
         }
       } else if (event === 'refund.created') {
@@ -855,6 +869,18 @@ class PaymentController {
               note: `Refund of ₹${refundAmount || order.grandTotal} created in Razorpay (Refund ID: ${refundId}). Awaiting processing.`,
             });
             await order.save();
+
+            // Synchronize refund processing status to any associated CancellationRequest
+            await CancellationRequest.updateMany(
+              { order: order._id, refundStatus: { $ne: 'SUCCESS' } },
+              {
+                $set: {
+                  refundStatus: 'PROCESSING',
+                  razorpayRefundId: refundId || order.paymentDetails.razorpayRefundId,
+                  refundAmount: refundAmount || order.grandTotal,
+                },
+              }
+            ).catch((err) => console.error('[Webhook] Error syncing CancellationRequest processing:', err.message));
           }
         }
       } else if (event === 'refund.failed') {
@@ -883,6 +909,17 @@ class PaymentController {
               note: `Razorpay refund failed: ${refundErrorDesc}. FLAGGED FOR MANUAL ADMIN REFUND.`,
             });
             await order.save();
+
+            // Synchronize refund failure to any associated CancellationRequest
+            await CancellationRequest.updateMany(
+              { order: order._id },
+              {
+                $set: {
+                  refundStatus: 'FAILED',
+                  failureReason: refundErrorDesc,
+                },
+              }
+            ).catch((err) => console.error('[Webhook] Error syncing CancellationRequest failure:', err.message));
           }
         }
       }

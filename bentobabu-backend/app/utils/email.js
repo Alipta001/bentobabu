@@ -326,6 +326,52 @@ const getEmailTemplate = (eventType, data = {}) => {
         </p>`;
       break;
 
+    case 'CANCELLATION_REQUESTED':
+      title = 'Cancellation Request Received';
+      preheader = `We received your cancellation request for order #${orderNumber}.`;
+      content = `
+        <p style="font-size: 15px; color: #374151; margin: 0 0 12px 0;">
+          We have received your cancellation request for order <strong>#${orderNumber}</strong>.
+        </p>
+        ${
+          reason
+            ? `<p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">Your Reason: <em>${reason}</em></p>`
+            : ''
+        }
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          Our kitchen operations team is currently reviewing your request. You will be updated as soon as it is processed.
+        </p>`;
+      break;
+
+    case 'CANCELLATION_APPROVED':
+      title = 'Cancellation Request Approved';
+      preheader = `Your order #${orderNumber} cancellation has been approved.`;
+      content = `
+        <p style="font-size: 15px; color: #059669; margin: 0 0 12px 0; font-weight: 600;">
+          Your cancellation request for order #${orderNumber} has been approved.
+        </p>
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          Your order has been cancelled and inventory released. Any applicable refund has been initiated to your original payment method.
+        </p>`;
+      break;
+
+    case 'CANCELLATION_REJECTED':
+      title = 'Cancellation Request Update';
+      preheader = `Update regarding your cancellation request for order #${orderNumber}.`;
+      content = `
+        <p style="font-size: 15px; color: #dc2626; margin: 0 0 12px 0;">
+          Your cancellation request for order <strong>#${orderNumber}</strong> could not be approved.
+        </p>
+        ${
+          reason
+            ? `<p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">Reason from Kitchen: <em>${reason}</em></p>`
+            : ''
+        }
+        <p style="font-size: 14px; color: #4b5563; margin: 0 0 12px 0;">
+          Your meal preparation has already progressed and your order remains active for delivery.
+        </p>`;
+      break;
+
     case 'ORDER_EXPIRED':
       title = 'Unpaid Order Expired';
       preheader = `Payment window for order #${orderNumber} expired.`;

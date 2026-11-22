@@ -17,7 +17,14 @@ import {
   Loader2,
 } from "lucide-react";
 import { AdminShell } from "@/components/layout/AdminShell";
-import { useAdminOrders, useUpdateOrderStatus } from "@/hooks/useAdminQueries";
+import {
+  useAdminOrders,
+  useUpdateOrderStatus,
+  useAdminCancellationRequests,
+  useApproveCancellationRequest,
+  useRejectCancellationRequest,
+  useRetryRefund,
+} from "@/hooks/useAdminQueries";
 import { orderService } from "@/services/orderService";
 import { OrderStatus } from "@/types";
 
@@ -48,12 +55,37 @@ function OrdersContent() {
   const [regeneratingReceipt, setRegeneratingReceipt] = useState(false);
   const [receiptFeedback, setReceiptFeedback] = useState<string | null>(null);
 
+  // Sub-tab state: orders or cancellations
+  const [activeTab, setActiveTab] = useState<"orders" | "cancellations">("orders");
+  const [cancellationStatus, setCancellationStatus] = useState<string>("pending");
+  const [cancellationSearch, setCancellationSearch] = useState<string>("");
+
+  // Modals for cancellation approval/rejection
+  const [approveModalItem, setApproveModalItem] = useState<any | null>(null);
+  const [rejectModalItem, setRejectModalItem] = useState<any | null>(null);
+  const [adminRejectionReason, setAdminRejectionReason] = useState<string>("");
+  const [cancellationActionError, setCancellationActionError] = useState<string | null>(null);
+
   const { data: orders = [], isLoading, refetch } = useAdminOrders({
     status: activeStatus,
     search: searchQuery,
   });
 
+  const {
+    data: cancellationData,
+    isLoading: isCancellationsLoading,
+    refetch: refetchCancellations,
+  } = useAdminCancellationRequests({
+    status: cancellationStatus,
+    search: cancellationSearch,
+  });
+
+  const approveMutation = useApproveCancellationRequest();
+  const rejectMutation = useRejectCancellationRequest();
+  const retryRefundMutation = useRetryRefund();
+
   const selectedOrder = orders.find((o) => o.id === selectedOrderId) || null;
+  const pendingCancellationCount = cancellationData?.pendingCount ?? 0;
 
   const updateStatusMutation = useUpdateOrderStatus();
 
@@ -112,11 +144,63 @@ function OrdersContent() {
       await updateStatusMutation.mutateAsync({
         id: (selectedOrder as any)?._backendId || selectedOrder.id,
         status: "cancelled",
+        note: cancelReason || "Cancelled via admin operations",
       });
       setCancelModalOpen(false);
+      setCancelReason("");
       setSelectedOrderId(null);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Failed to cancel order.");
+    }
+  };
+
+  const handleApproveCancellation = async () => {
+    if (!approveModalItem) return;
+    setCancellationActionError(null);
+    try {
+      await approveMutation.mutateAsync(approveModalItem.id || approveModalItem._id);
+      setApproveModalItem(null);
+      refetchCancellations();
+      refetch();
+    } catch (err: unknown) {
+      setCancellationActionError(
+        err instanceof Error ? err.message : "Failed to approve cancellation."
+      );
+    }
+  };
+
+  const handleRejectCancellation = async () => {
+    if (!rejectModalItem) return;
+    if (!adminRejectionReason || adminRejectionReason.trim().length < 3) {
+      setCancellationActionError(
+        "Please provide an administrative rejection reason (minimum 3 characters)."
+      );
+      return;
+    }
+    setCancellationActionError(null);
+    try {
+      await rejectMutation.mutateAsync({
+        id: rejectModalItem.id || rejectModalItem._id,
+        rejectionReason: adminRejectionReason.trim(),
+      });
+      setRejectModalItem(null);
+      setAdminRejectionReason("");
+      refetchCancellations();
+      refetch();
+    } catch (err: unknown) {
+      setCancellationActionError(
+        err instanceof Error ? err.message : "Failed to reject cancellation request."
+      );
+    }
+  };
+
+  const handleRetryRefund = async (reqId: string) => {
+    try {
+      await retryRefundMutation.mutateAsync(reqId);
+      refetchCancellations();
+      refetch();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to retry refund.");
     }
   };
 
@@ -125,9 +209,48 @@ function OrdersContent() {
       title="Kitchen & Dispatch Order Management"
       subtitle="Accept, prepare, assign and track delivery transitions for all healthy meal orders"
     >
-      {/* Top Controls: Filter Tabs & Search Bar */}
-      <div className="bg-white p-6 rounded-3xl border border-[#E5DFC5] shadow-xs space-y-4">
-        {/* Status Pill Filters */}
+      {/* Primary Navigation Tabs */}
+      <div className="flex items-center gap-3 border-b border-[#E5DFC5] pb-3 mb-6">
+        <button
+          onClick={() => setActiveTab("orders")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === "orders"
+              ? "bg-[#354B35] text-white shadow-xs"
+              : "bg-white text-[#667266] border border-[#E5DFC5] hover:bg-[#F7F3EA]"
+          }`}
+        >
+          <span>Live Kitchen & Dispatch Orders</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/15">
+            {orders.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("cancellations")}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === "cancellations"
+              ? "bg-[#354B35] text-white shadow-xs"
+              : "bg-white text-[#667266] border border-[#E5DFC5] hover:bg-[#F7F3EA]"
+          }`}
+        >
+          <span>Customer Cancellation Requests</span>
+          {pendingCancellationCount > 0 ? (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
+              {pendingCancellationCount} Pending
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/10">
+              0
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === "orders" ? (
+        <>
+          {/* Top Controls: Filter Tabs & Search Bar */}
+          <div className="bg-white p-6 rounded-3xl border border-[#E5DFC5] shadow-xs space-y-4">
+            {/* Status Pill Filters */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2">
           {STATUS_FILTERS.map((f) => (
             <button
@@ -362,6 +485,242 @@ function OrdersContent() {
           </div>
         )}
       </div>
+    </>
+  ) : (
+    /* ================= CANCELLATION REQUESTS TAB ================= */
+    <div className="space-y-6">
+      {/* Cancellation Controls: Filters & Search */}
+      <div className="bg-white p-6 rounded-3xl border border-[#E5DFC5] shadow-xs space-y-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          {[
+            { label: "Pending Review", value: "pending" },
+            { label: "Approved", value: "approved" },
+            { label: "Rejected", value: "rejected" },
+            { label: "All Requests", value: "all" },
+          ].map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setCancellationStatus(f.value)}
+              className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                cancellationStatus === f.value
+                  ? "bg-[#354B35] text-white shadow-xs"
+                  : "bg-[#F7F3EA] text-[#667266] hover:bg-[#EDE8DE]"
+              }`}
+            >
+              {f.label}
+              {f.value === "pending" && pendingCancellationCount > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-bold">
+                  {pendingCancellationCount}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-2 border-t border-[#F0ECE1]">
+          <div className="relative flex-1 max-w-md">
+            <input
+              type="text"
+              placeholder="Search by Order ID, Customer Name, Phone..."
+              value={cancellationSearch}
+              onChange={(e) => setCancellationSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-full bg-[#F7F3EA] border border-[#E5DFC5] text-xs text-[#1F271F] focus:outline-none focus:border-[#354B35]"
+            />
+            <Search className="w-4 h-4 text-[#8A9A86] absolute left-3.5 top-3 pointer-events-none" />
+          </div>
+
+          <div className="text-xs text-[#667266] font-medium">
+            Showing <strong>{cancellationData?.cancellationRequests?.length || 0}</strong> requests
+          </div>
+        </div>
+      </div>
+
+      {/* Cancellation Requests Table */}
+      <div className="bg-white rounded-3xl border border-[#E5DFC5] shadow-xs overflow-hidden">
+        {isCancellationsLoading ? (
+          <div className="p-12 text-center text-xs text-[#667266]">
+            Loading cancellation requests...
+          </div>
+        ) : !cancellationData?.cancellationRequests?.length ? (
+          <div className="p-16 text-center space-y-3">
+            <div className="w-16 h-16 rounded-full bg-[#F7F3EA] flex items-center justify-center mx-auto text-[#8A9A86]">
+              <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+            </div>
+            <h3 className="font-serif text-xl font-bold text-[#1F271F]">
+              No Cancellation Requests
+            </h3>
+            <p className="text-xs text-[#667266] max-w-sm mx-auto">
+              {cancellationStatus === "pending"
+                ? "Great news! There are no pending cancellation requests awaiting review."
+                : "No requests match the selected filter."}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-[#F7F3EA] border-b border-[#E5DFC5] text-[11px] uppercase tracking-wider text-[#667266]">
+                  <th className="py-3.5 px-6 font-bold">Request Date</th>
+                  <th className="py-3.5 px-4 font-bold">Order ID & Bill</th>
+                  <th className="py-3.5 px-4 font-bold">Customer</th>
+                  <th className="py-3.5 px-4 font-bold max-w-xs">Reason Provided</th>
+                  <th className="py-3.5 px-4 font-bold">Request Status</th>
+                  <th className="py-3.5 px-4 font-bold">Refund Status</th>
+                  <th className="py-3.5 px-6 font-bold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F0ECE1]">
+                {cancellationData.cancellationRequests.map((req: any) => {
+                  const orderRef = req.order;
+                  const orderNum =
+                    orderRef?.orderNumber ||
+                    (orderRef?._id ? `BB-${String(orderRef._id).slice(-6).toUpperCase()}` : String(req.order || ""));
+                  const grandTotal = orderRef?.grandTotal ?? req.refundAmount ?? 0;
+                  const customerName = req.customer?.name || orderRef?.user?.name || "Customer";
+                  const customerPhone = req.customer?.phone || orderRef?.user?.phone || "";
+
+                  return (
+                    <tr key={req.id || req._id} className="hover:bg-[#F9F7F1] transition-colors">
+                      <td className="py-4 px-6 text-[#667266]">
+                        <div>
+                          {new Date(req.createdAt).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                          })}
+                        </div>
+                        <div className="text-[10px] opacity-75">
+                          {new Date(req.createdAt).toLocaleTimeString("en-IN", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      </td>
+
+                      <td className="py-4 px-4">
+                        <div className="font-mono font-bold text-[#354B35]">
+                          {orderNum}
+                        </div>
+                        <div className="font-bold text-[#1F271F] text-[11px]">
+                          ₹{grandTotal}
+                        </div>
+                      </td>
+
+                      <td className="py-4 px-4">
+                        <div className="font-semibold text-[#1F271F]">
+                          {customerName}
+                        </div>
+                        {customerPhone && (
+                          <div className="text-[11px] text-[#667266]">
+                            {customerPhone}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="py-4 px-4 max-w-xs">
+                        <p className="text-xs text-[#1F271F] font-medium leading-relaxed">
+                          &ldquo;{req.reason}&rdquo;
+                        </p>
+                        {req.rejectionReason && (
+                          <p className="text-[11px] text-red-700 mt-1">
+                            <strong>Rejection note:</strong> {req.rejectionReason}
+                          </p>
+                        )}
+                      </td>
+
+                      <td className="py-4 px-4">
+                        <span
+                          className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                            req.status === "APPROVED"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : req.status === "REJECTED"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-amber-100 text-amber-900 border border-amber-300"
+                          }`}
+                        >
+                          {req.status}
+                        </span>
+                      </td>
+
+                      <td className="py-4 px-4">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            req.refundStatus === "SUCCESS"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : req.refundStatus === "FAILED"
+                              ? "bg-rose-100 text-rose-800 font-extrabold border border-rose-300"
+                              : req.refundStatus === "PROCESSING" ||
+                                req.refundStatus === "INITIATED" ||
+                                req.refundStatus === "PENDING"
+                              ? "bg-blue-50 text-blue-700 border border-blue-200"
+                              : "bg-gray-100 text-gray-700 border border-gray-200"
+                          }`}
+                        >
+                          {req.refundStatus.replace(/_/g, " ")}
+                        </span>
+                        {req.refundAmount > 0 && req.refundStatus !== "NOT_REQUIRED" && (
+                          <div className="text-[10px] text-[#667266] mt-0.5">
+                            ₹{req.refundAmount}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="py-4 px-6 text-right space-x-2">
+                        {req.status === "PENDING" && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setCancellationActionError(null);
+                                setApproveModalItem(req);
+                              }}
+                              className="px-3 py-1.5 rounded-full bg-emerald-700 text-white font-semibold hover:bg-emerald-800 transition-colors cursor-pointer"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => {
+                                setCancellationActionError(null);
+                                setAdminRejectionReason("");
+                                setRejectModalItem(req);
+                              }}
+                              className="px-3 py-1.5 rounded-full border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition-colors cursor-pointer"
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+
+                        {req.refundStatus === "FAILED" && (
+                          <button
+                            onClick={() => handleRetryRefund(req.id || req._id)}
+                            disabled={retryRefundMutation.isPending}
+                            className="px-3 py-1.5 rounded-full bg-rose-600 text-white font-semibold hover:bg-rose-700 transition-colors cursor-pointer disabled:opacity-50"
+                          >
+                            Retry Refund
+                          </button>
+                        )}
+
+                        {orderRef && (
+                          <button
+                            onClick={() => {
+                              setSelectedOrderId(orderRef.orderNumber || orderRef._id || String(orderRef));
+                              setActiveTab("orders");
+                            }}
+                            className="px-3 py-1.5 rounded-full bg-white border border-[#E5DFC5] text-[#354B35] font-semibold hover:bg-[#F7F3EA] transition-colors cursor-pointer"
+                          >
+                            View Order
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )}
 
       {/* Order Details Side Drawer */}
       {selectedOrder && (
@@ -395,6 +754,30 @@ function OrdersContent() {
 
             {/* Drawer Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs text-[#1F271F]">
+              {/* Active Customer Cancellation Request Banner */}
+              {selectedOrder.cancellationRequest?.status === "PENDING" && (
+                <div className="p-4 bg-amber-50 rounded-2xl border-2 border-amber-300 space-y-2">
+                  <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span>Customer Cancellation Request Pending</span>
+                  </div>
+                  <p className="text-xs text-amber-800">
+                    Reason: &ldquo;{selectedOrder.cancellationRequest.reason}&rdquo;
+                  </p>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setActiveTab("cancellations");
+                        setCancellationStatus("pending");
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-amber-600 text-white text-[11px] font-bold hover:bg-amber-700 cursor-pointer"
+                    >
+                      Review in Cancellation Requests
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Status Transition Control Card */}
               <div className="p-4 bg-[#F7F3EA] rounded-2xl border border-[#E5DFC5] space-y-3">
                 <div className="flex items-center justify-between">
@@ -696,6 +1079,140 @@ function OrdersContent() {
                 className="px-5 py-2 rounded-full bg-red-700 text-white text-xs font-semibold cursor-pointer"
               >
                 Confirm Cancellation
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Approve Cancellation Request Modal */}
+      {approveModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+            onClick={() => setApproveModalItem(null)}
+          />
+          <div className="relative bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-4 border border-[#E5DFC5] shadow-2xl">
+            <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs uppercase tracking-wider">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>Approve Cancellation Request</span>
+            </div>
+
+            <h3 className="font-serif text-xl font-bold text-[#1F271F]">
+              Approve cancellation for Order #{approveModalItem.order?.orderNumber || approveModalItem.order?._id || approveModalItem.order}?
+            </h3>
+
+            <div className="p-3 bg-[#F7F3EA] rounded-xl text-xs space-y-1.5 text-[#1F271F]">
+              <div><strong>Customer:</strong> {approveModalItem.customer?.name || "Customer"}</div>
+              <div><strong>Reason:</strong> &ldquo;{approveModalItem.reason}&rdquo;</div>
+              <div><strong>Order Total:</strong> ₹{approveModalItem.order?.grandTotal ?? approveModalItem.refundAmount ?? 0}</div>
+            </div>
+
+            {cancellationActionError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+                {cancellationActionError}
+              </div>
+            )}
+
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed">
+              {approveModalItem.refundAmount > 0 && approveModalItem.refundStatus !== "NOT_REQUIRED" ? (
+                <span>
+                  Approving will mark the order as <strong>CANCELLED</strong>, release inventory, and automatically trigger an online refund of <strong>₹{approveModalItem.refundAmount}</strong> via Razorpay.
+                </span>
+              ) : (
+                <span>
+                  Approving will mark the order as <strong>CANCELLED</strong> and release inventory. No refund is required (unpaid / Cash on Delivery).
+                </span>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setApproveModalItem(null)}
+                className="px-4 py-2 rounded-full border border-gray-300 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveCancellation}
+                disabled={approveMutation.isPending}
+                className="px-5 py-2 rounded-full bg-emerald-700 text-white text-xs font-semibold hover:bg-emerald-800 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+              >
+                {approveMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Confirm & Approve</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Reject Cancellation Request Modal */}
+      {rejectModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+            onClick={() => setRejectModalItem(null)}
+          />
+          <div className="relative bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-4 border border-[#E5DFC5] shadow-2xl">
+            <div className="flex items-center gap-2 text-red-800 font-bold text-xs uppercase tracking-wider">
+              <AlertTriangle className="w-4 h-4 text-red-600" />
+              <span>Decline Cancellation Request</span>
+            </div>
+
+            <h3 className="font-serif text-xl font-bold text-[#1F271F]">
+              Reject request for Order #{rejectModalItem.order?.orderNumber || rejectModalItem.order?._id || rejectModalItem.order}?
+            </h3>
+
+            <p className="text-xs text-[#667266]">
+              Customer Reason: &ldquo;{rejectModalItem.reason}&rdquo;
+            </p>
+
+            {cancellationActionError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+                {cancellationActionError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-[#1F271F] mb-1">
+                Reason for Declining <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                required
+                minLength={3}
+                maxLength={500}
+                value={adminRejectionReason}
+                onChange={(e) => setAdminRejectionReason(e.target.value)}
+                placeholder="e.g. Bento preparation has already completed and meals are freshly packed for dispatch..."
+                className="w-full p-3 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5] text-xs text-[#1F271F] focus:outline-none focus:border-red-600"
+              />
+              <div className="flex justify-between items-center text-[10px] text-[#667266] mt-1">
+                <span>Minimum 3 characters required</span>
+                <span className={adminRejectionReason.length > 500 ? "text-red-500 font-bold" : ""}>
+                  {adminRejectionReason.length} / 500
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRejectModalItem(null)}
+                className="px-4 py-2 rounded-full border border-gray-300 text-xs font-semibold cursor-pointer"
+              >
+                Go Back
+              </button>
+              <button
+                type="button"
+                onClick={handleRejectCancellation}
+                disabled={adminRejectionReason.trim().length < 3 || rejectMutation.isPending}
+                className="px-5 py-2 rounded-full bg-red-700 text-white text-xs font-semibold hover:bg-red-800 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+              >
+                {rejectMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Confirm Rejection</span>
               </button>
             </div>
           </div>

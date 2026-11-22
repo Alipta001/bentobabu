@@ -105,6 +105,7 @@ export const normalizeOrder = (ord: any): Order => {
     coupon: ord.coupon,
     deliveryOtp: ord.deliveryOtp || null,
     cancellationReason: ord.cancellationReason || null,
+    cancellationRequest: ord.cancellationRequest || null,
     statusHistory: Array.isArray(ord.statusHistory) ? ord.statusHistory : [],
     estimatedDelivery: ord.estimatedDelivery || "35 - 45 mins",
   };
@@ -205,6 +206,18 @@ export const orderService = {
     const orderData = extractOrderPayload(raw);
 
     return normalizeOrder(orderData);
+  },
+
+  /**
+   * Submit customer cancellation request for an eligible order
+   */
+  async requestCancellation(id: string, reason: string): Promise<any> {
+    const response = await apiClient.post<
+      ApiResponse<{ cancellationRequest: any }> | any
+    >(API_ENDPOINTS.ORDERS.CANCEL_REQUEST(id), { reason });
+
+    const raw = response.data;
+    return raw?.data?.cancellationRequest || raw?.cancellationRequest || raw?.data || raw;
   },
 
   /**

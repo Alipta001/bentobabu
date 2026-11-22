@@ -59,6 +59,7 @@ export interface BackendOrder {
     note?: string;
   }>;
   cancellationReason?: string;
+  cancellationRequest?: any;
   createdAt: string;
   receipt?: {
     status: "PENDING" | "GENERATING" | "STORED" | "FAILED";
@@ -128,6 +129,7 @@ export const mapBackendOrder = (o: BackendOrder): Order & { _backendId: string; 
     },
     deliverySlot: o.deliverySlot?.label || (o.deliverySlot ? `${o.deliverySlot.startTime || ""} - ${o.deliverySlot.endTime || ""}` : undefined),
     cancellationReason: o.cancellationReason,
+    cancellationRequest: o.cancellationRequest || null,
     receipt: o.receipt
       ? {
           status: o.receipt.status || "PENDING",

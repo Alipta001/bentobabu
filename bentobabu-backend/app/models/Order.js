@@ -343,6 +343,12 @@ const orderSchema = new mongoose.Schema(
       type: orderReceiptSchema,
       default: () => ({ status: 'PENDING' }),
     },
+    cancellationRequest: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CancellationRequest',
+      default: null,
+      index: true,
+    },
     cancellationReason: {
       type: String,
       default: null,

@@ -22,6 +22,7 @@ import {
   GetPartnersParams,
   AccountStatus,
 } from "@/services/deliveryOperationsService";
+import { cancellationService, CancellationFilterParams } from "@/services/cancellationService";
 import { OrderStatus, Product, Category, Coupon, BusinessSettings, ProductVideo, VideoContent } from "@/types";
 
 // ==========================================
@@ -1108,6 +1109,54 @@ export function useUpdatePartnerStatus() {
       queryClient.invalidateQueries({
         queryKey: ["admin", "deliveryOperations", "partnerDetail", variables.id],
       });
+    },
+  });
+}
+
+// ==========================================
+// CANCELLATION REQUESTS
+// ==========================================
+
+export function useAdminCancellationRequests(params?: CancellationFilterParams) {
+  return useQuery({
+    queryKey: ["admin", "cancellationRequests", params],
+    queryFn: () => cancellationService.getAll(params),
+    refetchInterval: (query) => (query.state.error ? false : 15000),
+  });
+}
+
+export function useApproveCancellationRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => cancellationService.approve(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "cancellationRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "kpis"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+    },
+  });
+}
+
+export function useRejectCancellationRequest() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, rejectionReason }: { id: string; rejectionReason: string }) =>
+      cancellationService.reject(id, rejectionReason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "cancellationRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
+  });
+}
+
+export function useRetryRefund() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => cancellationService.retryRefund(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "cancellationRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
     },
   });
 }

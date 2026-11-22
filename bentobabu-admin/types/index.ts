@@ -129,7 +129,35 @@ export interface Order {
   deliverySlot?: string;
   deliveryNotes?: string;
   cancellationReason?: string;
+  cancellationRequest?: CancellationRequest | null;
   receipt?: OrderReceiptMetadata;
+}
+
+export type CancellationRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type CancellationRefundStatus =
+  | "NOT_REQUIRED"
+  | "PENDING"
+  | "PROCESSING"
+  | "INITIATED"
+  | "SUCCESS"
+  | "FAILED";
+
+export interface CancellationRequest {
+  id: string;
+  _id?: string;
+  order: string | Order | any;
+  customer: string | Customer | any;
+  reason: string;
+  status: CancellationRequestStatus;
+  reviewedBy?: any;
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
+  refundStatus: CancellationRefundStatus;
+  razorpayRefundId?: string | null;
+  refundAmount?: number;
+  failureReason?: string | null;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Customer {

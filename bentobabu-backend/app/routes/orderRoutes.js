@@ -1,5 +1,6 @@
 const express = require('express');
 const OrderController = require('../controllers/orderController');
+const CancellationController = require('../controllers/cancellationController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -55,8 +56,21 @@ router.get(
 router.patch(
   '/:id/cancel',
   authenticate,
-  authorize('CUSTOMER'),
+  authorize('CUSTOMER', 'ADMIN'),
   OrderController.cancelOrder
+);
+
+router.post(
+  '/:id/cancel-request',
+  authenticate,
+  authorize('CUSTOMER'),
+  CancellationController.createRequest
+);
+
+router.get(
+  '/:id/cancel-request',
+  authenticate,
+  CancellationController.getOrderCancellationRequest
 );
 
 module.exports = router;

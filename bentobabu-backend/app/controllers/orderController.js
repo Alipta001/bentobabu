@@ -1187,6 +1187,14 @@ class OrderController {
 
       const orderData = order.toJSON();
 
+      // Retrieve latest cancellation request if any
+      const CancellationRequest = require('../models/CancellationRequest');
+      const cancellationRequest = await CancellationRequest.findOne({ order: order._id })
+        .sort({ createdAt: -1 })
+        .populate('reviewedBy', 'name email')
+        .lean();
+      orderData.cancellationRequest = cancellationRequest || null;
+
       // Only expose deliveryOtpCode to the customer who owns the order when PICKED_UP or OUT_FOR_DELIVERY
       if (
         req.user.role === 'CUSTOMER' &&
@@ -1297,7 +1305,7 @@ class OrderController {
   }
 
   /**
-   * CUSTOMER: Cancel an eligible order
+   * CUSTOMER / ADMIN: Cancel an eligible order
    * PATCH /api/v1/orders/:id/cancel
    */
   static async cancelOrder(req, res, next) {
@@ -1307,6 +1315,12 @@ class OrderController {
           success: false,
           message: 'Invalid order ID format',
         });
+      }
+
+      // If caller is an admin, delegate to admin cancellation logic
+      if (req.user && req.user.role === 'ADMIN') {
+        const AdminOrderController = require('./adminOrderController');
+        return AdminOrderController.cancelOrder(req, res, next);
       }
 
       // First check if the order exists and belongs to the customer

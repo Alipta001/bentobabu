@@ -101,6 +101,21 @@ const getInAppMessage = (
         subject: `Order Cancelled (#${orderNumber})`,
         message: `Order #${orderNumber} has been cancelled.${reason ? ` Reason: ${reason}` : ''}`,
       };
+    case 'CANCELLATION_REQUESTED':
+      return {
+        subject: `Cancellation Request Received (#${orderNumber})`,
+        message: `Your cancellation request for order #${orderNumber} has been received and is being reviewed by our kitchen.`,
+      };
+    case 'CANCELLATION_APPROVED':
+      return {
+        subject: `Cancellation Approved (#${orderNumber})`,
+        message: `Your cancellation request for order #${orderNumber} has been approved.${reason ? ` Note: ${reason}` : ''}`,
+      };
+    case 'CANCELLATION_REJECTED':
+      return {
+        subject: `Cancellation Request Declined (#${orderNumber})`,
+        message: `Your cancellation request for order #${orderNumber} could not be approved.${reason ? ` Reason: ${reason}` : ''}`,
+      };
     case 'ORDER_EXPIRED':
       return {
         subject: `Order Expired (#${orderNumber})`,

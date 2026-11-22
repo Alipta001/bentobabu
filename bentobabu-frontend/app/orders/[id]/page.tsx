@@ -26,7 +26,7 @@ import {
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { DownloadReceiptButton } from "@/components/order/DownloadReceiptButton";
-import { useOrder, useCancelOrder, useUserProfile } from "@/hooks/useQueries";
+import { useOrder, useCancelOrder, useRequestCancellation, useUserProfile } from "@/hooks/useQueries";
 import { OrderStatus } from "@/types";
 import { buildLoginUrl } from "@/lib/authRedirect";
 
@@ -103,6 +103,7 @@ export default function OrderTrackingPage() {
   const { data: user, isLoading: isUserLoading } = useUserProfile();
   const { data: order, isLoading, error, refetch, isFetching } = useOrder(orderId);
   const cancelOrderMutation = useCancelOrder();
+  const requestCancellationMutation = useRequestCancellation();
 
   // Redirect guest user to login with returnTo preserving this specific order tracking page
   React.useEffect(() => {
@@ -126,20 +127,29 @@ export default function OrderTrackingPage() {
   const handleCancelOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!order) return;
+    if (cancelReason.trim().length < 5) {
+      setActionError("Please provide a reason with at least 5 characters.");
+      return;
+    }
+    if (cancelReason.trim().length > 500) {
+      setActionError("Cancellation reason cannot exceed 500 characters.");
+      return;
+    }
     setActionError("");
 
     try {
-      await cancelOrderMutation.mutateAsync({
+      await requestCancellationMutation.mutateAsync({
         id: order.id,
-        reason: cancelReason || "Customer requested cancellation",
+        reason: cancelReason.trim(),
       });
       setCancelModalOpen(false);
+      setCancelReason("");
       refetch();
     } catch (err: unknown) {
       setActionError(
         err instanceof Error
           ? err.message
-          : "Failed to cancel order. It may have already entered preparation."
+          : "Failed to submit cancellation request. Order may have already progressed to packing."
       );
     }
   };
@@ -190,10 +200,17 @@ export default function OrderTrackingPage() {
   const currentStageIndex = STAGE_ORDER[order.status] ?? 0;
   const isCancelled = order.status === "CANCELLED";
   const isExpired = order.status === "EXPIRED";
-  const canCancel =
-    (order.status === "PENDING" || order.status === "CONFIRMED") &&
+  const cancellationReq = order.cancellationRequest;
+  const hasPendingRequest = cancellationReq?.status === "PENDING";
+  const isRequestRejected = cancellationReq?.status === "REJECTED";
+  const isRequestApproved = cancellationReq?.status === "APPROVED";
+
+  // Eligibility: Allowed if stage < 3 (before PACKED / READY_FOR_PICKUP) and not cancelled or expired
+  const canRequestCancellation =
+    currentStageIndex < 3 &&
     !isCancelled &&
-    !isExpired;
+    !isExpired &&
+    !hasPendingRequest;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F3EA]">
@@ -281,11 +298,54 @@ export default function OrderTrackingPage() {
                   {order.cancellationReason && (
                     <p className="text-red-700">Reason: {order.cancellationReason}</p>
                   )}
-                  {order.paymentStatus === "PAID" && (
-                    <p className="text-red-700 text-[11px]">
-                      Your payment refund will be credited back to your original source within 5-7 business days.
+                  {order.paymentMethod?.toLowerCase() === "razorpay" || order.paymentStatus === "PAID" || order.paymentStatus === "REFUNDED" || order.paymentStatus === "REFUND_PENDING" ? (
+                    <div className="pt-1 text-[11px] font-medium">
+                      {cancellationReq?.refundStatus === "SUCCESS" || order.paymentStatus === "REFUNDED" ? (
+                        <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Refund of ₹{cancellationReq?.refundAmount || order.grandTotal} processed successfully to your original payment method.
+                        </span>
+                      ) : cancellationReq?.refundStatus === "FAILED" || order.paymentStatus === "REFUND_FAILED" ? (
+                        <span className="text-red-700 font-semibold">
+                          Refund is flagged for admin resolution. If not credited within 24 hours, our support team will reach out.
+                        </span>
+                      ) : (
+                        <span className="text-amber-800">
+                          Automatic refund of ₹{cancellationReq?.refundAmount || order.grandTotal} has been initiated via Razorpay (typically reflects in 5-7 business days).
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-gray-600 text-[11px]">
+                      Payment was marked as Cash on Delivery. No refund is required.
                     </p>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Pending Cancellation Review Banner */}
+            {hasPendingRequest && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-3">
+                <Clock className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Cancellation Request Submitted — Awaiting Kitchen Review</p>
+                  <p className="text-amber-800">
+                    We received your cancellation request (Reason: &ldquo;{cancellationReq?.reason}&rdquo;). Our kitchen operations team is currently reviewing your order.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Rejected Cancellation Request Banner */}
+            {isRequestRejected && !isCancelled && (
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 text-xs flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 shrink-0 text-red-600 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Cancellation Request Declined by Kitchen</p>
+                  <p className="text-red-800">
+                    Your cancellation request could not be approved. Reason: &ldquo;{cancellationReq?.rejectionReason || "Meal preparation has already progressed"}&rdquo;. Your order remains active.
+                  </p>
                 </div>
               </div>
             )}
@@ -388,14 +448,26 @@ export default function OrderTrackingPage() {
             )}
 
             {/* Cancel Action if permitted */}
-            {canCancel && (
+            {canRequestCancellation && (
               <div className="pt-2 flex justify-end">
                 <button
-                  onClick={() => setCancelModalOpen(true)}
+                  onClick={() => {
+                    setActionError("");
+                    setCancelModalOpen(true);
+                  }}
                   className="text-xs font-bold text-red-600 hover:text-red-700 hover:underline cursor-pointer"
                 >
-                  Need to cancel this order?
+                  Need to cancel? Request cancellation
                 </button>
+              </div>
+            )}
+
+            {hasPendingRequest && (
+              <div className="pt-2 flex justify-end">
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-50 text-amber-800 text-xs font-semibold border border-amber-300">
+                  <Clock className="w-3.5 h-3.5 animate-pulse text-amber-600" />
+                  Cancellation Request Pending Review
+                </span>
               </div>
             )}
           </div>
@@ -551,10 +623,10 @@ export default function OrderTrackingPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 border border-[#E5DFC5] shadow-2xl space-y-4">
             <h3 className="font-serif text-xl font-bold text-[#222922]">
-              Cancel Order #{order.orderNumber || order.id}?
+              Request Cancellation
             </h3>
             <p className="text-xs text-[#6B776A] leading-relaxed">
-              If the kitchen hasn&apos;t started preparing your ingredients yet, we will cancel your order immediately and release any reservations.
+              If your meal has not yet reached the packing stage, our kitchen team will review and approve your cancellation request. For online prepaid orders, a full refund will be automatically triggered via Razorpay upon approval.
             </p>
 
             {actionError && (
@@ -564,35 +636,48 @@ export default function OrderTrackingPage() {
             )}
 
             <form onSubmit={handleCancelOrder} className="space-y-3">
-              <label className="block text-xs font-semibold text-[#222922]">
-                Reason for Cancellation
-              </label>
-              <textarea
-                rows={3}
-                required
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="e.g. Changed delivery address, ordered by mistake..."
-                className="w-full px-3.5 py-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5] text-xs text-[#222922] focus:outline-none focus:border-[#354B35]"
-              />
+              <div>
+                <label className="block text-xs font-semibold text-[#222922] mb-1">
+                  Reason for Cancellation <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  minLength={5}
+                  maxLength={500}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Please state why you wish to cancel (e.g. Ordered by mistake, wrong delivery address)..."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5] text-xs text-[#222922] focus:outline-none focus:border-[#354B35]"
+                />
+                <div className="flex justify-between items-center text-[10px] text-[#6B776A] mt-1">
+                  <span>Minimum 5 characters required</span>
+                  <span className={cancelReason.length > 500 ? "text-red-500 font-bold" : ""}>
+                    {cancelReason.length} / 500
+                  </span>
+                </div>
+              </div>
 
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setCancelModalOpen(false)}
+                  onClick={() => {
+                    setCancelModalOpen(false);
+                    setActionError("");
+                  }}
                   className="px-5 py-2 rounded-full border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
                 >
                   Keep Order
                 </button>
                 <button
                   type="submit"
-                  disabled={cancelOrderMutation.isPending}
+                  disabled={cancelReason.trim().length < 5 || requestCancellationMutation.isPending}
                   className="px-5 py-2 rounded-full bg-red-600 text-white text-xs font-semibold hover:bg-red-700 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                 >
-                  {cancelOrderMutation.isPending && (
+                  {requestCancellationMutation.isPending && (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   )}
-                  <span>Confirm Cancellation</span>
+                  <span>Send Cancellation Request</span>
                 </button>
               </div>
             </form>

@@ -278,6 +278,18 @@ export function useCancelOrder() {
   });
 }
 
+export function useRequestCancellation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      orderService.requestCancellation(id, reason),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ORDER(variables.id) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ORDERS });
+    },
+  });
+}
+
 export function useVideos(filters?: VideoFilterOptions) {
   return useQuery({
     queryKey: QUERY_KEYS.VIDEOS(filters),

@@ -222,6 +222,7 @@ export interface Order {
   deliveryNotes?: string;
   deliveryOtp?: string | null;
   cancellationReason?: string | null;
+  cancellationRequest?: CancellationRequest | null;
   statusHistory?: Array<{
     status: string;
     changedAt: string;
@@ -229,6 +230,33 @@ export interface Order {
   }>;
   razorpayOrderId?: string;
   estimatedDelivery?: string;
+}
+
+export type CancellationRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type CancellationRefundStatus =
+  | "NOT_REQUIRED"
+  | "PENDING"
+  | "PROCESSING"
+  | "INITIATED"
+  | "SUCCESS"
+  | "FAILED";
+
+export interface CancellationRequest {
+  id: string;
+  _id?: string;
+  order: string;
+  customer?: string | User;
+  reason: string;
+  status: CancellationRequestStatus;
+  reviewedBy?: string | User | null;
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
+  refundStatus: CancellationRefundStatus;
+  razorpayRefundId?: string | null;
+  refundAmount?: number;
+  failureReason?: string | null;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface DeliveryZone {

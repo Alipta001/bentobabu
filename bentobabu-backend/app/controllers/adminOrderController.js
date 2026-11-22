@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { Order, User, DeliveryPartnerPresence } = require('../models');
+const { Order, User, DeliveryPartnerPresence, CancellationRequest } = require('../models');
+const CancellationService = require('../services/cancellationService');
 const { redisDelPattern } = require('../config/redis');
 const NotificationDispatcher = require('../utils/notificationDispatcher');
 
@@ -465,6 +466,69 @@ class AdminOrderController {
             phone: partner.phone,
           },
         },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * ADMIN: Directly cancel an order and process automatic refund if paid
+   * PATCH /api/v1/admin/orders/:id/cancel
+   */
+  static async cancelOrder(req, res, next) {
+    try {
+      const { id } = req.params;
+      const reason = req.body.reason || req.body.note || 'Cancelled via admin operations';
+
+      if (!id || !mongoose.isValidObjectId(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid order ID format',
+        });
+      }
+
+      const order = await Order.findById(id);
+      if (!order) {
+        return res.status(404).json({
+          success: false,
+          message: 'Order not found',
+        });
+      }
+
+      if (order.orderStatus === 'CANCELLED') {
+        return res.status(400).json({
+          success: false,
+          message: 'This order is already cancelled',
+        });
+      }
+
+      // Check if there is a pending cancellation request for this order and link it
+      const pendingRequest = await CancellationRequest.findOne({
+        order: order._id,
+        status: 'PENDING',
+      });
+
+      await CancellationService.executeOrderCancellationAndRefund({
+        order,
+        cancellationRequest: pendingRequest,
+        adminUser: req.user,
+        reason,
+      });
+
+      if (pendingRequest) {
+        pendingRequest.status = 'APPROVED';
+        pendingRequest.reviewedBy = req.user._id || req.user.id;
+        pendingRequest.reviewedAt = new Date();
+        await pendingRequest.save();
+      }
+
+      await redisDelPattern('cache:admin:dashboard:*').catch(() => {});
+
+      return res.status(200).json({
+        success: true,
+        message: 'Order cancelled successfully by administrator.',
+        data: { order },
       });
     } catch (error) {
       next(error);

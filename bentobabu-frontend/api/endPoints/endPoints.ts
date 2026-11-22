@@ -58,6 +58,7 @@ export const API_ENDPOINTS = {
     DETAIL: (id: string) => `/orders/${id}`,
     RECEIPT: (id: string) => `/orders/${id}/receipt`,
     CANCEL: (id: string) => `/orders/${id}/cancel`,
+    CANCEL_REQUEST: (id: string) => `/orders/${id}/cancel-request`,
   },
   PAYMENTS: {
     CREATE_RAZORPAY_ORDER: "/payments/razorpay/create-order",
