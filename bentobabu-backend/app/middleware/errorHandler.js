@@ -17,6 +17,14 @@ const errorHandler = (err, req, res, next) => {
     errors = undefined;
   }
 
+  // 1b. Handle Request Entity Too Large (PayloadTooLargeError / HTTP 413 from express.json() or body-parser)
+  if (err.type === 'entity.too.large' || statusCode === 413 || err.status === 413) {
+    statusCode = 413;
+    const readableLimit = err.limit ? `${Math.round(err.limit / 1024)} KB` : '1 MB';
+    message = `Request entity too large. The payload exceeds the configured limit of ${readableLimit}.`;
+    errors = [{ field: 'body', message: `Payload exceeds ${readableLimit}` }];
+  }
+
   // 2. Handle Mongoose Validation Error
   if (err.name === 'ValidationError') {
     statusCode = 400;

@@ -9,7 +9,9 @@ import {
   Trash2,
   X,
   Flame,
+  RefreshCw,
 } from "lucide-react";
+import { toast } from "sonner";
 import { AdminShell } from "@/components/layout/AdminShell";
 import {
   useAdminProducts,
@@ -75,6 +77,7 @@ function ProductsContent() {
   const deleteProductMutation = useDeleteProduct();
   const toggleAvailabilityMutation = useToggleProductAvailability();
   const toggleStatusMutation = useToggleProductStatus();
+  const isSaving = createProductMutation.isPending || updateProductMutation.isPending;
 
   const handleOpenCreate = () => {
     setEditingProduct(null);
@@ -152,27 +155,48 @@ function ProductsContent() {
 
   const handleDelete = async (id: string, name: string) => {
     if (confirm(`Are you sure you want to delete "${name}" from the catalogue?`)) {
-      await deleteProductMutation.mutateAsync(id);
+      try {
+        await deleteProductMutation.mutateAsync(id);
+        toast.success(`"${name}" removed from catalogue.`);
+      } catch (err: any) {
+        const msg = err?.response?.data?.message || err?.message || "Failed to delete product";
+        toast.error(`Delete failed: ${msg}`);
+      }
     }
   };
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) return;
-    if (!formData.categoryIds || formData.categoryIds.length === 0) {
-      alert("Please assign at least one category to this product.");
+    if (!formData.name.trim()) {
+      toast.error("Product name is required.");
       return;
     }
-
-    if (editingProduct) {
-      await updateProductMutation.mutateAsync({
-        id: editingProduct.id,
-        data: formData,
-      });
-    } else {
-      await createProductMutation.mutateAsync(formData);
+    if (!formData.categoryIds || formData.categoryIds.length === 0) {
+      toast.error("Please assign at least one category to this product.");
+      return;
     }
-    setModalOpen(false);
+    if (isSaving) return;
+
+    try {
+      if (editingProduct) {
+        await updateProductMutation.mutateAsync({
+          id: editingProduct.id,
+          data: formData,
+        });
+        toast.success(`"${formData.name}" updated successfully!`);
+      } else {
+        await createProductMutation.mutateAsync(formData);
+        toast.success(`"${formData.name}" published to menu successfully!`);
+      }
+      setModalOpen(false);
+    } catch (err: any) {
+      console.error("[ProductSaveError]", err);
+      const apiMessage =
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to save product. Please try again.";
+      toast.error(`Could not publish product: ${apiMessage}`);
+    }
   };
 
   return (
@@ -733,16 +757,27 @@ function ProductsContent() {
               <div className="flex justify-end gap-3 pt-3 border-t border-[#F0ECE1]">
                 <button
                   type="button"
+                  disabled={isSaving}
                   onClick={() => setModalOpen(false)}
-                  className="px-5 py-2.5 rounded-full border border-gray-300 font-semibold cursor-pointer"
+                  className="px-5 py-2.5 rounded-full border border-gray-300 font-semibold cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-full bg-[#354B35] text-white font-semibold hover:bg-[#253525] cursor-pointer shadow-xs"
+                  disabled={isSaving}
+                  className="px-6 py-2.5 rounded-full bg-[#354B35] text-white font-semibold hover:bg-[#253525] cursor-pointer shadow-xs disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {editingProduct ? "Save Changes" : "Publish to Menu"}
+                  {isSaving ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-[#DFC89B]" />
+                      <span>{editingProduct ? "Saving..." : "Publishing..."}</span>
+                    </>
+                  ) : editingProduct ? (
+                    "Save Changes"
+                  ) : (
+                    "Publish to Menu"
+                  )}
                 </button>
               </div>
             </form>

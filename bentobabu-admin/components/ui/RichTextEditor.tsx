@@ -205,6 +205,27 @@ export function RichTextEditor({
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const html = e.clipboardData.getData("text/html");
+    const text = e.clipboardData.getData("text/plain");
+
+    if (html) {
+      // Strip any <img> tags, <svg> tags, scripts, and base64 data URIs
+      const cleanHtml = html
+        .replace(/<img\b[^>]*>/gi, "")
+        .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, "")
+        .replace(/data:image\/[^;]+;base64,[a-zA-Z0-9+/=]+/gi, "")
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "");
+
+      document.execCommand("insertHTML", false, cleanHtml);
+    } else if (text) {
+      document.execCommand("insertText", false, text);
+    }
+    handleInput();
+  };
+
   return (
     <div
       className={`rounded-2xl border border-[#E5DFC5] bg-white overflow-hidden shadow-2xs transition-all focus-within:border-[#354B35] focus-within:ring-1 focus-within:ring-[#354B35]/20 ${className}`}
@@ -449,6 +470,7 @@ export function RichTextEditor({
           onKeyUp={updateActiveStates}
           onMouseUp={updateActiveStates}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           data-placeholder={placeholder}
           className="bento-rich-editor-content p-3.5 min-h-[140px] max-h-[220px] overflow-y-auto focus:outline-none text-xs sm:text-sm text-[#222922] leading-relaxed"
         />

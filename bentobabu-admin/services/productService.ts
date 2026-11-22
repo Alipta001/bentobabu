@@ -228,10 +228,14 @@ export const productService = {
     const prepTime = data.preparationTime ?? data.preparationTimeMinutes;
     const rawImages = data.imageUrl ? [data.imageUrl, ...(data.galleryImages || [])] : data.galleryImages || [];
 
+    const cleanDescription = (data.description || data.name || "")
+      .replace(/<img\b[^>]*>/gi, "")
+      .replace(/data:image\/[^;]+;base64,[a-zA-Z0-9+/=]+/gi, "");
+
     const payload = {
       name: data.name,
       slug,
-      description: data.description || data.name,
+      description: cleanDescription,
       category: resolvedCatIds[0] || "",
       categories: resolvedCatIds,
       categoryIds: resolvedCatIds,
@@ -271,7 +275,11 @@ export const productService = {
   async update(id: string, data: Partial<Product>): Promise<Product> {
     const payload: Record<string, unknown> = {};
     if (data.name !== undefined) payload.name = data.name;
-    if (data.description !== undefined) payload.description = data.description;
+    if (data.description !== undefined) {
+      payload.description = data.description
+        .replace(/<img\b[^>]*>/gi, "")
+        .replace(/data:image\/[^;]+;base64,[a-zA-Z0-9+/=]+/gi, "");
+    }
     if (data.price !== undefined) payload.price = data.price;
     if (data.originalPrice !== undefined) payload.compareAtPrice = data.originalPrice;
     if (data.categoryIds !== undefined && Array.isArray(data.categoryIds)) {
