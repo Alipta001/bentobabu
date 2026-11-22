@@ -1,5 +1,6 @@
 const { Resend } = require('resend');
 const { validateEnv } = require('../config/env');
+const { EmailService, ResendProvider, ZohoProvider } = require('../services/email/emailService');
 
 let customResendClient = undefined;
 
@@ -8,6 +9,7 @@ let customResendClient = undefined;
  */
 const setResendClient = (client) => {
   customResendClient = client;
+  EmailService.setResendClient(client);
 };
 
 /**
@@ -16,8 +18,10 @@ const setResendClient = (client) => {
 const setTransporter = (transporter) => {
   if (!transporter) {
     customResendClient = undefined;
+    EmailService.setTransporter(null);
     return;
   }
+  EmailService.setTransporter(transporter);
   if (typeof transporter.sendMail === 'function') {
     customResendClient = {
       emails: {
@@ -56,6 +60,13 @@ const getResendClient = () => {
  * Backward compatibility alias for getResendClient
  */
 const getTransporter = () => getResendClient();
+
+/**
+ * Allows tests to supply a custom fetch for Zoho ZeptoMail
+ */
+const setZeptoMailFetch = (fn) => {
+  EmailService.setZeptoMailFetch(fn);
+};
 
 /**
  * Formats order items list into an HTML table
@@ -490,120 +501,10 @@ const maskEmailAddress = (email) => {
 };
 
 /**
- * Dispatches an email notification via Resend HTTPS API
+ * Dispatches an email notification via configured active provider (Resend or Zoho ZeptoMail)
  */
-const sendEmail = async ({ to, subject, html, text }) => {
-  if (process.env.MOCK_NOTIFICATIONS === 'true') {
-    return {
-      success: true,
-      messageId: `mock_email_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-      duration: 1,
-    };
-  }
-
-  const client = getResendClient();
-  const activeEnv = validateEnv();
-
-  if (!client) {
-    console.warn('[Email][resend-api] RESEND_API_KEY is not configured. Email delivery skipped.');
-    return {
-      success: false,
-      skipped: true,
-      error: 'Resend API key is not configured. Email delivery skipped.',
-    };
-  }
-
-  const startTime = Date.now();
-  const recipient = Array.isArray(to) ? to[0] : to;
-  const maskedDestination = maskEmailAddress(recipient);
-
-  console.log(`[Email][resend-api] Request started to: ${maskedDestination}`);
-
-  try {
-    const timeoutMs = parseInt(process.env.RESEND_TIMEOUT_MS, 10) || 12000;
-
-    let timeoutId;
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => {
-        const timeoutErr = new Error(`Resend API request timed out after ${timeoutMs}ms`);
-        timeoutErr.name = 'TimeoutError';
-        timeoutErr.code = 'ETIMEDOUT';
-        reject(timeoutErr);
-      }, timeoutMs);
-    });
-
-    const sendPromise = client.emails.send({
-      from: activeEnv.emailFrom,
-      to,
-      subject,
-      html,
-      text,
-    });
-
-    const result = await Promise.race([sendPromise, timeoutPromise]);
-    clearTimeout(timeoutId);
-
-    const duration = Date.now() - startTime;
-
-    // Resend SDK returns { data, error }
-    if (result && result.error) {
-      const err = result.error;
-      const status = err.statusCode || err.status || 400;
-      const errCode = err.name || 'ResendApiError';
-      console.error(
-        `[Email][resend-api] Request failed in ${duration}ms. Status: ${status}, Code: ${errCode}: ${err.message}`
-      );
-      return {
-        success: false,
-        error: err.message || 'Resend API rejected email delivery',
-        status,
-        code: errCode,
-        duration,
-      };
-    }
-
-    if (result && result.data && result.data.id) {
-      console.log(
-        `[Email][resend-api] Request succeeded in ${duration}ms. Message ID: ${result.data.id}`
-      );
-      return {
-        success: true,
-        messageId: result.data.id,
-        duration,
-      };
-    }
-
-    console.warn(`[Email][resend-api] Request failed in ${duration}ms. Missing message ID in response.`);
-    return {
-      success: false,
-      error: 'No message ID returned from Resend API',
-      duration,
-    };
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    const isTimeout = error.code === 'ETIMEDOUT' || error.name === 'TimeoutError';
-    const isNetwork =
-      error.code === 'ENOTFOUND' ||
-      error.code === 'ECONNREFUSED' ||
-      error.code === 'ECONNRESET' ||
-      error.code === 'EAI_AGAIN';
-    const errCode = isTimeout ? 'TIMEOUT' : isNetwork ? 'NETWORK_ERROR' : (error.name || 'UNKNOWN_ERROR');
-
-    console.error(
-      `[Email][resend-api] Request failed in ${duration}ms. Code: ${errCode}: ${error.message}`
-    );
-
-    return {
-      success: false,
-      error: isTimeout
-        ? 'Resend API request timed out'
-        : isNetwork
-        ? 'Network failure connecting to Resend API'
-        : (error.message || 'Resend API communication error'),
-      code: errCode,
-      duration,
-    };
-  }
+const sendEmail = async ({ to, subject, html, text, from }) => {
+  return EmailService.sendEmail({ to, subject, html, text, from });
 };
 
 /**
@@ -650,12 +551,53 @@ const sendSignupOtpEmail = async ({ to, name, otp, expiryMinutes = 5 }) => {
   });
 };
 
+/**
+ * Sends a responsive, branded Password Reset email
+ */
+const sendPasswordResetEmail = async ({ to, name, resetUrl, expiryMinutes = 30 }) => {
+  const title = 'Reset Your BentoBabu Password';
+  const preheader = `Password reset request for your BentoBabu account. Link valid for ${expiryMinutes} minutes.`;
+  const customerName = name || 'Valued Customer';
+
+  const content = `
+    <p style="font-size: 15px; color: #374151; margin: 0 0 16px 0; line-height: 1.5;">
+      We received a request to reset your password for your <strong>BentoBabu</strong> account. Click the button below to choose a new password:
+    </p>
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="${resetUrl}" style="background-color: #166534; color: #ffffff; padding: 12px 28px; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 9999px; display: inline-block;">
+        Reset Password
+      </a>
+    </div>
+    <p style="font-size: 13px; color: #6b7280; margin: 16px 0; line-height: 1.4;">
+      This password reset link will expire in <strong>${expiryMinutes} minutes</strong>. If you did not request a password reset, you can safely ignore this email.
+    </p>`;
+
+  const html = buildEmailLayout({
+    title,
+    preheader,
+    content,
+    customerName,
+  });
+
+  const text = `Reset Your BentoBabu Password\n\nHello ${customerName},\n\nWe received a request to reset your password.\nReset link: ${resetUrl}\n\nThis link is valid for ${expiryMinutes} minutes. If you did not request this, please ignore.\n\nBentoBabu`;
+
+  return sendEmail({
+    to,
+    subject: '🍱 Reset Your BentoBabu Password',
+    html,
+    text,
+  });
+};
+
 module.exports = {
   setResendClient,
   setTransporter,
   getResendClient,
   getTransporter,
+  setZeptoMailFetch,
   getEmailTemplate,
   sendEmail,
   sendSignupOtpEmail,
+  sendPasswordResetEmail,
+  EmailService,
 };

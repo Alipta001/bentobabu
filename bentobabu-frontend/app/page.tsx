@@ -124,21 +124,18 @@ export default async function HomePage() {
               <div className="lg:col-span-7 space-y-6 text-left">
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#354B35]/10 border border-[#354B35]/20 text-[#354B35] text-xs font-semibold">
                   <Sparkles className="w-3.5 h-3.5 text-[#755C2B]" />
-                  <span>Mindful Indian Nutrition for Every Generation</span>
+                  <span>Fresh, wholesome meals made for every generation.</span>
                 </div>
 
                 <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl font-extrabold text-[#243324] tracking-tight leading-[1.15]">
-                  Wholesome, Gourmet Meals.{" "}
+                  Eat Better. Live Better.{" "}
                   <span className="italic font-normal text-[#354B35] underline decoration-[#B99A60]/60 decoration-wavy">
-                    Zero Compromise
-                  </span>{" "}
-                  on Taste.
+                    Love Every Bite.
+                  </span>
                 </h1>
 
                 <p className="text-base sm:text-lg text-[#4A584A] max-w-2xl leading-relaxed">
-                  High-protein gym bowls, light millet khichdis for elders, energizing
-                  office lunches, and clean school snacks. Cooked fresh with cold-pressed oils,
-                  whole spices, and unadulterated passion.
+                  From protein-packed fitness bowls and nourishing millet meals to wholesome office lunches and healthy school snacks — BentoBabu brings delicious, balanced food to your everyday life. Freshly prepared in Barrackpore with quality ingredients and no compromise on taste.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-4">

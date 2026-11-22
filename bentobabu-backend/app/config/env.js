@@ -133,14 +133,41 @@ const validateEnv = () => {
     );
   }
 
-  // Validate required Resend API key when email OTP is enabled
+  // Resolve and validate EMAIL_PROVIDER
+  const emailProvider = (process.env.EMAIL_PROVIDER || 'resend').trim().toLowerCase();
+  const ALLOWED_EMAIL_PROVIDERS = ['resend', 'zoho'];
+  if (!ALLOWED_EMAIL_PROVIDERS.includes(emailProvider)) {
+    throw new Error(
+      `Invalid email configuration: Unsupported EMAIL_PROVIDER "${process.env.EMAIL_PROVIDER}". Allowed values are: ${ALLOWED_EMAIL_PROVIDERS.join(', ')}.`
+    );
+  }
+
+  // Validate required credentials for active email provider when email OTP is enabled
   if (otpEmailEnabled) {
-    if (!process.env.RESEND_API_KEY || !process.env.RESEND_API_KEY.trim()) {
-      throw new Error(
-        'Invalid email configuration: Missing required RESEND_API_KEY environment variable when email OTP is enabled.'
-      );
+    if (emailProvider === 'resend') {
+      const resendKey = (process.env.RESEND_API_KEY || '').trim();
+      if (!resendKey) {
+        throw new Error(
+          'Invalid email configuration: Missing required RESEND_API_KEY environment variable when EMAIL_PROVIDER is "resend".'
+        );
+      }
+    } else if (emailProvider === 'zoho') {
+      const zohoKey = (
+        process.env.ZOHO_ZEPTOMAIL_API_KEY ||
+        process.env.ZOHO_ZEPTOMAIL_TOKEN ||
+        process.env.ZEPTOMAIL_API_KEY ||
+        ''
+      ).trim();
+      if (!zohoKey) {
+        throw new Error(
+          'Invalid email configuration: Missing required ZOHO_ZEPTOMAIL_API_KEY environment variable when EMAIL_PROVIDER is "zoho".'
+        );
+      }
     }
   }
+
+  // Log active email provider on startup
+  console.log(`[Email] Transactional email provider initialized: ${emailProvider}`);
 
   let cloudinaryCloudName = (process.env.CLOUDINARY_CLOUD_NAME || '').trim();
   let cloudinaryApiKey = (process.env.CLOUDINARY_API_KEY || '').trim();
@@ -180,14 +207,25 @@ const validateEnv = () => {
     razorpayKeyId: process.env.RAZORPAY_KEY_ID || '',
     razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || '',
     razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
-    emailProvider: process.env.EMAIL_PROVIDER || 'resend',
+    emailProvider,
     resendApiKey: (process.env.RESEND_API_KEY || '').trim(),
+    resendFromEmail: (process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM || 'BentoBabu <verify@bentobabu.com>').trim(),
+    zohoZeptomailApiKey: (
+      process.env.ZOHO_ZEPTOMAIL_API_KEY ||
+      process.env.ZOHO_ZEPTOMAIL_TOKEN ||
+      process.env.ZEPTOMAIL_API_KEY ||
+      ''
+    ).trim(),
+    zohoZeptomailFromEmail: (process.env.ZOHO_ZEPTOMAIL_FROM_EMAIL || process.env.EMAIL_FROM || 'verify@bentobabu.com').trim(),
+    zohoZeptomailFromName: (process.env.ZOHO_ZEPTOMAIL_FROM_NAME || 'BentoBabu').trim(),
     smtpHost: process.env.SMTP_HOST || '',
     smtpPort: parseInt(process.env.SMTP_PORT, 10) || 465,
     smtpSecure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === 'true' : parseInt(process.env.SMTP_PORT, 10) === 465,
     smtpUser: process.env.SMTP_USER || '',
     smtpPassword: process.env.SMTP_PASSWORD || '',
-    emailFrom: process.env.EMAIL_FROM || 'BentoBabu <verify@bentobabu.com>',
+    emailFrom: emailProvider === 'zoho'
+      ? (process.env.ZOHO_ZEPTOMAIL_FROM_EMAIL || process.env.EMAIL_FROM || 'verify@bentobabu.com').trim()
+      : (process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM || 'BentoBabu <verify@bentobabu.com>').trim(),
     whatsappEnabled: process.env.WHATSAPP_ENABLED === 'true',
     whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
     whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
