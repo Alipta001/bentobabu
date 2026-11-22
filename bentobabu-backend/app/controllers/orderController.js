@@ -15,6 +15,7 @@ const {
 const NotificationDispatcher = require('../utils/notificationDispatcher');
 const { redisDelPattern } = require('../config/redis');
 const { getKolkataDateString } = require('../utils/businessDate');
+const { normalizePincode } = require('../utils/pincode');
 const AdminSettingsController = require('./adminSettingsController');
 const DailyInventoryService = require('../services/dailyInventoryService');
 const { generateOrderReceiptPdf } = require('../utils/receiptGenerator');
@@ -71,8 +72,9 @@ class OrderController {
       }
 
       // 2. Validate Delivery Zone
+      const cleanPin = normalizePincode(address.pincode) || address.pincode;
       const zone = await DeliveryZone.findOne({
-        pincodes: address.pincode,
+        pincodes: cleanPin,
         isActive: true,
         isDeleted: { $ne: true },
       });
@@ -81,9 +83,9 @@ class OrderController {
         return res.status(400).json({
           success: false,
           code: 'UNSERVICEABLE_LOCATION',
-          message: `Delivery is currently not serviceable to PIN code ${address.pincode}`,
+          message: `Delivery is currently not serviceable to PIN code ${cleanPin}`,
           data: {
-            pincode: address.pincode,
+            pincode: cleanPin,
             city: address.city,
             state: address.state,
           },
@@ -147,7 +149,7 @@ class OrderController {
 
       const dailyInvMap = await DailyInventoryService.getInventoryMapForDate(
         productIds,
-        todayKolkata
+        todayStr
       );
 
       let itemTotalPaise = 0;
@@ -196,7 +198,7 @@ class OrderController {
               productName: prod.name,
               requestedQuantity: item.quantity,
               availableQuantity: effectiveAvailable,
-              serviceDate: todayKolkata,
+              serviceDate: todayStr,
             },
           });
         }
@@ -376,6 +378,8 @@ class OrderController {
           itemTotal: itemTotalPaise / 100,
           deliveryAddress: address,
           deliveryZone: zone,
+          zoneName: zone ? zone.name : null,
+          pincode: cleanPin,
           deliverySlot: slot,
           coupon: appliedCoupon,
           couponDiscount: couponDiscountPaise / 100,
@@ -409,9 +413,9 @@ class OrderController {
     const { addressId, deliverySlotId, couponCode, paymentMethod } = req.body;
 
     const rawIdempotencyKey =
-      req.headers['idempotency-key'] ||
-      req.headers['x-idempotency-key'] ||
-      req.body.idempotencyKey;
+      req.headers?.['idempotency-key'] ||
+      req.headers?.['x-idempotency-key'] ||
+      req.body?.idempotencyKey;
     const idempotencyKey =
       typeof rawIdempotencyKey === 'string' && rawIdempotencyKey.trim()
         ? rawIdempotencyKey.trim()
@@ -514,8 +518,9 @@ class OrderController {
     }
 
     // 2. Verify Delivery Zone
+    const cleanPin = normalizePincode(address.pincode) || address.pincode;
     const zone = await DeliveryZone.findOne({
-      pincodes: address.pincode,
+      pincodes: cleanPin,
       isActive: true,
       isDeleted: { $ne: true },
     });
@@ -524,9 +529,9 @@ class OrderController {
       return res.status(400).json({
         success: false,
         code: 'UNSERVICEABLE_LOCATION',
-        message: `Delivery is currently not serviceable to PIN code ${address.pincode}`,
+        message: `Delivery is currently not serviceable to PIN code ${cleanPin}`,
         data: {
-          pincode: address.pincode,
+          pincode: cleanPin,
           city: address.city,
           state: address.state,
         },
@@ -563,6 +568,20 @@ class OrderController {
       }
     }
     const deliveryChargePaise = Math.round(adminDeliveryCharge * 100);
+
+    // Validate cart and pre-warm daily inventory records before transaction starts
+    // to prevent MongoDB snapshot isolation anomalies across transaction boundaries
+    const preCart = await Cart.findOne({ user: req.user.id });
+    if (!preCart || !Array.isArray(preCart.items) || preCart.items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Your cart is empty',
+      });
+    }
+
+    for (const it of preCart.items) {
+      await DailyInventoryService.getOrCreateDailyInventory(it.product, todayStr);
+    }
 
     const maxRetries = 10;
     let attempt = 0;
@@ -873,7 +892,7 @@ class OrderController {
           landmark: address.landmark || '',
           city: address.city,
           state: address.state,
-          pincode: address.pincode,
+          pincode: cleanPin,
           addressType: address.addressType,
         };
 

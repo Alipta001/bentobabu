@@ -236,9 +236,12 @@ export default function CheckoutPage() {
     return savedAddresses.find((a) => a.id === selectedAddressId || a._id === selectedAddressId) || null;
   }, [savedAddresses, selectedAddressId]);
 
-  const activePincode = activeAddress
-    ? activeAddress.pincode
-    : newAddressData.pincode;
+  const activePincode = useMemo(() => {
+    const rawPin = activeAddress ? activeAddress.pincode : newAddressData.pincode;
+    if (!rawPin) return "";
+    const digits = String(rawPin).replace(/\D/g, "");
+    return digits.length === 6 ? digits : String(rawPin).trim();
+  }, [activeAddress, newAddressData.pincode]);
 
   // Live serviceability check for active address PIN
   const { data: serviceability, isLoading: isCheckingServiceability } =

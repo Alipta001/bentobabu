@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { DeliveryZone, DeliverySlot, Order } = require('../models');
+const { normalizePincode } = require('../utils/pincode');
 
 /**
  * Class-based Controller for Admin Delivery Configuration & Slot Management
@@ -65,16 +66,17 @@ class AdminDeliveryController {
         });
       }
 
-      const cleanPincodes = [
-        ...new Set(pincodes.map((pin) => (typeof pin === 'string' ? pin.trim() : String(pin)))),
-      ];
-
-      for (const pin of cleanPincodes) {
-        if (!/^[1-9][0-9]{5}$/.test(pin)) {
+      const cleanPincodes = [];
+      for (const rawPin of pincodes) {
+        const pin = normalizePincode(rawPin);
+        if (!pin) {
           return res.status(400).json({
             success: false,
-            message: `Invalid PIN code: "${pin}". Must be a 6-digit Indian PIN code.`,
+            message: `Invalid PIN code: "${rawPin}". Must be a 6-digit Indian PIN code.`,
           });
+        }
+        if (!cleanPincodes.includes(pin)) {
+          cleanPincodes.push(pin);
         }
       }
 
@@ -90,7 +92,7 @@ class AdminDeliveryController {
           const conflictingPins = cleanPincodes.filter((p) => conflictZone.pincodes.includes(p));
           return res.status(409).json({
             success: false,
-            message: `PIN code(s) [${conflictingPins.join(', ')}] already belong to active zone: "${conflictZone.name}".`,
+            message: `PIN code(s) [${conflictingPins.join(', ')}] already belong to active zone: "${conflictZone.name}". A PIN code can belong to only one active delivery zone.`,
           });
         }
       }
@@ -194,15 +196,17 @@ class AdminDeliveryController {
             message: 'At least one PIN code is required.',
           });
         }
-        cleanPincodes = [
-          ...new Set(pincodes.map((pin) => (typeof pin === 'string' ? pin.trim() : String(pin)))),
-        ];
-        for (const pin of cleanPincodes) {
-          if (!/^[1-9][0-9]{5}$/.test(pin)) {
+        cleanPincodes = [];
+        for (const rawPin of pincodes) {
+          const pin = normalizePincode(rawPin);
+          if (!pin) {
             return res.status(400).json({
               success: false,
-              message: `Invalid PIN code: "${pin}". Must be a 6-digit Indian PIN code.`,
+              message: `Invalid PIN code: "${rawPin}". Must be a 6-digit Indian PIN code.`,
             });
+          }
+          if (!cleanPincodes.includes(pin)) {
+            cleanPincodes.push(pin);
           }
         }
       }
@@ -252,7 +256,7 @@ class AdminDeliveryController {
           const conflictingPins = cleanPincodes.filter((p) => conflictZone.pincodes.includes(p));
           return res.status(409).json({
             success: false,
-            message: `PIN code(s) [${conflictingPins.join(', ')}] already belong to active zone: "${conflictZone.name}".`,
+            message: `PIN code(s) [${conflictingPins.join(', ')}] already belong to active zone: "${conflictZone.name}". A PIN code can belong to only one active delivery zone.`,
           });
         }
       }
@@ -321,7 +325,7 @@ class AdminDeliveryController {
           const conflictingPins = zone.pincodes.filter((p) => conflictZone.pincodes.includes(p));
           return res.status(409).json({
             success: false,
-            message: `Cannot activate zone. PIN code(s) [${conflictingPins.join(', ')}] already active in zone: "${conflictZone.name}".`,
+            message: `Cannot activate zone "${zone.name}". PIN code(s) [${conflictingPins.join(', ')}] already belong to active zone: "${conflictZone.name}". A PIN code can belong to only one active delivery zone.`,
           });
         }
       }

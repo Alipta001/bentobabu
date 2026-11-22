@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { Address } = require('../models');
+const { normalizePincode } = require('../utils/pincode');
 
 class AddressController {
   /**
@@ -43,7 +44,8 @@ class AddressController {
         });
       }
 
-      if (!pincode || typeof pincode !== 'string' || !/^[1-9][0-9]{5}$/.test(pincode.trim())) {
+      const cleanPin = normalizePincode(pincode);
+      if (!cleanPin) {
         return res.status(400).json({
           success: false,
           message: 'Please provide a valid 6-digit Indian PIN code',
@@ -83,7 +85,7 @@ class AddressController {
         landmark: typeof landmark === 'string' ? landmark.trim() : '',
         city: typeof city === 'string' && city.trim() ? city.trim() : 'Barrackpore',
         state: typeof state === 'string' && state.trim() ? state.trim() : 'West Bengal',
-        pincode: pincode.trim(),
+        pincode: cleanPin,
         addressType: normalizedType,
         latitude: typeof latitude === 'number' ? latitude : null,
         longitude: typeof longitude === 'number' ? longitude : null,
@@ -219,10 +221,11 @@ class AddressController {
       }
 
       if (pincode !== undefined) {
-        if (typeof pincode !== 'string' || !/^[1-9][0-9]{5}$/.test(pincode.trim())) {
+        const cleanPin = normalizePincode(pincode);
+        if (!cleanPin) {
           return res.status(400).json({ success: false, message: 'Please provide a valid 6-digit Indian PIN code' });
         }
-        address.pincode = pincode.trim();
+        address.pincode = cleanPin;
       }
 
       if (addressType !== undefined) {

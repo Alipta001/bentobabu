@@ -91,7 +91,10 @@ export default function DeliveryZonesPage() {
     try {
       const pins = zonePincodes
         .split(",")
-        .map((p) => p.trim())
+        .map((p) => {
+          const digits = p.replace(/\D/g, "");
+          return digits.length === 6 ? digits : p.trim();
+        })
         .filter(Boolean);
 
       await createZoneMutation.mutateAsync({
@@ -139,7 +142,10 @@ export default function DeliveryZonesPage() {
     try {
       const pins = editZonePincodes
         .split(",")
-        .map((p) => p.trim())
+        .map((p) => {
+          const digits = p.replace(/\D/g, "");
+          return digits.length === 6 ? digits : p.trim();
+        })
         .filter(Boolean);
 
       await updateZoneMutation.mutateAsync({

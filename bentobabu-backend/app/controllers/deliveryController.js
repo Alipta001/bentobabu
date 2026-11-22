@@ -1,5 +1,6 @@
 const { DeliveryZone, DeliverySlot, SystemSetting } = require('../models');
 const { isDeliveryOtpRequired } = require('../config/env');
+const { normalizePincode } = require('../utils/pincode');
 
 class DeliveryController {
   /**
@@ -9,15 +10,14 @@ class DeliveryController {
   static async checkServiceability(req, res, next) {
     try {
       const { pincode } = req.query;
+      const cleanPin = normalizePincode(pincode);
 
-      if (!pincode || typeof pincode !== 'string' || !/^[1-9][0-9]{5}$/.test(pincode.trim())) {
+      if (!cleanPin) {
         return res.status(400).json({
           success: false,
           message: 'Please provide a valid 6-digit Indian postal PIN code',
         });
       }
-
-      const cleanPin = pincode.trim();
 
       // Query only currently active and non-deleted delivery zones
       const zone = await DeliveryZone.findOne({
@@ -65,6 +65,7 @@ class DeliveryController {
         success: true,
         serviceable: true,
         data: {
+          pincode: cleanPin,
           zoneName: zone.name,
           deliveryCharge: finalDeliveryCharge,
           deliveryFee: finalDeliveryCharge,
@@ -74,6 +75,7 @@ class DeliveryController {
           zone: {
             id: zone._id.toString(),
             name: zone.name,
+            pincode: cleanPin,
             deliveryCharge: finalDeliveryCharge,
             deliveryFee: finalDeliveryCharge,
             minimumOrderAmount: effectiveMinOrder,
@@ -161,14 +163,13 @@ class DeliveryController {
       const { pincode, date } = req.query;
 
       // 1. PIN code validation
-      if (!pincode || typeof pincode !== 'string' || !/^[1-9][0-9]{5}$/.test(pincode.trim())) {
+      const cleanPin = normalizePincode(pincode);
+      if (!cleanPin) {
         return res.status(400).json({
           success: false,
           message: 'Please provide a valid 6-digit Indian postal PIN code',
         });
       }
-
-      const cleanPin = pincode.trim();
 
       // 2. Validate zone serviceability
       const zone = await DeliveryZone.findOne({

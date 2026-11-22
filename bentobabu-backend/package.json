@@ -33,6 +33,7 @@
     "test:multi-category": "node test/multi_category_assignment_and_filtering.test.js",
     "test:rich-text": "node test/rich_text_description_sanitization.test.js",
     "test:product-payload": "node test/product_payload_size_and_creation.test.js",
+    "test:checkout-summary": "node test/checkout_summary_and_zone_pincode_separation.test.js",
     "test:all": "npm test"
   },
   "author": "Alipta Ghosh",

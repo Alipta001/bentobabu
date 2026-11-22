@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { ServiceExpansionVote, DeliveryZone } = require('../models');
+const { normalizePincode } = require('../utils/pincode');
 
 /**
  * Class-based Controller for Service Area Expansion Voting System
@@ -29,8 +30,8 @@ class ServiceExpansionController {
         });
       }
 
-      const cleanPin = pincode.trim();
-      if (!/^[1-9][0-9]{5}$/.test(cleanPin)) {
+      const cleanPin = normalizePincode(pincode);
+      if (!cleanPin) {
         return res.status(400).json({
           success: false,
           message: 'Please enter a valid 6-digit Indian postal PIN code (e.g., 700122)',

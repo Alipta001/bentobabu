@@ -21,14 +21,15 @@ class DailyInventoryService {
    * @param {string|ObjectId} productId
    * @param {string} [serviceDate]
    */
-  static async getOrCreateDailyInventory(productId, serviceDate = getKolkataDateString()) {
+  static async getOrCreateDailyInventory(productId, serviceDate = getKolkataDateString(), session = null) {
     const sDate = this.resolveServiceDate(serviceDate);
     const prodId = new mongoose.Types.ObjectId(productId);
 
-    let doc = await DailyInventory.findOne({ product: prodId, serviceDate: sDate });
+    const findOpts = session ? { session } : {};
+    let doc = await DailyInventory.findOne({ product: prodId, serviceDate: sDate }, null, findOpts);
     if (!doc) {
       // Find product to seed default threshold and master stock if same-day
-      const product = await Product.findById(prodId).lean();
+      const product = await Product.findById(prodId, null, findOpts).lean();
       if (!product) {
         throw new Error('Product not found');
       }
@@ -37,7 +38,7 @@ class DailyInventoryService {
       const initialStock = isToday ? (product.stockQuantity || 0) : 0;
 
       try {
-        doc = await DailyInventory.create({
+        const createData = {
           product: prodId,
           serviceDate: sDate,
           initialStock,
@@ -47,11 +48,17 @@ class DailyInventoryService {
           soldQuantity: 0,
           isManuallyDisabled: !product.isAvailable,
           lowStockThreshold: product.lowStockThreshold || 5,
-        });
+        };
+        if (session) {
+          const created = await DailyInventory.create([createData], { session });
+          doc = created[0];
+        } else {
+          doc = await DailyInventory.create(createData);
+        }
       } catch (err) {
         // Handle race condition if created concurrently
         if (err.code === 11000) {
-          doc = await DailyInventory.findOne({ product: prodId, serviceDate: sDate });
+          doc = await DailyInventory.findOne({ product: prodId, serviceDate: sDate }, null, findOpts);
         } else {
           throw err;
         }
@@ -293,7 +300,7 @@ class DailyInventoryService {
         const qty = Number(item.quantity);
 
         // Ensure daily inventory document exists
-        await this.getOrCreateDailyInventory(prodId, sDate);
+        await this.getOrCreateDailyInventory(prodId, sDate, currentSession);
 
         // Atomic conditional increment: totalStock - reservedQuantity >= qty
         // In MongoDB: $expr: { $gte: [{ $subtract: ['$totalStock', '$reservedQuantity'] }, qty] }
@@ -311,8 +318,8 @@ class DailyInventoryService {
         };
 
         const opts = currentSession
-          ? { new: true, session: currentSession }
-          : { new: true };
+          ? { returnDocument: 'after', session: currentSession }
+          : { returnDocument: 'after' };
 
         const updated = await DailyInventory.findOneAndUpdate(updateQuery, updateDoc, opts);
 
