@@ -37,6 +37,7 @@
     "test:delivery-slots": "node test/delivery_slot_recurring_and_date_scheduling.test.js",
     "test:cancellations": "node test/cancellation_workflow_and_refund.test.js",
     "test:cancellation-safety": "node test/cancellation_safety_audit.test.js",
+    "test:order-images": "node test/admin_order_images.test.js",
     "test:all": "npm test"
   },
   "author": "Alipta Ghosh",

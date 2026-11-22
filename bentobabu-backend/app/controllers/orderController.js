@@ -763,10 +763,19 @@ class OrderController {
           const subtotalPaise = pricePaise * it.quantity;
           itemTotalPaise += subtotalPaise;
 
+          const productImg =
+            (product.images && product.images.length > 0 && typeof product.images[0] === 'string' && product.images[0].trim()
+              ? product.images[0].trim()
+              : null) ||
+            (product.imagesData && product.imagesData.length > 0 && product.imagesData[0]?.secureUrl
+              ? product.imagesData[0].secureUrl.trim()
+              : null) ||
+            '';
+
           itemSnapshots.push({
             product: product._id,
             productName: product.name,
-            image: product.images && product.images.length > 0 ? product.images[0] : '',
+            image: productImg,
             quantity: it.quantity,
             unitPrice: product.price,
             subtotal: subtotalPaise / 100,
@@ -1130,15 +1139,36 @@ class OrderController {
       const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
       const skip = (page - 1) * limit;
 
-      const [orders, total] = await Promise.all([
+      const [rawOrders, total] = await Promise.all([
         Order.find({ user: req.user.id })
           .sort({ createdAt: -1 })
           .skip(skip)
           .limit(limit)
           .populate('deliverySlot', 'label startTime endTime date')
-          .populate('deliveryZone', 'name estimatedDeliveryMinutes'),
+          .populate('deliveryZone', 'name estimatedDeliveryMinutes')
+          .populate('items.product', 'name images imagesData price isAvailable')
+          .lean(),
         Order.countDocuments({ user: req.user.id }),
       ]);
+
+      const orders = rawOrders.map((ord) => {
+        if (Array.isArray(ord.items)) {
+          ord.items = ord.items.map((it) => {
+            const prod = typeof it.product === 'object' && it.product !== null ? it.product : null;
+            const fallbackImg =
+              (prod?.images && prod.images.length > 0 ? prod.images[0] : null) ||
+              (prod?.imagesData && prod.imagesData.length > 0 ? prod.imagesData[0]?.secureUrl : null) ||
+              '';
+            const resolvedImg = it.image || it.productImage || fallbackImg || '';
+            return {
+              ...it,
+              image: resolvedImg,
+              productImage: resolvedImg,
+            };
+          });
+        }
+        return ord;
+      });
 
       return res.status(200).json({
         success: true,
@@ -1176,6 +1206,7 @@ class OrderController {
         .populate('deliverySlot', 'label startTime endTime date')
         .populate('deliveryZone', 'name estimatedDeliveryMinutes')
         .populate('coupon', 'code discountType discountValue')
+        .populate('items.product', 'name images imagesData price isAvailable')
         .select('+deliveryOtpCode');
 
       if (!order) {
@@ -1186,6 +1217,22 @@ class OrderController {
       }
 
       const orderData = order.toJSON();
+
+      if (Array.isArray(orderData.items)) {
+        orderData.items = orderData.items.map((it) => {
+          const prod = typeof it.product === 'object' && it.product !== null ? it.product : null;
+          const fallbackImg =
+            (prod?.images && prod.images.length > 0 ? prod.images[0] : null) ||
+            (prod?.imagesData && prod.imagesData.length > 0 ? prod.imagesData[0]?.secureUrl : null) ||
+            '';
+          const resolvedImg = it.image || it.productImage || fallbackImg || '';
+          return {
+            ...it,
+            image: resolvedImg,
+            productImage: resolvedImg,
+          };
+        });
+      }
 
       // Retrieve latest cancellation request if any
       const CancellationRequest = require('../models/CancellationRequest');

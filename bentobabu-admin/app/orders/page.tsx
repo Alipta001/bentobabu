@@ -66,6 +66,16 @@ function OrdersContent() {
   const [adminRejectionReason, setAdminRejectionReason] = useState<string>("");
   const [cancellationActionError, setCancellationActionError] = useState<string | null>(null);
 
+  // Safe image error handler preventing infinite reload loops
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    const target = e.currentTarget;
+    if (!target.src.includes("/images/placeholder.png")) {
+      target.src = "/images/placeholder.png";
+    } else {
+      target.onerror = null;
+    }
+  };
+
   const { data: orders = [], isLoading, refetch } = useAdminOrders({
     status: activeStatus,
     search: searchQuery,
@@ -355,14 +365,25 @@ function OrdersContent() {
                     </td>
 
                     <td className="py-4 px-4 text-[#667266]">
-                      <div className="font-medium text-[#1F271F] line-clamp-1">
-                        {order.items[0]?.productName}
-                      </div>
-                      {order.items.length > 1 && (
-                        <div className="text-[10px] text-[#B99A60] font-semibold">
-                          +{order.items.length - 1} other items
+                      <div className="flex items-center gap-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={order.items[0]?.productImage || "/images/placeholder.png"}
+                          alt={order.items[0]?.productName || "Bento Item"}
+                          onError={handleImageError}
+                          className="w-10 h-10 rounded-xl object-cover border border-[#E5DFC5] bg-[#F7F3EA] shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="font-medium text-[#1F271F] line-clamp-1">
+                            {order.items[0]?.productName || "Bento Item"}
+                          </div>
+                          {order.items.length > 1 && (
+                            <div className="text-[10px] text-[#B99A60] font-semibold">
+                              +{order.items.length - 1} other item{order.items.length > 2 ? "s" : ""}
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </td>
 
                     <td className="py-4 px-4 font-bold text-[#1F271F]">
@@ -889,23 +910,24 @@ function OrdersContent() {
               {/* Items Card */}
               <div className="p-4 bg-white rounded-2xl border border-[#E5DFC5] space-y-3">
                 <h4 className="font-bold text-xs uppercase tracking-wider text-[#667266]">
-                  Meal Items in Bento Box
+                  Meal Items in Bento Box ({selectedOrder.items.length})
                 </h4>
                 <div className="divide-y divide-[#F0ECE1]">
                   {selectedOrder.items.map((item, idx) => (
                     <div
                       key={idx}
-                      className="py-2.5 flex items-center justify-between text-xs"
+                      className="py-2.5 flex items-center justify-between text-xs gap-3"
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={item.productImage}
-                          alt=""
-                          className="w-10 h-10 rounded-xl object-cover"
+                          src={item.productImage || "/images/placeholder.png"}
+                          alt={item.productName || "Bento item"}
+                          onError={handleImageError}
+                          className="w-12 h-12 rounded-xl object-cover border border-[#E5DFC5] bg-[#F7F3EA] shrink-0"
                         />
-                        <div>
-                          <div className="font-bold text-[#1F271F]">
+                        <div className="min-w-0">
+                          <div className="font-bold text-[#1F271F] line-clamp-1">
                             {item.quantity}x {item.productName}
                           </div>
                           <div className="text-[11px] text-[#667266]">
@@ -913,7 +935,7 @@ function OrdersContent() {
                           </div>
                         </div>
                       </div>
-                      <span className="font-bold text-[#354B35]">
+                      <span className="font-bold text-[#354B35] shrink-0">
                         ₹{item.price * item.quantity}
                       </span>
                     </div>

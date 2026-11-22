@@ -14,9 +14,11 @@ export interface BackendOrder {
     phone: string;
   };
   items: Array<{
-    product: string | { _id: string; name: string };
+    product: string | { _id: string; name?: string; images?: string[]; imagesData?: Array<{ secureUrl?: string }> };
     productName: string;
+    image?: string;
     productImage?: string;
+    unitPrice?: number;
     price: number;
     quantity: number;
     subtotal: number;
@@ -103,13 +105,22 @@ export const mapBackendOrder = (o: BackendOrder): Order & { _backendId: string; 
     customerName: o.user?.name || addr?.fullName || "Guest Customer",
     customerEmail: o.user?.email || "customer@bentobabu.in",
     customerPhone: o.user?.phone || addr?.phone || "",
-    items: (o.items || []).map((it) => ({
-      productId: typeof it.product === "object" ? it.product._id : it.product || "",
-      productName: it.productName || "Bento Item",
-      productImage: it.productImage || "/images/placeholder.png",
-      price: it.price || 0,
-      quantity: it.quantity || 1,
-    })),
+    items: (o.items || []).map((it: any) => {
+      const prod = typeof it.product === "object" && it.product !== null ? it.product : null;
+      const rawImg =
+        it.image ||
+        it.productImage ||
+        prod?.images?.[0] ||
+        prod?.imagesData?.[0]?.secureUrl ||
+        "";
+      return {
+        productId: prod?._id || it.product || "",
+        productName: it.productName || prod?.name || "Bento Item",
+        productImage: rawImg || "/images/placeholder.png",
+        price: it.unitPrice || it.price || 0,
+        quantity: it.quantity || 1,
+      };
+    }),
     subtotal: o.subtotal || 0,
     discount: o.couponDiscount || 0,
     deliveryFee: o.deliveryCharge || 0,

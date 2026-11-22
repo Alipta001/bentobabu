@@ -80,6 +80,7 @@ class AdminOrderController {
           .populate('user', 'name email phone')
           .populate('deliverySlot', 'date label startTime endTime')
           .populate('assignedDeliveryPartner', 'name phone')
+          .populate('items.product', 'name images imagesData price isAvailable')
           .sort(sort)
           .skip(skip)
           .limit(limitNum)
@@ -87,10 +88,29 @@ class AdminOrderController {
         Order.countDocuments(filter),
       ]);
 
+      const normalizedOrders = orders.map((ord) => {
+        if (Array.isArray(ord.items)) {
+          ord.items = ord.items.map((it) => {
+            const prod = typeof it.product === 'object' && it.product !== null ? it.product : null;
+            const fallbackImg =
+              (prod?.images && prod.images.length > 0 ? prod.images[0] : null) ||
+              (prod?.imagesData && prod.imagesData.length > 0 ? prod.imagesData[0]?.secureUrl : null) ||
+              '';
+            const resolvedImg = it.image || it.productImage || fallbackImg || '';
+            return {
+              ...it,
+              image: resolvedImg,
+              productImage: resolvedImg,
+            };
+          });
+        }
+        return ord;
+      });
+
       return res.status(200).json({
         success: true,
         data: {
-          orders,
+          orders: normalizedOrders,
           pagination: {
             totalOrders,
             totalPages: Math.ceil(totalOrders / limitNum) || 1,
@@ -124,12 +144,29 @@ class AdminOrderController {
         .populate('deliverySlot', 'date label startTime endTime')
         .populate('assignedDeliveryPartner', 'name email phone')
         .populate('statusHistory.changedBy', 'name role')
+        .populate('items.product', 'name images imagesData price isAvailable')
         .lean();
 
       if (!order) {
         return res.status(404).json({
           success: false,
           message: 'Order not found.',
+        });
+      }
+
+      if (Array.isArray(order.items)) {
+        order.items = order.items.map((it) => {
+          const prod = typeof it.product === 'object' && it.product !== null ? it.product : null;
+          const fallbackImg =
+            (prod?.images && prod.images.length > 0 ? prod.images[0] : null) ||
+            (prod?.imagesData && prod.imagesData.length > 0 ? prod.imagesData[0]?.secureUrl : null) ||
+            '';
+          const resolvedImg = it.image || it.productImage || fallbackImg || '';
+          return {
+            ...it,
+            image: resolvedImg,
+            productImage: resolvedImg,
+          };
         });
       }
 

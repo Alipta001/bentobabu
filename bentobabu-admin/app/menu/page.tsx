@@ -38,6 +38,15 @@ import {
 export default function AdminDailyMenuPage() {
   const [activeTab, setActiveTab] = useState<"daily" | "weekly">("daily");
 
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    const target = e.currentTarget;
+    if (!target.src.includes("/images/placeholder.png")) {
+      target.src = "/images/placeholder.png";
+    } else {
+      target.onerror = null;
+    }
+  };
+
   // ==========================================
   // DAILY MENU STATE
   // ==========================================
@@ -457,7 +466,8 @@ export default function AdminDailyMenuPage() {
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={item.product.images?.[0] || "/images/placeholder.png"}
-                        alt=""
+                        alt={item.product.name || ""}
+                        onError={handleImageError}
                         className="w-14 h-14 rounded-xl object-cover border border-[#E5DFC5] shrink-0"
                       />
                       <div className="space-y-0.5 flex-1 min-w-0">
@@ -615,7 +625,8 @@ export default function AdminDailyMenuPage() {
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={prod.images?.[0] || "/images/placeholder.png"}
-                              alt=""
+                              alt={prod.name || ""}
+                              onError={handleImageError}
                               className="w-8 h-8 rounded-lg object-cover border border-[#E5DFC5]"
                             />
                             <span>{prod.name}</span>
