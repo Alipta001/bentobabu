@@ -18,6 +18,7 @@ const { getKolkataDateString } = require('../utils/businessDate');
 const { normalizePincode } = require('../utils/pincode');
 const AdminSettingsController = require('./adminSettingsController');
 const DailyInventoryService = require('../services/dailyInventoryService');
+const DeliverySlotService = require('../services/deliverySlotService');
 const { generateOrderReceiptPdf } = require('../utils/receiptGenerator');
 const orderReceiptService = require('../utils/orderReceiptService');
 const receiptQueue = require('../utils/receiptQueue');
@@ -969,6 +970,10 @@ class OrderController {
           );
         }
 
+        if (order.deliverySlot) {
+          DeliverySlotService.invalidateCache().catch(() => {});
+        }
+
         // Safely dispatch notifications after order creation and transaction commit
         NotificationDispatcher.dispatch({
           userId: req.user.id,
@@ -1404,6 +1409,9 @@ class OrderController {
       }
 
       // Safely dispatch order cancellation notification
+      if (order.deliverySlot) {
+        DeliverySlotService.invalidateCache().catch(() => {});
+      }
       NotificationDispatcher.dispatch({
         userId: order.user,
         orderId: order._id,

@@ -83,6 +83,12 @@ export const ADMIN_API_ENDPOINTS = {
     SLOTS: "/admin/delivery/slots",
     SLOT_DETAIL: (id: string) => `/admin/delivery/slots/${id}`,
     SLOT_STATUS: (id: string) => `/admin/delivery/slots/${id}/status`,
+    WEEKLY_SCHEDULE: "/admin/delivery/schedules/weekly",
+    WEEKLY_SCHEDULE_DAY: (day: number | string) => `/admin/delivery/schedules/weekly/${day}`,
+    WEEKLY_SCHEDULE_COPY: "/admin/delivery/schedules/weekly/copy",
+    DATE_SCHEDULE: (date: string) => `/admin/delivery/schedules/dates/${date}`,
+    UPDATE_DATE_SCHEDULE: (date: string) => `/admin/delivery/schedules/dates/${date}`,
+    RESTORE_DATE_SCHEDULE: (date: string) => `/admin/delivery/schedules/dates/${date}`,
   },
   COUPONS: {
     LIST: "/coupons",

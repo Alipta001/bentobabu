@@ -1,6 +1,7 @@
 const { DeliveryZone, DeliverySlot, SystemSetting } = require('../models');
 const { isDeliveryOtpRequired } = require('../config/env');
 const { normalizePincode } = require('../utils/pincode');
+const DeliverySlotService = require('../services/deliverySlotService');
 
 class DeliveryController {
   /**
@@ -156,7 +157,8 @@ class DeliveryController {
 
   /**
    * GET /api/v1/delivery/slots
-   * Retrieve available delivery slots for a serviceable PIN code on a specific date
+   * Retrieve available delivery slots for a serviceable PIN code on a specific date (Asia/Kolkata).
+   * Resolves recurring weekly schedule, date-specific overrides, capacity, and accurate state.
    */
   static async getAvailableSlots(req, res, next) {
     try {
@@ -179,9 +181,12 @@ class DeliveryController {
       });
 
       if (!zone) {
-        return res.status(400).json({
-          success: false,
-          message: `Delivery is not serviceable for PIN code ${cleanPin}`,
+        return res.status(200).json({
+          success: true,
+          serviceable: false,
+          state: 'UNSERVICEABLE',
+          message: `Delivery is currently not available for PIN code ${cleanPin}`,
+          data: [],
         });
       }
 
@@ -189,63 +194,41 @@ class DeliveryController {
       if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid date format. Expected YYYY-MM-DD (e.g. 2026-11-11)',
+          message: 'Invalid date format. Expected YYYY-MM-DD (e.g. 2026-11-22)',
         });
       }
 
       const cleanDate = date.trim();
-      const [year, month, day] = cleanDate.split('-').map(Number);
-      const targetStart = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
-      const targetEnd = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
 
-      if (isNaN(targetStart.getTime())) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid calendar date provided',
-        });
-      }
+      // 4. Resolve effective schedule from DeliverySlotService
+      const scheduleResult = await DeliverySlotService.getEffectiveScheduleForDate(cleanDate, false);
 
-      // Current server date and time comparison
-      const now = new Date();
-      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const isPastDate = cleanDate < todayStr;
-      const isToday = cleanDate === todayStr;
-
-      if (isPastDate) {
-        return res.status(200).json({
-          success: true,
-          data: [],
-        });
-      }
-
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
-
-      // Query active slots scheduled for this calendar date
-      const slots = await DeliverySlot.find({
-        date: { $gte: targetStart, $lte: targetEnd },
-        isActive: true,
-      }).sort({ startTime: 1 });
-
-      // Exclude full slots and past time windows for today
-      const availableSlots = slots
-        .filter((slot) => {
-          const hasCapacity = slot.bookedCount < slot.capacity;
-          const notPast = !isToday || slot.endTime > currentTimeStr;
-          return hasCapacity && notPast;
-        })
+      // Filter slots that are available to book right now
+      const availableSlots = (scheduleResult.slots || [])
+        .filter((slot) => slot.isAvailable)
         .map((slot) => ({
-          id: slot._id.toString(),
+          id: slot.id,
+          _id: slot.id,
+          date: slot.date,
+          dateStr: slot.dateStr,
+          slotKey: slot.slotKey,
           label: slot.label,
           startTime: slot.startTime,
           endTime: slot.endTime,
-          remainingCapacity: slot.capacity - slot.bookedCount,
+          capacity: slot.capacity,
+          bookedCount: slot.bookedCount,
+          remainingCapacity: slot.remainingCapacity,
+          scheduleSource: slot.scheduleSource,
+          isActive: slot.isActive,
         }));
 
       res.status(200).json({
         success: true,
+        serviceable: true,
+        state: scheduleResult.state,
+        message: scheduleResult.message,
         data: availableSlots,
+        allSlots: scheduleResult.slots,
       });
     } catch (error) {
       next(error);

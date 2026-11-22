@@ -1,6 +1,18 @@
 const mongoose = require('mongoose');
-const { DeliveryZone, DeliverySlot, Order } = require('../models');
+const {
+  DeliveryZone,
+  DeliverySlot,
+  Order,
+  WeeklyDeliverySchedule,
+  DateDeliverySchedule,
+} = require('../models');
 const { normalizePincode } = require('../utils/pincode');
+const DeliverySlotService = require('../services/deliverySlotService');
+const {
+  isValidDateString,
+  getDayOfWeek,
+  getDayName,
+} = require('../utils/businessDate');
 
 /**
  * Class-based Controller for Admin Delivery Configuration & Slot Management
@@ -396,7 +408,316 @@ class AdminDeliveryController {
   }
 
   // ==========================================
-  // DELIVERY SLOTS
+  // WEEKLY RECURRING SCHEDULES
+  // ==========================================
+
+  /**
+   * GET /api/v1/admin/delivery/schedules/weekly
+   * Retrieve weekly recurring schedules for all 7 days
+   */
+  static async getWeeklySchedule(req, res, next) {
+    try {
+      await DeliverySlotService.seedDefaultWeeklySchedule();
+      const schedules = await WeeklyDeliverySchedule.find().sort({ dayOfWeek: 1 }).lean();
+      return res.status(200).json({
+        success: true,
+        data: {
+          schedules,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PUT /api/v1/admin/delivery/schedules/weekly/:dayOfWeek
+   * Update weekly schedule for a specific day of week (0=Sunday ... 6=Saturday)
+   */
+  static async updateWeeklySchedule(req, res, next) {
+    try {
+      const { dayOfWeek } = req.params;
+      const { isDeliveryEnabled, slots } = req.body;
+      const dayNum = Number(dayOfWeek);
+
+      if (isNaN(dayNum) || dayNum < 0 || dayNum > 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid day of week. Must be an integer between 0 (Sunday) and 6 (Saturday).',
+        });
+      }
+
+      const timeFormat = /^([01]\d|2[0-3]):([0-5]\d)$/;
+      const cleanedSlots = [];
+
+      if (Array.isArray(slots)) {
+        for (const s of slots) {
+          if (!s.label || typeof s.label !== 'string' || !s.label.trim()) {
+            return res.status(400).json({ success: false, message: 'Each slot must have a non-empty label.' });
+          }
+          if (!s.startTime || !timeFormat.test(s.startTime)) {
+            return res.status(400).json({ success: false, message: `Invalid start time "${s.startTime}". Must be in HH:mm format.` });
+          }
+          if (!s.endTime || !timeFormat.test(s.endTime)) {
+            return res.status(400).json({ success: false, message: `Invalid end time "${s.endTime}". Must be in HH:mm format.` });
+          }
+          if (s.endTime <= s.startTime) {
+            return res.status(400).json({ success: false, message: `End time "${s.endTime}" must be after start time "${s.startTime}".` });
+          }
+          const cap = Number(s.capacity);
+          if (!Number.isInteger(cap) || cap < 1) {
+            return res.status(400).json({ success: false, message: 'Capacity must be an integer >= 1.' });
+          }
+
+          cleanedSlots.push({
+            slotKey: s.slotKey || DeliverySlotService.generateSlotKey(s.label, s.startTime, s.endTime),
+            label: s.label.trim(),
+            startTime: s.startTime,
+            endTime: s.endTime,
+            capacity: cap,
+            isActive: s.isActive !== false,
+            orderCutoffMinutes: Math.max(0, Number(s.orderCutoffMinutes) || 0),
+          });
+        }
+      }
+
+      const schedule = await WeeklyDeliverySchedule.findOneAndUpdate(
+        { dayOfWeek: dayNum },
+        {
+          $set: {
+            dayName: getDayName(dayNum),
+            isDeliveryEnabled: isDeliveryEnabled !== undefined ? Boolean(isDeliveryEnabled) : true,
+            slots: cleanedSlots,
+          },
+        },
+        { new: true, upsert: true, returnDocument: 'after' }
+      );
+
+      await DeliverySlotService.invalidateCache();
+
+      return res.status(200).json({
+        success: true,
+        message: `Weekly schedule for ${getDayName(dayNum)} updated successfully.`,
+        data: { schedule },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/delivery/schedules/weekly/copy
+   * Copy one day's schedule to other target days
+   */
+  static async copyWeeklySchedule(req, res, next) {
+    try {
+      const { fromDay, toDays } = req.body;
+      const fromNum = Number(fromDay);
+
+      if (isNaN(fromNum) || fromNum < 0 || fromNum > 6) {
+        return res.status(400).json({ success: false, message: 'Invalid fromDay. Must be 0-6.' });
+      }
+
+      if (!Array.isArray(toDays) || toDays.length === 0) {
+        return res.status(400).json({ success: false, message: 'toDays must be a non-empty array of day numbers.' });
+      }
+
+      const sourceSchedule = await WeeklyDeliverySchedule.findOne({ dayOfWeek: fromNum }).lean();
+      if (!sourceSchedule) {
+        return res.status(404).json({ success: false, message: 'Source day schedule not found.' });
+      }
+
+      for (const targetDay of toDays) {
+        const targetNum = Number(targetDay);
+        if (isNaN(targetNum) || targetNum < 0 || targetNum > 6) continue;
+        if (targetNum === fromNum) continue;
+
+        await WeeklyDeliverySchedule.findOneAndUpdate(
+          { dayOfWeek: targetNum },
+          {
+            $set: {
+              dayName: getDayName(targetNum),
+              isDeliveryEnabled: sourceSchedule.isDeliveryEnabled,
+              slots: sourceSchedule.slots.map((s) => ({
+                slotKey: s.slotKey,
+                label: s.label,
+                startTime: s.startTime,
+                endTime: s.endTime,
+                capacity: s.capacity,
+                isActive: s.isActive,
+                orderCutoffMinutes: s.orderCutoffMinutes || 0,
+              })),
+            },
+          },
+          { upsert: true }
+        );
+      }
+
+      await DeliverySlotService.invalidateCache();
+      const updatedSchedules = await WeeklyDeliverySchedule.find().sort({ dayOfWeek: 1 }).lean();
+
+      return res.status(200).json({
+        success: true,
+        message: `Schedule successfully copied from ${getDayName(fromNum)} to target days.`,
+        data: { schedules: updatedSchedules },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================
+  // DATE-SPECIFIC SCHEDULES
+  // ==========================================
+
+  /**
+   * GET /api/v1/admin/delivery/schedules/dates/:date
+   * Get effective schedule and date-specific overrides for a specific calendar date (YYYY-MM-DD)
+   */
+  static async getDateSchedule(req, res, next) {
+    try {
+      const { date } = req.params;
+      if (!isValidDateString(date)) {
+        return res.status(400).json({ success: false, message: 'Invalid date format. Expected YYYY-MM-DD.' });
+      }
+
+      const cleanDate = date.trim();
+      const dayOfWeek = getDayOfWeek(cleanDate);
+      const dayName = getDayName(dayOfWeek);
+
+      const [scheduleResult, dateConfig, weeklyConfig] = await Promise.all([
+        DeliverySlotService.getEffectiveScheduleForDate(cleanDate, true),
+        DateDeliverySchedule.findOne({ date: cleanDate }).lean(),
+        WeeklyDeliverySchedule.findOne({ dayOfWeek }).lean(),
+      ]);
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          date: cleanDate,
+          dayOfWeek,
+          dayName,
+          isClosed: scheduleResult.isClosed,
+          closureReason: scheduleResult.closureReason,
+          overrideMode: scheduleResult.overrideMode,
+          effectiveSlots: scheduleResult.slots,
+          dateConfig,
+          weeklyConfig,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PUT /api/v1/admin/delivery/schedules/dates/:date
+   * Set or update date-specific schedule overrides
+   */
+  static async updateDateSchedule(req, res, next) {
+    try {
+      const { date } = req.params;
+      if (!isValidDateString(date)) {
+        return res.status(400).json({ success: false, message: 'Invalid date format. Expected YYYY-MM-DD.' });
+      }
+
+      const cleanDate = date.trim();
+      const {
+        isClosed,
+        closureReason,
+        overrideMode = 'INHERIT',
+        disabledSlotKeys = [],
+        slotOverrides = [],
+        customSlots = [],
+      } = req.body;
+
+      if (!['INHERIT', 'REPLACE', 'ADDITIVE'].includes(overrideMode)) {
+        return res.status(400).json({ success: false, message: 'Invalid overrideMode. Expected INHERIT, REPLACE, or ADDITIVE.' });
+      }
+
+      const timeFormat = /^([01]\d|2[0-3]):([0-5]\d)$/;
+      const cleanedCustomSlots = [];
+      if (Array.isArray(customSlots)) {
+        for (const cs of customSlots) {
+          if (!cs.label || !cs.label.trim()) continue;
+          if (!cs.startTime || !timeFormat.test(cs.startTime)) continue;
+          if (!cs.endTime || !timeFormat.test(cs.endTime) || cs.endTime <= cs.startTime) continue;
+          cleanedCustomSlots.push({
+            slotKey: cs.slotKey || DeliverySlotService.generateSlotKey(cs.label, cs.startTime, cs.endTime),
+            label: cs.label.trim(),
+            startTime: cs.startTime,
+            endTime: cs.endTime,
+            capacity: Math.max(1, Number(cs.capacity) || 20),
+            isActive: cs.isActive !== false,
+          });
+        }
+      }
+
+      const dateSchedule = await DateDeliverySchedule.findOneAndUpdate(
+        { date: cleanDate },
+        {
+          $set: {
+            date: cleanDate,
+            isClosed: Boolean(isClosed),
+            closureReason: typeof closureReason === 'string' ? closureReason.trim() : '',
+            overrideMode,
+            disabledSlotKeys: Array.isArray(disabledSlotKeys) ? disabledSlotKeys : [],
+            slotOverrides: Array.isArray(slotOverrides) ? slotOverrides : [],
+            customSlots: cleanedCustomSlots,
+          },
+        },
+        { new: true, upsert: true, returnDocument: 'after' }
+      );
+
+      // Re-materialize effective slots and invalidate cache
+      const effective = await DeliverySlotService.getEffectiveScheduleForDate(cleanDate, true);
+      await DeliverySlotService.invalidateCache(cleanDate);
+
+      return res.status(200).json({
+        success: true,
+        message: `Date schedule for ${cleanDate} updated successfully.`,
+        data: {
+          dateSchedule,
+          effectiveSlots: effective.slots,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE /api/v1/admin/delivery/schedules/dates/:date
+   * Restore weekly recurring schedule for a specific date
+   */
+  static async restoreWeeklySchedule(req, res, next) {
+    try {
+      const { date } = req.params;
+      if (!isValidDateString(date)) {
+        return res.status(400).json({ success: false, message: 'Invalid date format. Expected YYYY-MM-DD.' });
+      }
+
+      const cleanDate = date.trim();
+      await DateDeliverySchedule.deleteOne({ date: cleanDate });
+
+      // Re-materialize effective schedule following weekly template
+      const effective = await DeliverySlotService.getEffectiveScheduleForDate(cleanDate, true);
+      await DeliverySlotService.invalidateCache(cleanDate);
+
+      return res.status(200).json({
+        success: true,
+        message: `Restored recurring weekly schedule for ${cleanDate}.`,
+        data: {
+          effectiveSlots: effective.slots,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================
+  // DELIVERY SLOTS (MATERIALIZED)
   // ==========================================
 
   /**
@@ -406,15 +727,30 @@ class AdminDeliveryController {
   static async getSlots(req, res, next) {
     try {
       const { date, startDate, endDate, isActive } = req.query;
-      const filter = {};
 
-      if (date) {
-        const slotDate = new Date(date);
-        slotDate.setHours(0, 0, 0, 0);
-        const nextDay = new Date(slotDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-        filter.date = { $gte: slotDate, $lt: nextDay };
-      } else if (startDate && endDate) {
+      if (date && typeof date === 'string' && isValidDateString(date.trim())) {
+        const cleanDate = date.trim();
+        const scheduleResult = await DeliverySlotService.getEffectiveScheduleForDate(cleanDate, true);
+        let slots = scheduleResult.slots || [];
+        if (isActive !== undefined && isActive !== '') {
+          const activeFilter = isActive === 'true' || isActive === true;
+          slots = slots.filter((s) => s.isActive === activeFilter);
+        }
+        return res.status(200).json({
+          success: true,
+          data: {
+            count: slots.length,
+            slots,
+            state: scheduleResult.state,
+            isClosed: scheduleResult.isClosed,
+            closureReason: scheduleResult.closureReason,
+            overrideMode: scheduleResult.overrideMode,
+          },
+        });
+      }
+
+      const filter = {};
+      if (startDate && endDate) {
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
         const end = new Date(endDate);
@@ -444,7 +780,7 @@ class AdminDeliveryController {
 
   /**
    * POST /api/v1/admin/delivery/slots
-   * Create a new delivery slot
+   * Create a new custom delivery slot for a specific date
    */
   static async createSlot(req, res, next) {
     try {
@@ -464,24 +800,11 @@ class AdminDeliveryController {
         });
       }
 
-      const slotDate = new Date(date);
-      if (isNaN(slotDate.getTime())) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid slot date format.',
-        });
-      }
+      const cleanDate = typeof date === 'string' && isValidDateString(date.trim())
+        ? date.trim()
+        : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(date));
 
-      slotDate.setHours(0, 0, 0, 0);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      if (slotDate < today) {
-        return res.status(400).json({
-          success: false,
-          message: 'Cannot create delivery slots for past dates.',
-        });
-      }
+      const slotDate = new Date(cleanDate + 'T00:00:00.000Z');
 
       if (!label || typeof label !== 'string' || !label.trim()) {
         return res.status(400).json({
@@ -520,11 +843,11 @@ class AdminDeliveryController {
         });
       }
 
-      // Check for duplicate slot on the same date and time interval
+      const slotKey = DeliverySlotService.generateSlotKey(label, startTime, endTime);
+
       const existingSlot = await DeliverySlot.findOne({
-        date: slotDate,
-        startTime,
-        endTime,
+        dateStr: cleanDate,
+        $or: [{ slotKey }, { startTime, endTime }],
       });
 
       if (existingSlot) {
@@ -536,13 +859,18 @@ class AdminDeliveryController {
 
       const slot = await DeliverySlot.create({
         date: slotDate,
+        dateStr: cleanDate,
+        slotKey,
         label: label.trim(),
         startTime,
         endTime,
         capacity: numCapacity,
         bookedCount: 0,
         isActive: Boolean(isActive),
+        scheduleSource: 'CUSTOM',
       });
+
+      await DeliverySlotService.invalidateCache(cleanDate);
 
       return res.status(201).json({
         success: true,
@@ -603,6 +931,16 @@ class AdminDeliveryController {
         });
       }
 
+      // If slot already has orders, prevent modifying timings destructively
+      if (slot.bookedCount > 0 && (startTime !== undefined || endTime !== undefined)) {
+        if (startTime !== slot.startTime || endTime !== slot.endTime) {
+          return res.status(400).json({
+            success: false,
+            message: `Cannot change timing on slot with ${slot.bookedCount} active booking(s). Disable this slot and create a new one instead.`,
+          });
+        }
+      }
+
       if (capacity !== undefined) {
         const numCapacity = Number(capacity);
         if (!Number.isInteger(numCapacity) || numCapacity < 1) {
@@ -627,6 +965,7 @@ class AdminDeliveryController {
       if (isActive !== undefined) slot.isActive = Boolean(isActive);
 
       await slot.save();
+      await DeliverySlotService.invalidateCache(slot.dateStr);
 
       return res.status(200).json({
         success: true,
@@ -671,11 +1010,54 @@ class AdminDeliveryController {
 
       slot.isActive = isActive;
       await slot.save();
+      await DeliverySlotService.invalidateCache(slot.dateStr);
 
       return res.status(200).json({
         success: true,
         message: `Delivery slot ${isActive ? 'activated' : 'deactivated'} successfully.`,
         data: { slot },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE /api/v1/admin/delivery/slots/:id
+   * Delete delivery slot (only if no booked orders)
+   */
+  static async deleteSlot(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid delivery slot ID format.',
+        });
+      }
+
+      const slot = await DeliverySlot.findById(id);
+      if (!slot) {
+        return res.status(404).json({
+          success: false,
+          message: 'Delivery slot not found.',
+        });
+      }
+
+      if (slot.bookedCount > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot delete delivery slot with ${slot.bookedCount} active order(s). Please disable the slot instead to prevent new bookings.`,
+        });
+      }
+
+      await DeliverySlot.deleteOne({ _id: id });
+      await DeliverySlotService.invalidateCache(slot.dateStr);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Delivery slot deleted successfully.',
       });
     } catch (error) {
       next(error);

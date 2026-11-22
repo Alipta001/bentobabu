@@ -686,6 +686,99 @@ export function useToggleDeliverySlot() {
   });
 }
 
+export function useDeleteDeliverySlot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deliveryService.deleteSlot(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliverySlots"] });
+    },
+  });
+}
+
+// Weekly Recurring Schedules Hooks
+export function useAdminWeeklySchedules() {
+  return useQuery({
+    queryKey: ["admin", "deliveryWeeklySchedules"],
+    queryFn: () => deliveryService.getWeeklySchedules(),
+  });
+}
+
+export function useUpdateWeeklySchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      dayOfWeek,
+      data,
+    }: {
+      dayOfWeek: number;
+      data: { isDeliveryEnabled?: boolean; slots: any[] };
+    }) => deliveryService.updateWeeklySchedule(dayOfWeek, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliveryWeeklySchedules"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliverySlots"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliveryDateSchedule"] });
+    },
+  });
+}
+
+export function useCopyWeeklySchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fromDay, toDays }: { fromDay: number; toDays: number[] }) =>
+      deliveryService.copyWeeklySchedule(fromDay, toDays),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliveryWeeklySchedules"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliverySlots"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliveryDateSchedule"] });
+    },
+  });
+}
+
+// Date-Specific Schedules Hooks
+export function useAdminDateSchedule(date: string) {
+  return useQuery({
+    queryKey: ["admin", "deliveryDateSchedule", date],
+    queryFn: () => deliveryService.getDateSchedule(date),
+    enabled: Boolean(date && /^\d{4}-\d{2}-\d{2}$/.test(date)),
+  });
+}
+
+export function useUpdateDateSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      date,
+      data,
+    }: {
+      date: string;
+      data: {
+        isClosed?: boolean;
+        closureReason?: string;
+        overrideMode?: "INHERIT" | "REPLACE" | "ADDITIVE";
+        disabledSlotKeys?: string[];
+        slotOverrides?: any[];
+        customSlots?: any[];
+      };
+    }) => deliveryService.updateDateSchedule(date, data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliveryDateSchedule", variables.date] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliverySlots"] });
+    },
+  });
+}
+
+export function useRestoreWeeklySchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (date: string) => deliveryService.restoreWeeklySchedule(date),
+    onSuccess: (_, date) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliveryDateSchedule", date] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "deliverySlots"] });
+    },
+  });
+}
+
 // ==========================================
 // REVIEWS
 // ==========================================

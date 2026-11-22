@@ -25,6 +25,8 @@ const SupportTicket = require('./SupportTicket');
 const SupportFaq = require('./SupportFaq');
 const ServiceExpansionVote = require('./ServiceExpansionVote');
 const DailyInventory = require('./DailyInventory');
+const WeeklyDeliverySchedule = require('./WeeklyDeliverySchedule');
+const DateDeliverySchedule = require('./DateDeliverySchedule');
 
 module.exports = {
   User,
@@ -54,5 +56,7 @@ module.exports = {
   SupportFaq,
   ServiceExpansionVote,
   DailyInventory,
+  WeeklyDeliverySchedule,
+  DateDeliverySchedule,
 };
 

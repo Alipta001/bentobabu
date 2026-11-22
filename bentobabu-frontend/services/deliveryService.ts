@@ -1,6 +1,6 @@
 import apiClient from "@/api/axios/axios";
 import { API_ENDPOINTS } from "@/api/endPoints/endPoints";
-import { DeliveryZone, DeliverySlot } from "@/types";
+import { DeliveryZone, DeliverySlot, DeliverySlotsResult } from "@/types";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -98,36 +98,62 @@ export const deliveryService = {
   /**
    * Retrieve available delivery slots for given PIN code and date (YYYY-MM-DD)
    */
-  async getSlots(pincode: string, date: string): Promise<DeliverySlot[]> {
+  async getSlots(pincode: string, date: string): Promise<DeliverySlotsResult> {
     try {
-      const response = await apiClient.get<
-        ApiResponse<{ slots: any[] }> | { slots: any[] }
-      >(API_ENDPOINTS.DELIVERY.SLOTS(pincode, date));
+      const response = await apiClient.get<any>(
+        API_ENDPOINTS.DELIVERY.SLOTS(pincode, date)
+      );
 
       const raw = response.data;
-      let list: any[] = [];
+      const dataPayload = raw && typeof raw === "object" && "data" in raw ? raw.data : raw;
 
-      if (raw && "data" in raw && Array.isArray(raw.data?.slots)) {
-        list = raw.data.slots;
-      } else if (raw && "slots" in raw && Array.isArray(raw.slots)) {
+      let list: any[] = [];
+      if (Array.isArray(dataPayload)) {
+        list = dataPayload;
+      } else if (dataPayload && Array.isArray(dataPayload.slots)) {
+        list = dataPayload.slots;
+      } else if (raw && Array.isArray(raw.slots)) {
         list = raw.slots;
-      } else if (Array.isArray(raw)) {
-        list = raw;
       }
 
-      return list.map((s) => ({
+      const state = raw?.state || (list.length > 0 ? "AVAILABLE" : "NO_SCHEDULE");
+      const message = raw?.message || (list.length > 0 ? "Slots available" : "No delivery slots scheduled");
+      const serviceable = raw?.serviceable !== false;
+
+      const slots: DeliverySlot[] = list.map((s) => ({
         id: s.id || s._id || "",
         _id: s._id || s.id || "",
         date: s.date,
+        dateStr: s.dateStr,
+        slotKey: s.slotKey,
+        label: s.label,
         startTime: s.startTime,
         endTime: s.endTime,
-        capacity: s.capacity,
-        bookedCount: s.bookedCount || 0,
+        capacity: typeof s.capacity === "number" ? s.capacity : 25,
+        bookedCount: typeof s.bookedCount === "number" ? s.bookedCount : 0,
+        remainingCapacity:
+          typeof s.remainingCapacity === "number"
+            ? s.remainingCapacity
+            : Math.max(0, (s.capacity || 25) - (s.bookedCount || 0)),
+        scheduleSource: s.scheduleSource || "WEEKLY",
         isActive: s.isActive !== false,
+        isAvailable: s.isAvailable !== false,
       }));
+
+      return {
+        slots,
+        state,
+        message,
+        serviceable,
+      };
     } catch (err) {
       console.error("[deliveryService] Error fetching slots:", err);
-      return [];
+      return {
+        slots: [],
+        state: "NO_SCHEDULE",
+        message: err instanceof Error ? err.message : "Error fetching delivery slots",
+        serviceable: true,
+      };
     }
   },
 

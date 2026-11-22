@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Clock, Calendar, AlertCircle, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Clock, Calendar, AlertCircle, CheckCircle2, Ban, CalendarX, Lock } from "lucide-react";
 import { useDeliverySlots } from "@/hooks/useQueries";
 import { DeliverySlot } from "@/types";
 
@@ -11,31 +11,66 @@ interface DeliverySlotPickerProps {
   onSelectSlot: (slot: DeliverySlot | null) => void;
 }
 
+/**
+ * Format date in Asia/Kolkata timezone as YYYY-MM-DD
+ */
+function getKolkataDateString(daysOffset: number): { dateStr: string; label: string } {
+  const d = new Date(Date.now() + daysOffset * 24 * 60 * 60 * 1000);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const dateStr = formatter.format(d);
+
+  let label = d.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+
+  if (daysOffset === 0) {
+    label = `Today, ${d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" })}`;
+  } else if (daysOffset === 1) {
+    label = `Tomorrow, ${d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" })}`;
+  }
+
+  return { dateStr, label };
+}
+
 export function DeliverySlotPicker({
   pincode,
   selectedSlotId,
   onSelectSlot,
 }: DeliverySlotPickerProps) {
-  // Generate date tabs: Today, Tomorrow, +2, +3
-  const dateOptions = React.useMemo(() => {
-    const list: Array<{ label: string; date: string }> = [];
-    const today = new Date();
-
-    for (let i = 0; i <= 3; i++) {
-      const d = new Date();
-      d.setDate(today.getDate() + i);
-      const dateString = d.toISOString().split("T")[0];
-      let label = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
-      if (i === 0) label = `Today, ${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
-      if (i === 1) label = `Tomorrow, ${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`;
-      list.push({ label, date: dateString });
-    }
-    return list;
+  // Generate 4 upcoming dates in Asia/Kolkata (Today, Tomorrow, +2, +3)
+  const dateOptions = useMemo(() => {
+    return [0, 1, 2, 3].map((offset) => getKolkataDateString(offset));
   }, []);
 
-  const [selectedDate, setSelectedDate] = useState<string>(dateOptions[0].date);
+  const [selectedDate, setSelectedDate] = useState<string>(dateOptions[0].dateStr);
 
-  const { data: slots = [], isLoading, error } = useDeliverySlots(pincode, selectedDate);
+  const { data: slotResult, isLoading, error } = useDeliverySlots(pincode, selectedDate);
+
+  const slots: DeliverySlot[] = useMemo(() => {
+    if (!slotResult) return [];
+    if (Array.isArray(slotResult)) return slotResult;
+    return slotResult.slots || [];
+  }, [slotResult]);
+
+  const scheduleState: string = useMemo(() => {
+    if (!slotResult || Array.isArray(slotResult)) {
+      return slots.length > 0 ? "AVAILABLE" : "NO_SCHEDULE";
+    }
+    return slotResult.state || (slots.length > 0 ? "AVAILABLE" : "NO_SCHEDULE");
+  }, [slotResult, slots.length]);
+
+  const scheduleMessage: string = useMemo(() => {
+    if (!slotResult || Array.isArray(slotResult)) return "";
+    return slotResult.message || "";
+  }, [slotResult]);
 
   // Auto-select first available slot if none selected or if selected slot not in current date
   useEffect(() => {
@@ -45,8 +80,12 @@ export function DeliverySlotPicker({
         const firstAvailable = slots.find((s) => s.isActive && (s.capacity - s.bookedCount > 0));
         if (firstAvailable) {
           onSelectSlot(firstAvailable);
+        } else {
+          onSelectSlot(null);
         }
       }
+    } else {
+      onSelectSlot(null);
     }
   }, [slots, selectedSlotId, onSelectSlot]);
 
@@ -65,11 +104,11 @@ export function DeliverySlotPicker({
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
         {dateOptions.map((opt) => (
           <button
-            key={opt.date}
+            key={opt.dateStr}
             type="button"
-            onClick={() => setSelectedDate(opt.date)}
+            onClick={() => setSelectedDate(opt.dateStr)}
             className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-              selectedDate === opt.date
+              selectedDate === opt.dateStr
                 ? "bg-[#354B35] text-white shadow-xs"
                 : "bg-[#F7F3EA] text-[#626F62] hover:bg-[#EDE8DE] border border-[#E5DFC5]"
             }`}
@@ -82,20 +121,72 @@ export function DeliverySlotPicker({
         ))}
       </div>
 
-      {/* Available Slots List */}
+      {/* Available Slots List or State-Specific Empty Message */}
       {isLoading ? (
         <div className="py-6 text-center text-xs text-[#6B776A] bg-[#F7F3EA] rounded-2xl border border-[#E5DFC5]">
           Loading delivery slots for {selectedDate}...
         </div>
-      ) : error || slots.length === 0 ? (
+      ) : error ? (
         <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
           <div className="flex items-center gap-1.5 font-bold">
             <AlertCircle className="w-4 h-4" />
-            <span>No Delivery Slots Scheduled</span>
+            <span>Unable to Load Slots</span>
           </div>
-          <p>
-            Slots for this date are fully booked or not yet open. Please choose another delivery day or check back shortly.
-          </p>
+          <p>We could not fetch delivery windows at this moment. Please try again.</p>
+        </div>
+      ) : slots.length === 0 ? (
+        <div className="p-4 rounded-2xl border text-xs space-y-1.5 transition-all">
+          {scheduleState === "ALL_FULL" ? (
+            <div className="bg-amber-50/80 -m-4 p-4 rounded-2xl border border-amber-200 text-amber-900 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <Ban className="w-4 h-4 text-amber-700" />
+                <span>All Delivery Slots Fully Booked</span>
+              </div>
+              <p className="text-amber-800 text-[11px] leading-relaxed">
+                All delivery windows for this date have reached kitchen batch capacity. Please select another delivery day.
+              </p>
+            </div>
+          ) : scheduleState === "BOOKING_CLOSED" ? (
+            <div className="bg-orange-50/80 -m-4 p-4 rounded-2xl border border-orange-200 text-orange-900 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <Lock className="w-4 h-4 text-orange-700" />
+                <span>Booking Closed For Today</span>
+              </div>
+              <p className="text-orange-800 text-[11px] leading-relaxed">
+                Order preparation cutoffs for today&apos;s delivery slots have passed. Please select tomorrow or an upcoming date.
+              </p>
+            </div>
+          ) : scheduleState === "DELIVERY_CLOSED" ? (
+            <div className="bg-rose-50/80 -m-4 p-4 rounded-2xl border border-rose-200 text-rose-900 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <CalendarX className="w-4 h-4 text-rose-700" />
+                <span>Kitchen Delivery Closed</span>
+              </div>
+              <p className="text-rose-800 text-[11px] leading-relaxed">
+                {scheduleMessage || "Kitchen delivery is unavailable on this date. Please choose another delivery day."}
+              </p>
+            </div>
+          ) : scheduleState === "UNSERVICEABLE" ? (
+            <div className="bg-rose-50/80 -m-4 p-4 rounded-2xl border border-rose-200 text-rose-900 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <AlertCircle className="w-4 h-4 text-rose-700" />
+                <span>PIN Code Not Serviceable</span>
+              </div>
+              <p className="text-rose-800 text-[11px] leading-relaxed">
+                {scheduleMessage || `Delivery is not currently serviceable to PIN code ${pincode}.`}
+              </p>
+            </div>
+          ) : (
+            <div className="bg-[#F7F3EA] -m-4 p-4 rounded-2xl border border-[#E5DFC5] text-[#4E5B4E] space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-[#1E2B1E]">
+                <Clock className="w-4 h-4 text-[#8A9A86]" />
+                <span>No Delivery Slots Scheduled</span>
+              </div>
+              <p className="text-[11px] text-[#6B776A] leading-relaxed">
+                No delivery windows have been configured for this date yet. Please select another date or check back shortly.
+              </p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -104,6 +195,7 @@ export function DeliverySlotPicker({
             const isFull = slot.bookedCount >= slot.capacity || !slot.isActive;
             const isSelected = selectedSlotId === slotId;
             const remaining = Math.max(0, slot.capacity - slot.bookedCount);
+            const slotLabel = slot.label || `${slot.startTime} – ${slot.endTime}`;
 
             return (
               <button
@@ -120,17 +212,20 @@ export function DeliverySlotPicker({
                 }`}
               >
                 <div className="space-y-0.5">
-                  <div className="flex items-center gap-1.5 font-bold text-xs text-[#222922]">
+                  <div className="flex items-center gap-1.5 font-bold text-xs text-[#1E2B1E]">
                     <Clock className={`w-3.5 h-3.5 ${isSelected ? "text-[#354B35]" : "text-[#8A9A86]"}`} />
-                    <span>{slot.startTime} – {slot.endTime}</span>
+                    <span>{slotLabel}</span>
                   </div>
-                  <div className="text-[10px] text-[#6B776A]">
+                  <div className="text-[11px] font-mono text-[#4E5B4E]">
+                    {slot.startTime} – {slot.endTime}
+                  </div>
+                  <div className="text-[10px]">
                     {isFull ? (
-                      <span className="text-red-600 font-semibold">Slot Full</span>
+                      <span className="text-rose-600 font-semibold">Slot Full</span>
                     ) : remaining <= 5 ? (
                       <span className="text-amber-700 font-semibold">Only {remaining} slots left!</span>
                     ) : (
-                      <span className="text-emerald-700 font-medium">Available</span>
+                      <span className="text-emerald-700 font-medium">{remaining} slots available</span>
                     )}
                   </div>
                 </div>
@@ -146,4 +241,3 @@ export function DeliverySlotPicker({
     </div>
   );
 }
-

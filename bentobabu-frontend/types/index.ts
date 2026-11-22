@@ -247,11 +247,24 @@ export interface DeliverySlot {
   id: string;
   _id?: string;
   date: string;
+  dateStr?: string;
+  slotKey?: string;
+  label?: string;
   startTime: string;
   endTime: string;
   capacity: number;
   bookedCount: number;
+  remainingCapacity?: number;
+  scheduleSource?: "WEEKLY" | "DATE_ADDITION" | "DATE_OVERRIDE" | "CUSTOM" | string;
   isActive: boolean;
+  isAvailable?: boolean;
+}
+
+export interface DeliverySlotsResult {
+  slots: DeliverySlot[];
+  state: "AVAILABLE" | "NO_SCHEDULE" | "ALL_FULL" | "BOOKING_CLOSED" | "DELIVERY_CLOSED" | "UNSERVICEABLE" | string;
+  message: string;
+  serviceable: boolean;
 }
 
 export interface CheckoutSummary {

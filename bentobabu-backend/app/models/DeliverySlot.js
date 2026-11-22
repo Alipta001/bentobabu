@@ -7,6 +7,18 @@ const deliverySlotSchema = new mongoose.Schema(
       required: [true, 'Slot date is required'],
       index: true,
     },
+    dateStr: {
+      type: String, // 'YYYY-MM-DD' formatted in Asia/Kolkata
+      trim: true,
+      match: [/^\d{4}-\d{2}-\d{2}$/, 'dateStr must be in YYYY-MM-DD format'],
+      index: true,
+    },
+    slotKey: {
+      type: String,
+      trim: true,
+      maxlength: [100, 'Slot key cannot exceed 100 characters'],
+      index: true,
+    },
     label: {
       type: String,
       required: [true, 'Slot label is required'],
@@ -56,6 +68,12 @@ const deliverySlotSchema = new mongoose.Schema(
       default: true,
       index: true,
     },
+    scheduleSource: {
+      type: String,
+      enum: ['WEEKLY', 'DATE_ADDITION', 'DATE_OVERRIDE', 'CUSTOM'],
+      default: 'WEEKLY',
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -70,8 +88,10 @@ const deliverySlotSchema = new mongoose.Schema(
   }
 );
 
-// Compound index on date and time range
+// Compound indexes
 deliverySlotSchema.index({ date: 1, startTime: 1, endTime: 1 });
+deliverySlotSchema.index({ dateStr: 1, startTime: 1, endTime: 1 });
+deliverySlotSchema.index({ dateStr: 1, slotKey: 1 }, { unique: true, sparse: true });
 
 const DeliverySlot = mongoose.model('DeliverySlot', deliverySlotSchema);
 

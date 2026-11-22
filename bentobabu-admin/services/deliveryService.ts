@@ -18,13 +18,92 @@ export interface DeliverySlotItem {
   _id: string;
   id?: string;
   date: string;
+  dateStr?: string;
+  slotKey?: string;
   label: string;
   startTime: string;
   endTime: string;
   capacity: number;
+  bookedCount?: number;
   currentOrders?: number;
+  remainingCapacity?: number;
+  scheduleSource?: "WEEKLY" | "DATE_ADDITION" | "DATE_OVERRIDE" | "CUSTOM";
   isActive: boolean;
   createdAt?: string;
+}
+
+export interface WeeklySlotTemplate {
+  _id?: string;
+  id?: string;
+  slotKey?: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  capacity: number;
+  isActive: boolean;
+  orderCutoffMinutes?: number;
+}
+
+export interface WeeklyScheduleDay {
+  _id?: string;
+  id?: string;
+  dayOfWeek: number;
+  dayName: string;
+  isDeliveryEnabled: boolean;
+  slots: WeeklySlotTemplate[];
+}
+
+export interface EffectiveDeliverySlot {
+  id: string;
+  _id?: string;
+  date: string;
+  dateStr?: string;
+  slotKey: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  capacity: number;
+  bookedCount: number;
+  remainingCapacity: number;
+  isActive: boolean;
+  isAvailable: boolean;
+  isPastWindow?: boolean;
+  scheduleSource: "WEEKLY" | "DATE_ADDITION" | "DATE_OVERRIDE" | "CUSTOM";
+}
+
+export interface DateScheduleDetails {
+  date: string;
+  dayOfWeek: number;
+  dayName: string;
+  isClosed: boolean;
+  closureReason: string;
+  overrideMode: "INHERIT" | "REPLACE" | "ADDITIVE";
+  effectiveSlots: EffectiveDeliverySlot[];
+  isOverridden?: boolean;
+  schedule?: {
+    date: string;
+    isClosed: boolean;
+    closureReason: string;
+    overrideMode: "INHERIT" | "REPLACE" | "ADDITIVE";
+    disabledSlotKeys: string[];
+    slotOverrides: any[];
+    customSlots: any[];
+  } | null;
+  effectiveSchedule?: {
+    state: string;
+    message: string;
+    slots: EffectiveDeliverySlot[];
+  };
+  dateConfig?: {
+    date: string;
+    isClosed: boolean;
+    closureReason: string;
+    overrideMode: "INHERIT" | "REPLACE" | "ADDITIVE";
+    disabledSlotKeys: string[];
+    slotOverrides: any[];
+    customSlots: any[];
+  } | null;
+  weeklyConfig?: WeeklyScheduleDay | null;
 }
 
 const mapZone = (z: BackendDeliveryZone): DeliveryZone => ({
@@ -173,5 +252,131 @@ export const deliveryService = {
     });
 
     return res.data?.data?.slot;
+  },
+
+  async deleteSlot(id: string): Promise<void> {
+    await adminApiClient.delete(ADMIN_API_ENDPOINTS.DELIVERY.SLOT_DETAIL(id));
+  },
+
+  // Weekly Schedules
+  async getWeeklySchedules(): Promise<WeeklyScheduleDay[]> {
+    const res = await adminApiClient.get<{
+      success: boolean;
+      data: {
+        schedules: WeeklyScheduleDay[];
+      };
+    }>(ADMIN_API_ENDPOINTS.DELIVERY.WEEKLY_SCHEDULE);
+
+    return res.data?.data?.schedules || [];
+  },
+
+  async updateWeeklySchedule(
+    dayOfWeek: number,
+    data: {
+      isDeliveryEnabled?: boolean;
+      slots: WeeklySlotTemplate[];
+    }
+  ): Promise<WeeklyScheduleDay> {
+    const res = await adminApiClient.put<{
+      success: boolean;
+      message: string;
+      data: {
+        schedule: WeeklyScheduleDay;
+      };
+    }>(ADMIN_API_ENDPOINTS.DELIVERY.WEEKLY_SCHEDULE_DAY(dayOfWeek), data);
+
+    return res.data?.data?.schedule;
+  },
+
+  async copyWeeklySchedule(
+    fromDay: number,
+    toDays: number[]
+  ): Promise<WeeklyScheduleDay[]> {
+    const res = await adminApiClient.post<{
+      success: boolean;
+      message: string;
+      data: {
+        schedules: WeeklyScheduleDay[];
+      };
+    }>(ADMIN_API_ENDPOINTS.DELIVERY.WEEKLY_SCHEDULE_COPY, {
+      fromDay,
+      toDays,
+    });
+
+    return res.data?.data?.schedules || [];
+  },
+
+  // Date-Specific Schedules
+  async getDateSchedule(date: string): Promise<DateScheduleDetails> {
+    const res = await adminApiClient.get<{
+      success: boolean;
+      data: any;
+    }>(ADMIN_API_ENDPOINTS.DELIVERY.DATE_SCHEDULE(date));
+
+    const raw = res.data?.data;
+    const dateCfg = raw?.dateConfig;
+    const isOverridden = Boolean(
+      dateCfg &&
+        (dateCfg.isClosed ||
+          (dateCfg.overrideMode && dateCfg.overrideMode !== "INHERIT") ||
+          (dateCfg.disabledSlotKeys && dateCfg.disabledSlotKeys.length > 0) ||
+          (dateCfg.customSlots && dateCfg.customSlots.length > 0) ||
+          (dateCfg.slotOverrides && dateCfg.slotOverrides.length > 0))
+    );
+
+    const slots = raw?.effectiveSlots || [];
+    return {
+      date: raw?.date || date,
+      dayOfWeek: raw?.dayOfWeek ?? 0,
+      dayName: raw?.dayName || "",
+      isClosed: Boolean(raw?.isClosed),
+      closureReason: raw?.closureReason || "",
+      overrideMode: raw?.overrideMode || "INHERIT",
+      effectiveSlots: slots,
+      isOverridden,
+      schedule: dateCfg || null,
+      effectiveSchedule: {
+        state: raw?.isClosed ? "DELIVERY_CLOSED" : slots.length > 0 ? "AVAILABLE" : "NO_SCHEDULE",
+        message: raw?.closureReason || "",
+        slots,
+      },
+      dateConfig: dateCfg,
+      weeklyConfig: raw?.weeklyConfig,
+    };
+  },
+
+  async updateDateSchedule(
+    date: string,
+    data: {
+      isClosed?: boolean;
+      closureReason?: string;
+      overrideMode?: "INHERIT" | "REPLACE" | "ADDITIVE";
+      disabledSlotKeys?: string[];
+      slotOverrides?: any[];
+      customSlots?: any[];
+    }
+  ): Promise<DateScheduleDetails> {
+    const res = await adminApiClient.put<{
+      success: boolean;
+      message: string;
+      data: {
+        dateSchedule: any;
+        effectiveSlots: EffectiveDeliverySlot[];
+      };
+    }>(ADMIN_API_ENDPOINTS.DELIVERY.UPDATE_DATE_SCHEDULE(date), data);
+
+    return this.getDateSchedule(date);
+  },
+
+  async restoreWeeklySchedule(date: string): Promise<{ effectiveSlots: EffectiveDeliverySlot[] }> {
+    const res = await adminApiClient.delete<{
+      success: boolean;
+      message: string;
+      data: {
+        effectiveSlots: EffectiveDeliverySlot[];
+      };
+    }>(ADMIN_API_ENDPOINTS.DELIVERY.RESTORE_DATE_SCHEDULE(date));
+
+    return res.data?.data;
   },
 };
