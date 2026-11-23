@@ -44,6 +44,8 @@ class EmailService {
    */
   static resetProvider() {
     overriddenProvider = null;
+    resendInstance = null;
+    zohoInstance = null;
   }
 
   /**

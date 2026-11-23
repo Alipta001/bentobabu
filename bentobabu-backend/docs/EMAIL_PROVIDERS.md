@@ -8,7 +8,7 @@ This document describes the configurable, multi-provider email architecture for 
 
 BentoBabu supports two production-grade transactional email providers:
 1. **Resend** (default) — using the official Resend SDK.
-2. **Zoho ZeptoMail** — using the official Zoho ZeptoMail REST API (`https://api.zeptomail.com/v1.1/email`).
+2. **Zoho ZeptoMail** — using the official Zoho ZeptoMail REST API (`https://cpaas.zoho.in/v1.1/email` for Zoho India accounts).
 
 Provider selection is completely driven by the environment variable `EMAIL_PROVIDER`. Switching providers requires **zero code changes** and takes effect immediately upon application restart or container redeployment.
 
@@ -45,7 +45,7 @@ flowchart TD
 | `ZOHO_ZEPTOMAIL_API_KEY` | Yes (when zoho active & email OTP on) | None | ZeptoMail Send Mail Token (e.g. `Zoho-enczapikey phl...` or raw token) |
 | `ZOHO_ZEPTOMAIL_FROM_EMAIL` | Yes (when zoho active) | `verify@bentobabu.com` | Verified sender email in ZeptoMail Mail Agent |
 | `ZOHO_ZEPTOMAIL_FROM_NAME` | Optional | `BentoBabu` | Display name for the sender |
-| `ZOHO_ZEPTOMAIL_API_URL` | Optional | `https://api.zeptomail.com/v1.1/email` | Endpoint URL (US, IN, or EU region) |
+| `ZOHO_ZEPTOMAIL_API_URL` | Optional | `https://cpaas.zoho.in/v1.1/email` | Endpoint URL (defaults to Zoho India `https://cpaas.zoho.in/v1.1/email`) |
 
 ---
 
@@ -67,8 +67,9 @@ flowchart TD
    ZOHO_ZEPTOMAIL_API_KEY=phl087xxxxxx...
    ZOHO_ZEPTOMAIL_FROM_EMAIL=verify@bentobabu.com
    ZOHO_ZEPTOMAIL_FROM_NAME=BentoBabu
+   ZOHO_ZEPTOMAIL_API_URL=https://cpaas.zoho.in/v1.1/email
    ```
-   *(Note: You can paste either the token directly or prefixed with `Zoho-enczapikey `; the backend handles both transparently.)*
+   *(Note: You can paste either the token directly or prefixed with `Zoho-enczapikey `; the backend formats the header to `Zoho-enczapikey <YOUR_TOKEN>`.)*
 
 ---
 

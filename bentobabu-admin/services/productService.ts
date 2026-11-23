@@ -94,6 +94,21 @@ export function deduplicateImagesData(imagesData: ProductMediaImage[]): ProductM
   return result;
 }
 
+export function mapDietaryToTags(dietary?: string): string[] {
+  switch (dietary) {
+    case "vegan":
+      return ["VEGAN"];
+    case "egg":
+      return ["EGG"];
+    case "non-vegetarian":
+      return ["NON_VEG"];
+    case "vegetarian":
+      return ["VEG"];
+    default:
+      return dietary ? [dietary.toUpperCase()] : ["VEG"];
+  }
+}
+
 export const mapBackendProduct = (p: BackendProduct): Product => {
   const catId =
     typeof p.category === "object" && p.category
@@ -110,12 +125,15 @@ export const mapBackendProduct = (p: BackendProduct): Product => {
   }
 
   let dietary: DietaryType = "vegetarian";
-  if (p.dietaryTags?.includes("VEGAN")) {
+  const upperTags = (p.dietaryTags || []).map((t) => (typeof t === "string" ? t.toUpperCase().trim() : ""));
+  if (upperTags.includes("VEGAN")) {
     dietary = "vegan";
-  } else if (p.dietaryTags?.includes("EGG")) {
+  } else if (upperTags.includes("EGG") || upperTags.includes("CONTAINS_EGG")) {
     dietary = "egg";
-  } else if (p.dietaryTags?.includes("NON_VEG")) {
+  } else if (upperTags.includes("NON_VEG") || upperTags.includes("NON_VEGETARIAN") || upperTags.includes("NON-VEG")) {
     dietary = "non-vegetarian";
+  } else if (upperTags.includes("VEG") || upperTags.includes("VEGETARIAN")) {
+    dietary = "vegetarian";
   }
 
     const uniqueImages = deduplicateUrls(p.images || []);
@@ -247,7 +265,7 @@ export const productService = {
       preparationTime: prepTime,
       preparationTimeMinutes: prepTime,
       portionSize: data.servingSize || "1 Bento",
-      dietaryTags: data.dietary === "non-vegetarian" ? ["NON_VEG"] : [data.dietary?.toUpperCase() || "VEG"],
+      dietaryTags: mapDietaryToTags(data.dietary),
       mealTypes: data.isDailyMenu ? ["DAILY_MENU", "LUNCH", "DINNER"] : ["LUNCH", "DINNER"],
       nutrition: {
         calories: data.nutritionalInfo?.calories ?? 0,
@@ -320,6 +338,10 @@ export const productService = {
     }
     if (data.servingSize !== undefined) payload.portionSize = data.servingSize;
     if (data.isBestseller !== undefined) payload.isFeatured = data.isBestseller;
+    if (data.dietary !== undefined) {
+      payload.dietary = data.dietary;
+      payload.dietaryTags = mapDietaryToTags(data.dietary);
+    }
     if (data.allergens !== undefined) payload.allergens = data.allergens;
     if (data.nutritionalInfo) {
       payload.nutrition = {

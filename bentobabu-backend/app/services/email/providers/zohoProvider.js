@@ -50,14 +50,14 @@ const parseEmailAndName = (input, defaultName = '') => {
 class ZohoProvider {
   constructor(config = {}) {
     this.name = 'zoho';
-    this.apiUrl = config.apiUrl || process.env.ZOHO_ZEPTOMAIL_API_URL || 'https://api.zeptomail.com/v1.1/email';
+    this.apiUrl = config.apiUrl || process.env.ZOHO_ZEPTOMAIL_API_URL || 'https://cpaas.zoho.in/v1.1/email';
     this.apiKey = config.apiKey || (
       process.env.ZOHO_ZEPTOMAIL_API_KEY ||
       process.env.ZOHO_ZEPTOMAIL_TOKEN ||
       process.env.ZEPTOMAIL_API_KEY ||
       ''
     ).trim();
-    this.fromEmail = config.fromEmail || (process.env.ZOHO_ZEPTOMAIL_FROM_EMAIL || process.env.EMAIL_FROM || '').trim();
+    this.fromEmail = config.fromEmail || (process.env.ZOHO_ZEPTOMAIL_FROM_EMAIL || process.env.EMAIL_FROM || 'verify@bentobabu.com').trim();
     this.fromName = config.fromName || (process.env.ZOHO_ZEPTOMAIL_FROM_NAME || 'BentoBabu').trim();
   }
 
@@ -79,13 +79,14 @@ class ZohoProvider {
   }
 
   /**
-   * Formats authorization header ensuring single "Zoho-enczapikey " prefix
+   * Formats authorization header ensuring exact "Zoho-enczapikey <token>" format
    */
   formatAuthHeader(token) {
     if (!token) return '';
     const cleanToken = token.trim();
-    if (cleanToken.startsWith('Zoho-enczapikey ')) {
-      return cleanToken;
+    if (/^Zoho-enczapikey[:\s]+/i.test(cleanToken)) {
+      const actualToken = cleanToken.replace(/^Zoho-enczapikey[:\s]+/i, '').trim();
+      return `Zoho-enczapikey ${actualToken}`;
     }
     return `Zoho-enczapikey ${cleanToken}`;
   }
@@ -118,18 +119,21 @@ class ZohoProvider {
    * Builds the from object for ZeptoMail
    */
   buildSender(from) {
+    const activeFromName = (process.env.ZOHO_ZEPTOMAIL_FROM_NAME || this.fromName || 'BentoBabu').trim();
+    const activeFromEmail = (process.env.ZOHO_ZEPTOMAIL_FROM_EMAIL || this.fromEmail || 'verify@bentobabu.com').trim();
+
     if (from) {
-      const parsed = parseEmailAndName(from, this.fromName);
+      const parsed = parseEmailAndName(from, activeFromName);
       return {
-        address: parsed.address || this.fromEmail || 'verify@bentobabu.com',
-        name: parsed.name || this.fromName || 'BentoBabu',
+        address: parsed.address || activeFromEmail,
+        name: parsed.name || activeFromName,
       };
     }
 
-    const defaultParsed = parseEmailAndName(this.fromEmail, this.fromName);
+    const defaultParsed = parseEmailAndName(activeFromEmail, activeFromName);
     return {
       address: defaultParsed.address || 'verify@bentobabu.com',
-      name: defaultParsed.name || this.fromName || 'BentoBabu',
+      name: defaultParsed.name || activeFromName,
     };
   }
 
@@ -137,10 +141,11 @@ class ZohoProvider {
    * Dispatches email via Zoho ZeptoMail HTTPS API
    */
   async sendEmail({ to, subject, html, text, from }) {
-    const activeApiKey = this.apiKey || (
+    const activeApiKey = (
       process.env.ZOHO_ZEPTOMAIL_API_KEY ||
       process.env.ZOHO_ZEPTOMAIL_TOKEN ||
       process.env.ZEPTOMAIL_API_KEY ||
+      this.apiKey ||
       ''
     ).trim();
 
@@ -185,10 +190,11 @@ class ZohoProvider {
     const timeoutMs = parseInt(process.env.ZOHO_ZEPTOMAIL_TIMEOUT_MS, 10) || 12000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const targetUrl = process.env.ZOHO_ZEPTOMAIL_API_URL || this.apiUrl || 'https://cpaas.zoho.in/v1.1/email';
 
     try {
       const fetchFn = this.getFetch();
-      const response = await fetchFn(this.apiUrl, {
+      const response = await fetchFn(targetUrl, {
         method: 'POST',
         headers: {
           'Authorization': this.formatAuthHeader(activeApiKey),

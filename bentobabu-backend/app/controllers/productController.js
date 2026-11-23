@@ -7,6 +7,34 @@ const { deleteAsset } = require('../config/cloudinary');
 const { deleteObject } = require('../config/r2');
 const { getKolkataDateString, isValidDateString } = require('../utils/businessDate');
 
+const normalizeDietaryTags = (tags = []) => {
+  if (!Array.isArray(tags)) {
+    if (typeof tags === 'string' && tags.trim()) {
+      tags = tags.split(',').map((t) => t.trim()).filter(Boolean);
+    } else {
+      return [];
+    }
+  }
+  const result = new Set();
+  for (const t of tags) {
+    if (!t || typeof t !== 'string') continue;
+    const clean = t.trim();
+    const upper = clean.toUpperCase().replace(/\s+/g, '_');
+    if (upper === 'VEGETARIAN' || upper === 'VEG') {
+      result.add('VEG');
+    } else if (upper === 'NON_VEGETARIAN' || upper === 'NON_VEG' || upper === 'NON-VEG') {
+      result.add('NON_VEG');
+    } else if (upper === 'VEGAN') {
+      result.add('VEGAN');
+    } else if (upper === 'EGG' || upper === 'CONTAINS_EGG') {
+      result.add('EGG');
+    } else {
+      result.add(upper);
+    }
+  }
+  return Array.from(result);
+};
+
 class ProductController {
   /**
    * GET /api/v1/products
@@ -115,13 +143,40 @@ class ProductController {
         }
       }
 
-      // Dietary Tags Filter: Supports comma-separated string or array
-      if (req.query.dietaryTags) {
-        const tags = Array.isArray(req.query.dietaryTags)
-          ? req.query.dietaryTags
-          : req.query.dietaryTags.split(',').map((t) => t.trim()).filter(Boolean);
-        if (tags.length > 0) {
-          filter.dietaryTags = { $in: tags };
+      // Dietary Tags / Dietary Filter: Supports comma-separated string, array, or multiple query params
+      const rawDietary = req.query.dietaryTags || req.query.dietary;
+      if (rawDietary) {
+        const inputTags = Array.isArray(rawDietary)
+          ? rawDietary
+          : String(rawDietary).split(',').map((t) => t.trim()).filter(Boolean);
+
+        const synonymsMap = {
+          VEG: ['VEG', 'VEGETARIAN', 'veg', 'vegetarian'],
+          VEGETARIAN: ['VEG', 'VEGETARIAN', 'veg', 'vegetarian'],
+          NON_VEG: ['NON_VEG', 'NON_VEGETARIAN', 'NON-VEG', 'non_veg', 'non-veg', 'non-vegetarian'],
+          'NON-VEG': ['NON_VEG', 'NON_VEGETARIAN', 'NON-VEG', 'non_veg', 'non-veg', 'non-vegetarian'],
+          NON_VEGETARIAN: ['NON_VEG', 'NON_VEGETARIAN', 'NON-VEG', 'non_veg', 'non-veg', 'non-vegetarian'],
+          VEGAN: ['VEGAN', 'vegan'],
+          EGG: ['EGG', 'CONTAINS_EGG', 'egg', 'contains_egg', 'contains-egg'],
+          CONTAINS_EGG: ['EGG', 'CONTAINS_EGG', 'egg', 'contains_egg', 'contains-egg'],
+        };
+
+        const targetTags = new Set();
+        for (const t of inputTags) {
+          const upper = t.toUpperCase().replace(/\s+/g, '_');
+          if (synonymsMap[upper]) {
+            synonymsMap[upper].forEach((s) => targetTags.add(s));
+          } else if (synonymsMap[t.toLowerCase()]) {
+            synonymsMap[t.toLowerCase()].forEach((s) => targetTags.add(s));
+          } else {
+            targetTags.add(t);
+            targetTags.add(t.toUpperCase());
+            targetTags.add(t.toLowerCase());
+          }
+        }
+
+        if (targetTags.size > 0) {
+          filter.dietaryTags = { $in: Array.from(targetTags) };
         }
       }
 
@@ -478,6 +533,13 @@ class ProductController {
         resolvedImages = Product.deduplicateUrls(resolvedImagesData.map((img) => img.secureUrl).filter(Boolean));
       }
 
+      const rawDietaryInput = dietaryTags !== undefined
+        ? dietaryTags
+        : req.body.dietary !== undefined
+        ? (Array.isArray(req.body.dietary) ? req.body.dietary : [req.body.dietary])
+        : [];
+      const resolvedDietaryTags = normalizeDietaryTags(rawDietaryInput);
+
       const product = await Product.create({
         name: name.trim(),
         slug: generatedSlug,
@@ -491,7 +553,7 @@ class ProductController {
         compareAtPrice: typeof compareAtPrice === 'number' && compareAtPrice >= 0 ? compareAtPrice : null,
         ingredients: Array.isArray(ingredients) ? ingredients : [],
         portionSize: typeof portionSize === 'string' ? portionSize.trim() : '',
-        dietaryTags: Array.isArray(dietaryTags) ? dietaryTags : [],
+        dietaryTags: resolvedDietaryTags,
         mealTypes: Array.isArray(mealTypes) ? mealTypes : [],
         nutrition: nutrition && typeof nutrition === 'object' ? nutrition : undefined,
         allergens: Array.isArray(allergens) ? allergens : [],
@@ -730,7 +792,12 @@ class ProductController {
 
       if (ingredients !== undefined && Array.isArray(ingredients)) product.ingredients = ingredients;
       if (portionSize !== undefined) product.portionSize = typeof portionSize === 'string' ? portionSize.trim() : '';
-      if (dietaryTags !== undefined && Array.isArray(dietaryTags)) product.dietaryTags = dietaryTags;
+      const rawDietaryToUpdate = dietaryTags !== undefined
+        ? dietaryTags
+        : req.body.dietary !== undefined
+        ? (Array.isArray(req.body.dietary) ? req.body.dietary : [req.body.dietary])
+        : undefined;
+      if (rawDietaryToUpdate !== undefined) product.dietaryTags = normalizeDietaryTags(rawDietaryToUpdate);
       if (mealTypes !== undefined && Array.isArray(mealTypes)) product.mealTypes = mealTypes;
       if (nutrition !== undefined && typeof nutrition === 'object') product.nutrition = nutrition;
       if (allergens !== undefined && Array.isArray(allergens)) product.allergens = allergens;

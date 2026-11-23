@@ -216,6 +216,7 @@ const validateEnv = () => {
       process.env.ZEPTOMAIL_API_KEY ||
       ''
     ).trim(),
+    zohoZeptomailApiUrl: (process.env.ZOHO_ZEPTOMAIL_API_URL || 'https://cpaas.zoho.in/v1.1/email').trim(),
     zohoZeptomailFromEmail: (process.env.ZOHO_ZEPTOMAIL_FROM_EMAIL || process.env.EMAIL_FROM || 'verify@bentobabu.com').trim(),
     zohoZeptomailFromName: (process.env.ZOHO_ZEPTOMAIL_FROM_NAME || 'BentoBabu').trim(),
     smtpHost: process.env.SMTP_HOST || '',

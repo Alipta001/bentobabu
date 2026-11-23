@@ -9,9 +9,11 @@ interface ApiResponse<T> {
 }
 
 const mapDietary = (tags: string[] = []): DietaryType => {
-  if (tags.includes("VEGAN")) return "vegan";
-  if (tags.includes("VEG")) return "vegetarian";
-  if (tags.includes("NON_VEG")) return "non-vegetarian";
+  const upper = tags.map((t) => (typeof t === "string" ? t.toUpperCase().trim() : ""));
+  if (upper.includes("VEGAN")) return "vegan";
+  if (upper.includes("EGG") || upper.includes("CONTAINS_EGG")) return "egg";
+  if (upper.includes("NON_VEG") || upper.includes("NON_VEGETARIAN") || upper.includes("NON-VEG")) return "non-vegetarian";
+  if (upper.includes("VEG") || upper.includes("VEGETARIAN")) return "vegetarian";
   return "vegetarian";
 };
 
@@ -143,15 +145,15 @@ export const productService = {
       }
 
       if (filters?.dietary && filters.dietary.length > 0) {
-        const dietaryMap: Record<string, string> = {
-          vegetarian: "VEG",
-          "non-vegetarian": "NON_VEG",
-          vegan: "VEGAN",
+        const dietaryMap: Record<string, string[]> = {
+          vegetarian: ["VEG", "VEGETARIAN", "vegetarian"],
+          "non-vegetarian": ["NON_VEG", "NON_VEGETARIAN", "non-vegetarian"],
+          vegan: ["VEGAN", "vegan"],
+          egg: ["EGG", "CONTAINS_EGG", "egg"],
         };
-        const mapped = filters.dietary
-          .map((d) => dietaryMap[d] || d)
-          .join(",");
-        params.dietaryTags = mapped;
+        const mappedTags = filters.dietary.flatMap((d) => dietaryMap[d] || [d.toUpperCase()]);
+        params.dietaryTags = mappedTags.join(",");
+        params.dietary = filters.dietary.join(",");
       } else if (filters?.dietaryTags) {
         params.dietaryTags = filters.dietaryTags;
       }

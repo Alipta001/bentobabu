@@ -39,6 +39,7 @@
     "test:cancellation-safety": "node test/cancellation_safety_audit.test.js",
     "test:order-images": "node test/admin_order_images.test.js",
     "test:email-providers": "node test/email_provider_switching.test.js",
+    "test:dietary": "node test/dietary_filter_verification.test.js",
     "test:all": "npm test"
   },
   "author": "Alipta Ghosh",
