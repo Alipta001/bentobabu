@@ -190,5 +190,20 @@ export const {
   clearCart,
 } = cartSlice.actions;
 
+/**
+ * Selectors for Cart State
+ * - selectCartItemCount: Authoritative count of distinct cart line items for navbar badge
+ * - selectCartTotalQuantity: Total physical quantity of all units in cart
+ */
+export const selectCartItems = (state: { cart: CartState }) => state.cart.items;
+export const selectCartItemCount = (state: { cart: CartState }) => state.cart.items.length;
+export const selectCartTotalQuantity = (state: { cart: CartState }) =>
+  state.cart.items.reduce((acc, item) => acc + item.quantity, 0);
+export const selectCartCoupon = (state: { cart: CartState }) => state.cart.appliedCoupon;
+export const selectCartDeliveryPreferences = (state: { cart: CartState }) => ({
+  slot: state.cart.deliverySlot,
+  notes: state.cart.deliveryNotes,
+});
+
 export default cartSlice.reducer;
 

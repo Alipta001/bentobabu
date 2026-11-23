@@ -129,6 +129,7 @@ export function useCartSync() {
 
   return {
     cartItems,
+    cartItemCount: cartItems.length,
     appliedCoupon,
     addItem,
     setQuantity,

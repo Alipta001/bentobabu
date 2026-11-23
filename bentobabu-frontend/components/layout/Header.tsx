@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { brandConfig } from "@/config/brand";
 import { useAppSelector } from "@/store/hooks";
+import { selectCartItemCount } from "@/store/cartSlice";
 import { useCategories } from "@/hooks/useQueries";
 import { useAuth } from "@/context/AuthContext";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -82,8 +83,7 @@ export function Header() {
     router.push("/menu");
   };
 
-  const cartItems = useAppSelector((state) => state.cart.items);
-  const totalCartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const cartItemCount = useAppSelector(selectCartItemCount);
 
   const { data: categories = [] } = useCategories();
 
@@ -284,9 +284,9 @@ export function Header() {
               <span className="hidden sm:inline text-xs font-semibold tracking-wide">
                 Cart
               </span>
-              {isMounted && totalCartCount > 0 ? (
+              {isMounted && cartItemCount > 0 ? (
                 <span className="inline-flex items-center justify-center bg-[#B99A60] text-[#1E2B1E] text-[11px] font-bold h-5 min-w-[20px] px-1.5 rounded-full shadow-xs">
-                  {totalCartCount}
+                  {cartItemCount}
                 </span>
               ) : null}
             </Link>
