@@ -64,18 +64,57 @@ export function ProductDetailView({
   const [quantity, setQuantity] = useState(1);
   const [addedSuccess, setAddedSuccess] = useState(false);
 
+  const defaultVariant = useMemo(() => {
+    if (!product.hasVariants || !Array.isArray(product.variants) || product.variants.length === 0) {
+      return null;
+    }
+    return product.variants.find((v) => v.isAvailable) || product.variants[0];
+  }, [product.hasVariants, product.variants]);
+
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
+    defaultVariant?._id || defaultVariant?.id || null
+  );
+
+  useEffect(() => {
+    if (defaultVariant && !selectedVariantId) {
+      setSelectedVariantId(defaultVariant._id || defaultVariant.id || null);
+    }
+  }, [defaultVariant, selectedVariantId]);
+
+  const selectedVariant = useMemo(() => {
+    if (!product.hasVariants || !Array.isArray(product.variants)) return null;
+    return (
+      product.variants.find((v) => (v._id || v.id) === selectedVariantId) || defaultVariant
+    );
+  }, [product.hasVariants, product.variants, selectedVariantId, defaultVariant]);
+
+  const effectivePrice = selectedVariant ? selectedVariant.price : product.price;
+  const isVariantUnavailable = product.hasVariants && selectedVariant && selectedVariant.isAvailable === false;
+
   const isSoldOut = (product.stockQuantity ?? 1) <= 0;
   const maxStock = Math.max(1, product.stockQuantity ?? 99);
   const isLowStock = !isSoldOut && (product.stockQuantity ?? 99) <= (product.lowStockThreshold || 5);
 
-  const cartItem = cartItems.find((item) => item.product.id === product.id);
+  const targetVariantKey = selectedVariant?._id || selectedVariant?.id || null;
+  const cartItem = cartItems.find(
+    (item) =>
+      item.product.id === product.id &&
+      (targetVariantKey ? (item.variantId ? String(item.variantId) : null) === String(targetVariantKey) : true)
+  );
 
   const handleAddToCart = () => {
-    addItem(product, quantity);
+    if (isVariantUnavailable) return;
+    addItem(
+      product,
+      quantity,
+      selectedVariant?._id || selectedVariant?.id || null,
+      selectedVariant?.name || null,
+      effectivePrice
+    );
     setAddedSuccess(true);
     showToast({
       title: "Added to Bento Cart",
-      message: `${quantity}x ${product.name} • Total: ₹${product.price * quantity}`,
+      message: `${quantity}x ${product.name}${selectedVariant?.name ? ` (${selectedVariant.name})` : ""} • Total: ₹${effectivePrice * quantity}`,
       type: "success",
       action: {
         label: "Proceed to Cart →",
@@ -240,9 +279,9 @@ export function ProductDetailView({
 
             <div className="flex items-baseline gap-3">
               <span className="font-serif text-3xl font-bold text-[#354B35]">
-                ₹{product.price}
+                ₹{effectivePrice}
               </span>
-              {product.originalPrice && product.originalPrice > product.price && (
+              {product.originalPrice && product.originalPrice > effectivePrice && (
                 <span className="text-sm text-[#8A9A86] line-through">
                   ₹{product.originalPrice}
                 </span>
@@ -253,6 +292,54 @@ export function ProductDetailView({
                 </span>
               )}
             </div>
+
+            {/* Dynamic Product Variants / Options Selector */}
+            {product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0 && (
+              <div className="space-y-2.5 p-4 rounded-2xl bg-[#F7F3EA] border border-[#E5DFC5]">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#354B35]">
+                    {product.variantLabel || "Choose Option"}
+                  </label>
+                  {selectedVariant && (
+                    <span className="text-xs text-[#626F62]">
+                      Selected: <strong className="text-[#1F271F]">{selectedVariant.name}</strong> (₹{selectedVariant.price})
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {product.variants.map((v) => {
+                    const vId = v._id || v.id || v.name;
+                    const isSelected = (selectedVariant?._id || selectedVariant?.id) === (v._id || v.id);
+                    const isAvailable = v.isAvailable !== false;
+                    return (
+                      <button
+                        key={vId}
+                        type="button"
+                        disabled={!isAvailable}
+                        onClick={() => setSelectedVariantId(v._id || v.id || null)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border ${
+                          isSelected
+                            ? "bg-[#354B35] text-white border-[#354B35] shadow-xs scale-102"
+                            : isAvailable
+                            ? "bg-white text-[#1F271F] border-[#E5DFC5] hover:border-[#354B35]/40 hover:bg-[#FAF8F3]"
+                            : "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60 line-through"
+                        }`}
+                      >
+                        <span>{v.name}</span>
+                        <span className={isSelected ? "text-[#E5DFC5]" : "text-[#755C2B]"}>
+                          ₹{v.price}
+                        </span>
+                        {!isAvailable && (
+                          <span className="text-[10px] text-rose-600 no-underline font-normal">
+                            (Unavailable)
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <ProductDescription
               content={product.detailedDescription || product.description}
@@ -378,7 +465,7 @@ export function ProductDetailView({
               {/* Add to Cart CTA */}
               <button
                 onClick={handleAddToCart}
-                disabled={!acceptingOrders || !product.isAvailable || isSoldOut}
+                disabled={!acceptingOrders || !product.isAvailable || isSoldOut || Boolean(isVariantUnavailable)}
                 className={`flex-1 flex items-center justify-center gap-2 py-3.5 px-6 rounded-full text-sm font-bold shadow-md transition-all duration-200 ${
                   !acceptingOrders
                     ? "bg-amber-100 text-amber-900 border border-amber-300 cursor-not-allowed opacity-90"
@@ -386,6 +473,8 @@ export function ProductDetailView({
                     ? "bg-gray-200 text-gray-500 cursor-not-allowed border border-gray-300"
                     : isSoldOut
                     ? "bg-rose-100 text-rose-800 border border-rose-300 cursor-not-allowed"
+                    : isVariantUnavailable
+                    ? "bg-amber-100 text-amber-800 border border-amber-300 cursor-not-allowed"
                     : addedSuccess
                     ? "bg-emerald-700 text-white cursor-pointer"
                     : "bg-[#354B35] text-[#F7F3EA] hover:bg-[#253525] cursor-pointer"
@@ -397,6 +486,8 @@ export function ProductDetailView({
                   <span>Unavailable on Today&apos;s Menu</span>
                 ) : isSoldOut ? (
                   <span>Sold Out for Today</span>
+                ) : isVariantUnavailable ? (
+                  <span>Option &ldquo;{selectedVariant?.name}&rdquo; is Unavailable</span>
                 ) : addedSuccess ? (
                   <>
                     <Check className="w-4 h-4" />
@@ -405,7 +496,7 @@ export function ProductDetailView({
                 ) : (
                   <>
                     <Plus className="w-4 h-4 text-[#B99A60]" />
-                    <span>Add {quantity} to Cart • ₹{product.price * quantity}</span>
+                    <span>Add {quantity} to Cart • ₹{effectivePrice * quantity}</span>
                   </>
                 )}
               </button>

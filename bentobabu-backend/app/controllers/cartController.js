@@ -54,7 +54,7 @@ class CartController {
     if (!cart.populated || !cart.populated('items.product')) {
       populatedCart = await Cart.findById(cart._id).populate({
         path: 'items.product',
-        select: 'name slug images price stockQuantity isAvailable isActive dietaryTags',
+        select: 'name slug images price stockQuantity isAvailable isActive dietaryTags hasVariants variantLabel variants',
       });
     }
 
@@ -97,14 +97,35 @@ class CartController {
         (!dailyMap.has(p._id.toString()) || dailyMap.get(p._id.toString()) === true);
 
       const isSufficientStock = effectiveStock >= item.quantity;
-      const isOrderable = p.isActive && isAvailableToday && isSufficientStock;
+
+      let unitPrice = p.price;
+      let variantName = null;
+      const variantIdStr = item.variantId ? item.variantId.toString() : null;
+      let variantUnavailable = false;
+
+      if (p.hasVariants) {
+        const matchedVariant = Array.isArray(p.variants)
+          ? p.variants.find((v) => v._id && v._id.toString() === variantIdStr)
+          : null;
+
+        if (!matchedVariant) {
+          variantUnavailable = true;
+        } else {
+          unitPrice = matchedVariant.price;
+          variantName = matchedVariant.name;
+          if (matchedVariant.isAvailable === false) {
+            variantUnavailable = true;
+          }
+        }
+      }
+
+      const isOrderable = p.isActive && isAvailableToday && isSufficientStock && !variantUnavailable;
 
       if (!isOrderable) {
         allOrderable = false;
       }
 
       // Precise financial calculation using integer paise
-      const unitPrice = p.price;
       const unitPricePaise = Math.round(unitPrice * 100);
       const subtotalPaise = unitPricePaise * item.quantity;
 
@@ -123,7 +144,12 @@ class CartController {
           isAvailable: isAvailableToday,
           isActive: p.isActive,
           dietaryTags: p.dietaryTags,
+          hasVariants: Boolean(p.hasVariants),
+          variantLabel: p.variantLabel || 'Choose Option',
+          variants: p.variants || [],
         },
+        variantId: variantIdStr,
+        variantName: variantName || null,
         quantity: item.quantity,
         unitPrice,
         subtotal: subtotalPaise / 100,
@@ -134,6 +160,8 @@ class CartController {
           ? 'Product is currently unavailable'
           : !isAvailableToday
           ? "Product is not available on today's menu"
+          : variantUnavailable
+          ? (variantName ? `Variant "${variantName}" is currently unavailable` : 'Selected option is no longer available')
           : !isSufficientStock
           ? effectiveStock <= 0
             ? 'Sold out for today'
@@ -198,6 +226,7 @@ class CartController {
       if (Array.isArray(items) && items.length > 0) {
         for (const item of items) {
           const productId = item.productId || item.product?.id || item.product?._id;
+          const rawVariantId = item.variantId || item.variant?.id || item.variant?._id || item.variant || null;
           const qty = parseInt(item.quantity, 10);
 
           if (!productId || !mongoose.Types.ObjectId.isValid(productId) || !Number.isInteger(qty) || qty < 1) {
@@ -209,8 +238,25 @@ class CartController {
             continue;
           }
 
+          let resolvedVariantId = null;
+          if (product.hasVariants) {
+            if (!rawVariantId || !mongoose.Types.ObjectId.isValid(rawVariantId)) {
+              continue;
+            }
+            const matchedVariant = Array.isArray(product.variants)
+              ? product.variants.find((v) => v._id && v._id.toString() === rawVariantId.toString())
+              : null;
+            if (!matchedVariant || matchedVariant.isAvailable === false) {
+              continue;
+            }
+            resolvedVariantId = matchedVariant._id;
+          }
+
+          const targetVariantStr = resolvedVariantId ? resolvedVariantId.toString() : null;
           const existingIndex = cart.items.findIndex(
-            (i) => i.product.toString() === productId.toString()
+            (i) =>
+              i.product.toString() === productId.toString() &&
+              (i.variantId ? i.variantId.toString() : null) === targetVariantStr
           );
 
           if (existingIndex > -1) {
@@ -219,6 +265,7 @@ class CartController {
           } else {
             cart.items.push({
               product: product._id,
+              variantId: resolvedVariantId,
               quantity: Math.min(product.stockQuantity, qty),
             });
           }
@@ -244,7 +291,7 @@ class CartController {
    */
   static async addItem(req, res, next) {
     try {
-      const { productId, quantity } = req.body;
+      const { productId, quantity, variantId } = req.body;
 
       if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
         return res.status(400).json({
@@ -277,6 +324,39 @@ class CartController {
         });
       }
 
+      // Validate variant if product has variants
+      let resolvedVariantId = null;
+      if (product.hasVariants) {
+        if (!variantId) {
+          return res.status(400).json({
+            success: false,
+            message: `Please select an option for "${product.name}"`,
+          });
+        }
+        if (!mongoose.Types.ObjectId.isValid(variantId)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid variant identifier',
+          });
+        }
+        const matchedVariant = Array.isArray(product.variants)
+          ? product.variants.find((v) => v._id && v._id.toString() === variantId.toString())
+          : null;
+        if (!matchedVariant) {
+          return res.status(400).json({
+            success: false,
+            message: 'Selected variant is invalid or no longer exists',
+          });
+        }
+        if (matchedVariant.isAvailable === false) {
+          return res.status(400).json({
+            success: false,
+            message: `Option "${matchedVariant.name}" is currently unavailable`,
+          });
+        }
+        resolvedVariantId = matchedVariant._id;
+      }
+
       const isAvailableToday = await CartController.checkProductAvailabilityToday(productId, product);
       if (!isAvailableToday) {
         return res.status(400).json({
@@ -305,8 +385,11 @@ class CartController {
         cart = new Cart({ user: req.user.id, items: [] });
       }
 
+      const targetVariantStr = resolvedVariantId ? resolvedVariantId.toString() : null;
       const existingIndex = cart.items.findIndex(
-        (i) => i.product.toString() === productId
+        (i) =>
+          i.product.toString() === productId &&
+          (i.variantId ? i.variantId.toString() : null) === targetVariantStr
       );
 
       if (existingIndex > -1) {
@@ -322,6 +405,7 @@ class CartController {
       } else {
         cart.items.push({
           product: product._id,
+          variantId: resolvedVariantId,
           quantity: qty,
         });
       }
@@ -346,7 +430,9 @@ class CartController {
   static async updateItemQuantity(req, res, next) {
     try {
       const { productId } = req.params;
-      const { quantity } = req.body;
+      const { quantity, variantId } = req.body;
+      const queryVariantId = req.query.variantId;
+      const targetVariant = variantId !== undefined ? variantId : queryVariantId;
 
       if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
         return res.status(400).json({
@@ -409,8 +495,13 @@ class CartController {
         });
       }
 
+      const targetVariantStr = targetVariant ? targetVariant.toString() : null;
       const itemIndex = cart.items.findIndex(
-        (i) => i.product.toString() === productId
+        (i) =>
+          i.product.toString() === productId &&
+          (targetVariantStr !== null
+            ? (i.variantId ? i.variantId.toString() : null) === targetVariantStr
+            : true)
       );
 
       if (itemIndex === -1) {
@@ -441,6 +532,7 @@ class CartController {
   static async removeItem(req, res, next) {
     try {
       const { productId } = req.params;
+      const targetVariant = req.body?.variantId || req.query?.variantId || null;
 
       if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
         return res.status(400).json({
@@ -451,9 +543,20 @@ class CartController {
 
       const cart = await Cart.findOne({ user: req.user.id });
       if (cart) {
-        cart.items = cart.items.filter(
-          (i) => i.product.toString() !== productId
-        );
+        const targetVariantStr = targetVariant ? targetVariant.toString() : null;
+        if (targetVariantStr !== null) {
+          cart.items = cart.items.filter(
+            (i) =>
+              !(
+                i.product.toString() === productId &&
+                (i.variantId ? i.variantId.toString() : null) === targetVariantStr
+              )
+          );
+        } else {
+          cart.items = cart.items.filter(
+            (i) => i.product.toString() !== productId
+          );
+        }
         await cart.save();
       }
 

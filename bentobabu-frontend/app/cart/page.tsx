@@ -38,7 +38,7 @@ export default function CartPage() {
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
   const subtotal = cartItems.reduce(
-    (acc, item) => acc + item.product.price * item.quantity,
+    (acc, item) => acc + (item.unitPrice ?? item.product.price) * item.quantity,
     0
   );
 
@@ -150,85 +150,94 @@ export default function CartPage() {
             {/* Left Column: Cart Items List */}
             <div className="lg:col-span-8 space-y-4">
               <div className="bg-white rounded-3xl border border-[#E5DFC5] overflow-hidden shadow-xs divide-y divide-[#F0ECE1]">
-                {cartItems.map((item) => (
-                  <div
-                    key={item.product.id}
-                    className="p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-                  >
-                    {/* Thumbnail & Meta */}
-                    <div className="flex items-center gap-4">
-                      <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-[#EDE8DE] shrink-0 border border-[#E5DFC5]">
-                        <Image
-                          src={item.product.imageUrl}
-                          alt={item.product.name}
-                          fill
-                          sizes="80px"
-                          className="object-cover"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <DietaryBadge type={item.product.dietary} showText={false} />
-                          {item.product.isAvailable === false && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-700 text-white shadow-xs">
-                              Currently Unavailable
-                            </span>
+                {cartItems.map((item) => {
+                  const itemPrice = item.unitPrice ?? item.product.price;
+                  const itemKey = `${item.product.id}-${item.variantId || "default"}`;
+                  return (
+                    <div
+                      key={itemKey}
+                      className="p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                    >
+                      {/* Thumbnail & Meta */}
+                      <div className="flex items-center gap-4">
+                        <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-[#EDE8DE] shrink-0 border border-[#E5DFC5]">
+                          <Image
+                            src={item.product.imageUrl}
+                            alt={item.product.name}
+                            fill
+                            sizes="80px"
+                            className="object-cover"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <DietaryBadge type={item.product.dietary} showText={false} />
+                            {item.product.isAvailable === false && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-700 text-white shadow-xs">
+                                Currently Unavailable
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-serif font-bold text-base text-[#222922] hover:text-[#354B35] transition-colors">
+                            <Link href={`/product/${item.product.slug}`}>
+                              {item.product.name}
+                            </Link>
+                          </h3>
+                          {item.variantName && (
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 mt-0.5">
+                              <span>Option: {item.variantName}</span>
+                            </div>
                           )}
-                        </div>
-                        <h3 className="font-serif font-bold text-base text-[#222922] hover:text-[#354B35] transition-colors">
-                          <Link href={`/product/${item.product.slug}`}>
-                            {item.product.name}
-                          </Link>
-                        </h3>
-                        <div className="text-xs text-[#6B776A]">
-                          ₹{item.product.price} each
-                          {item.product.servingSize && ` • ${item.product.servingSize}`}
+                          <div className="text-xs text-[#6B776A]">
+                            ₹{itemPrice} each
+                            {item.product.servingSize && ` • ${item.product.servingSize}`}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Stepper & Line Price */}
-                    <div className="flex items-center justify-between w-full sm:w-auto gap-6 sm:justify-end">
-                      {/* Quantity Stepper */}
-                      <div className="flex items-center gap-2 bg-[#F7F3EA] border border-[#E5DFC5] rounded-full p-1">
+                      {/* Stepper & Line Price */}
+                      <div className="flex items-center justify-between w-full sm:w-auto gap-6 sm:justify-end">
+                        {/* Quantity Stepper */}
+                        <div className="flex items-center gap-2 bg-[#F7F3EA] border border-[#E5DFC5] rounded-full p-1">
+                          <button
+                            onClick={() => setQuantity(item.product.id, item.quantity - 1, item.variantId)}
+                            className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5"
+                            aria-label="Decrease quantity"
+                          >
+                            <Minus className="w-3.5 h-3.5 text-[#222922]" />
+                          </button>
+                          <span className="w-6 text-center text-xs font-bold text-[#222922]">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => setQuantity(item.product.id, item.quantity + 1, item.variantId)}
+                            disabled={item.product.isAvailable === false}
+                            className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed"
+                            aria-label="Increase quantity"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-[#222922]" />
+                          </button>
+                        </div>
+
+                        {/* Line Item Total */}
+                        <div className="text-right min-w-[70px]">
+                          <span className="font-serif font-bold text-base text-[#354B35]">
+                            ₹{itemPrice * item.quantity}
+                          </span>
+                        </div>
+
+                        {/* Delete Item */}
                         <button
-                          onClick={() => setQuantity(item.product.id, item.quantity - 1)}
-                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5"
-                          aria-label="Decrease quantity"
+                          onClick={() => removeItem(item.product.id, item.variantId)}
+                          className="text-[#8A9A86] hover:text-[#C86D51] p-1.5 transition-colors cursor-pointer"
+                          title="Remove item"
                         >
-                          <Minus className="w-3.5 h-3.5 text-[#222922]" />
-                        </button>
-                        <span className="w-6 text-center text-xs font-bold text-[#222922]">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => setQuantity(item.product.id, item.quantity + 1)}
-                          disabled={item.product.isAvailable === false}
-                          className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed"
-                          aria-label="Increase quantity"
-                        >
-                          <Plus className="w-3.5 h-3.5 text-[#222922]" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-
-                      {/* Line Item Total */}
-                      <div className="text-right min-w-[70px]">
-                        <span className="font-serif font-bold text-base text-[#354B35]">
-                          ₹{item.product.price * item.quantity}
-                        </span>
-                      </div>
-
-                      {/* Delete Item */}
-                      <button
-                        onClick={() => removeItem(item.product.id)}
-                        className="text-[#8A9A86] hover:text-[#C86D51] p-1.5 transition-colors cursor-pointer"
-                        title="Remove item"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Delivery Policy Notice */}

@@ -123,6 +123,18 @@ export const normalizeProduct = (item: any): Product => {
     ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
     allergens: Array.isArray(item.allergens) ? item.allergens : [],
     tags: Array.isArray(item.tags) ? item.tags : item.dietaryTags || [],
+    hasVariants: Boolean(item.hasVariants),
+    variantLabel: item.variantLabel || "Choose Option",
+    variants: Array.isArray(item.variants)
+      ? item.variants.map((v: any, idx: number) => ({
+          _id: v._id || v.id,
+          id: v.id || v._id,
+          name: v.name,
+          price: typeof v.price === "number" ? v.price : Number(v.price) || 0,
+          isAvailable: v.isAvailable !== false,
+          sortOrder: v.sortOrder ?? idx + 1,
+        }))
+      : [],
   };
 };
 

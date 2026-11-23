@@ -22,7 +22,7 @@ import {
   useToggleProductAvailability,
   useToggleProductStatus,
 } from "@/hooks/useAdminQueries";
-import { Product, DietaryType } from "@/types";
+import { Product, DietaryType, ProductVariant } from "@/types";
 import { MediaImageUpload } from "@/components/media/MediaImageUpload";
 import { MediaVideoUpload } from "@/components/media/MediaVideoUpload";
 import { StorageUsageCard } from "@/components/media/StorageUsageCard";
@@ -64,6 +64,9 @@ function ProductsContent() {
     nutritionalInfo: { calories: 420, protein: 30, carbs: 45, fats: 10, fiber: 8 },
     ingredients: ["Fresh seasonal produce", "Cold-pressed oil", "Whole spices"],
     allergens: ["None"],
+    hasVariants: false,
+    variantLabel: "Choose Option",
+    variants: [],
   });
 
   const { data: products = [], isLoading } = useAdminProducts({
@@ -107,6 +110,9 @@ function ProductsContent() {
       nutritionalInfo: { calories: 400, protein: 25, carbs: 45, fats: 10, fiber: 8 },
       ingredients: ["Fresh produce"],
       allergens: ["None"],
+      hasVariants: false,
+      variantLabel: "Choose Option",
+      variants: [],
     });
     setModalOpen(true);
   };
@@ -149,6 +155,9 @@ function ProductsContent() {
       },
       ingredients: p.ingredients || [],
       allergens: p.allergens || [],
+      hasVariants: p.hasVariants || false,
+      variantLabel: p.variantLabel || "Choose Option",
+      variants: p.variants || [],
     });
     setModalOpen(true);
   };
@@ -174,6 +183,30 @@ function ProductsContent() {
     if (!formData.categoryIds || formData.categoryIds.length === 0) {
       toast.error("Please assign at least one category to this product.");
       return;
+    }
+    if (formData.hasVariants) {
+      if (!formData.variants || formData.variants.length === 0) {
+        toast.error("Please add at least one variant option for this product.");
+        return;
+      }
+      const names = new Set<string>();
+      for (let i = 0; i < formData.variants.length; i++) {
+        const v = formData.variants[i];
+        if (!v.name.trim()) {
+          toast.error(`Variant option #${i + 1} must have a non-empty name.`);
+          return;
+        }
+        const canonical = v.name.trim().toLowerCase();
+        if (names.has(canonical)) {
+          toast.error(`Duplicate variant name "${v.name}" is not allowed.`);
+          return;
+        }
+        names.add(canonical);
+        if (typeof v.price !== "number" || isNaN(v.price) || v.price < 0) {
+          toast.error(`Variant "${v.name}" must have a valid non-negative price.`);
+          return;
+        }
+      }
     }
     if (isSaving) return;
 
@@ -300,11 +333,29 @@ function ProductsContent() {
                     </td>
 
                     <td className="py-3.5 px-4">
-                      <div className="font-bold text-[#1F271F]">₹{p.price}</div>
-                      {p.costPrice && (
-                        <div className="text-[10px] text-[#8A9A86]">
-                          Cost: ₹{p.costPrice}
+                      {p.hasVariants && Array.isArray(p.variants) && p.variants.length > 0 ? (
+                        <div>
+                          <div className="font-bold text-[#1F271F]">
+                            {(() => {
+                              const prices = p.variants.map((v) => v.price);
+                              const min = Math.min(...prices);
+                              const max = Math.max(...prices);
+                              return min === max ? `₹${min}` : `₹${min} - ₹${max}`;
+                            })()}
+                          </div>
+                          <div className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                            {p.variants.length} options
+                          </div>
                         </div>
+                      ) : (
+                        <>
+                          <div className="font-bold text-[#1F271F]">₹{p.price}</div>
+                          {p.costPrice && (
+                            <div className="text-[10px] text-[#8A9A86]">
+                              Cost: ₹{p.costPrice}
+                            </div>
+                          )}
+                        </>
                       )}
                     </td>
 
@@ -510,6 +561,189 @@ function ProductsContent() {
                     <option value="vegan">Vegan</option>
                     <option value="egg">Egg</option>
                   </select>
+                </div>
+
+                {/* Product Variants / Customisations Section */}
+                <div className="col-span-3 p-4 rounded-2xl bg-[#F7F3EA] border border-[#E5DFC5] space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-[#1F271F] flex items-center gap-2">
+                        <span>Product Variants / Customisations</span>
+                        {formData.hasVariants && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#354B35] text-white">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-[#667266]">
+                        Does this food item have different variants with distinct prices? (e.g. Chicken ₹199, Paneer ₹179, Soyabean ₹149)
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.hasVariants || false}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          const initialVariants =
+                            checked && (!formData.variants || formData.variants.length === 0)
+                              ? [
+                                  {
+                                    name: "Option 1",
+                                    price: formData.price,
+                                    isAvailable: true,
+                                    sortOrder: 1,
+                                  },
+                                ]
+                              : formData.variants || [];
+                          setFormData({
+                            ...formData,
+                            hasVariants: checked,
+                            variants: initialVariants,
+                          });
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#354B35]"></div>
+                    </label>
+                  </div>
+
+                  {formData.hasVariants && (
+                    <div className="space-y-3 pt-2 border-t border-[#E5DFC5]">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-[#1F271F]">
+                          Selection Prompt / Label *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.variantLabel || "Choose Option"}
+                          onChange={(e) =>
+                            setFormData({ ...formData, variantLabel: e.target.value })
+                          }
+                          placeholder="e.g. Choose Protein, Select Base, Choose Size"
+                          className="w-full p-2 text-xs rounded-xl bg-white border border-[#E5DFC5]"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-[#1F271F]">
+                            Option List ({formData.variants?.length || 0})
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const current = formData.variants || [];
+                              const nextOrder = current.length + 1;
+                              setFormData({
+                                ...formData,
+                                variants: [
+                                  ...current,
+                                  {
+                                    name: "",
+                                    price: formData.price,
+                                    isAvailable: true,
+                                    sortOrder: nextOrder,
+                                  },
+                                ],
+                              });
+                            }}
+                            className="px-2.5 py-1 text-xs font-bold rounded-lg bg-[#354B35] text-white hover:bg-[#253525] transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Option</span>
+                          </button>
+                        </div>
+
+                        {(!formData.variants || formData.variants.length === 0) ? (
+                          <div className="p-3 text-xs text-center text-[#8A9A86] border border-dashed border-[#D5CDBE] rounded-xl bg-white">
+                            No options added yet. Click &ldquo;Add Option&rdquo; above.
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {formData.variants.map((v, idx) => (
+                              <div
+                                key={idx}
+                                className="p-2.5 bg-white rounded-xl border border-[#E5DFC5] flex items-center gap-2.5"
+                              >
+                                <div className="flex-1">
+                                  <label className="text-[10px] text-[#8A9A86] font-semibold block">
+                                    Variant Name *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    required
+                                    value={v.name}
+                                    placeholder="e.g. Chicken, Paneer, Soyabean"
+                                    onChange={(e) => {
+                                      const updated = [...(formData.variants || [])];
+                                      updated[idx] = { ...updated[idx], name: e.target.value };
+                                      setFormData({ ...formData, variants: updated });
+                                    }}
+                                    className="w-full p-1.5 text-xs rounded-lg border border-[#E5DFC5] bg-[#F7F3EA]"
+                                  />
+                                </div>
+
+                                <div className="w-28">
+                                  <label className="text-[10px] text-[#8A9A86] font-semibold block">
+                                    Price (₹) *
+                                  </label>
+                                  <input
+                                    type="number"
+                                    required
+                                    min={0}
+                                    value={v.price}
+                                    onChange={(e) => {
+                                      const updated = [...(formData.variants || [])];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        price: Number(e.target.value),
+                                      };
+                                      setFormData({ ...formData, variants: updated });
+                                    }}
+                                    className="w-full p-1.5 text-xs rounded-lg border border-[#E5DFC5] bg-[#F7F3EA]"
+                                  />
+                                </div>
+
+                                <div className="flex flex-col items-center">
+                                  <label className="text-[10px] text-[#8A9A86] font-semibold block">
+                                    Available
+                                  </label>
+                                  <input
+                                    type="checkbox"
+                                    checked={v.isAvailable !== false}
+                                    onChange={(e) => {
+                                      const updated = [...(formData.variants || [])];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        isAvailable: e.target.checked,
+                                      };
+                                      setFormData({ ...formData, variants: updated });
+                                    }}
+                                    className="mt-1 h-4 w-4 rounded text-[#354B35] cursor-pointer"
+                                  />
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = (formData.variants || []).filter(
+                                      (_, i) => i !== idx
+                                    );
+                                    setFormData({ ...formData, variants: updated });
+                                  }}
+                                  className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer mt-3"
+                                  title="Remove option"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5 col-span-3">

@@ -34,6 +34,9 @@ function parseCartData(raw: any): { items: CartItem[]; itemTotal: number } {
     .map((it: any) => ({
       product: normalizeProduct(it.product || it),
       quantity: it.quantity,
+      variantId: it.variantId || null,
+      variantName: it.variantName || null,
+      unitPrice: typeof it.unitPrice === "number" ? it.unitPrice : undefined,
     }));
 
   return { items, itemTotal: typeof data.itemTotal === "number" ? data.itemTotal : 0 };
@@ -71,6 +74,7 @@ export const cartService = {
           .map((it) => ({
             productId: it.product.id || (it.product as any)._id,
             quantity: it.quantity || 1,
+            variantId: it.variantId || undefined,
           })),
       };
 
@@ -93,11 +97,11 @@ export const cartService = {
   /**
    * Add item to customer cart in backend (/cart/items)
    */
-  async addItem(productId: string, quantity = 1): Promise<{ items: CartItem[]; itemTotal: number }> {
+  async addItem(productId: string, quantity = 1, variantId?: string | null): Promise<{ items: CartItem[]; itemTotal: number }> {
     try {
       const response = await apiClient.post<
         ApiResponse<{ cart: BackendCartResponse }> | { cart: BackendCartResponse }
-      >(API_ENDPOINTS.CART.ADD_ITEM, { productId, quantity });
+      >(API_ENDPOINTS.CART.ADD_ITEM, { productId, quantity, variantId: variantId || undefined });
 
       const parsed = parseCartData(response.data);
       if (parsed.items.length > 0) {
@@ -113,11 +117,11 @@ export const cartService = {
   /**
    * Update quantity of item in customer cart (/cart/items/:productId)
    */
-  async updateQuantity(productId: string, quantity: number): Promise<{ items: CartItem[]; itemTotal: number }> {
+  async updateQuantity(productId: string, quantity: number, variantId?: string | null): Promise<{ items: CartItem[]; itemTotal: number }> {
     try {
       const response = await apiClient.patch<
         ApiResponse<{ cart: BackendCartResponse }> | { cart: BackendCartResponse }
-      >(API_ENDPOINTS.CART.UPDATE_ITEM(productId), { quantity });
+      >(API_ENDPOINTS.CART.UPDATE_ITEM(productId), { quantity, variantId: variantId || undefined });
 
       const parsed = parseCartData(response.data);
       if (parsed.items.length > 0) {
@@ -133,11 +137,13 @@ export const cartService = {
   /**
    * Remove item from cart (/cart/items/:productId)
    */
-  async removeItem(productId: string): Promise<{ items: CartItem[]; itemTotal: number }> {
+  async removeItem(productId: string, variantId?: string | null): Promise<{ items: CartItem[]; itemTotal: number }> {
     try {
       const response = await apiClient.delete<
         ApiResponse<{ cart: BackendCartResponse }> | { cart: BackendCartResponse }
-      >(API_ENDPOINTS.CART.REMOVE_ITEM(productId));
+      >(API_ENDPOINTS.CART.REMOVE_ITEM(productId), {
+        data: { variantId: variantId || undefined },
+      });
 
       const parsed = parseCartData(response.data);
       return parsed;

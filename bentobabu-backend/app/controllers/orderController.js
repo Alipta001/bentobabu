@@ -204,16 +204,43 @@ class OrderController {
           });
         }
 
-        const pricePaise = Math.round(prod.price * 100);
+        let unitPrice = prod.price;
+        let variantName = '';
+        let variantId = null;
+
+        if (prod.hasVariants) {
+          const matchedVariant = Array.isArray(prod.variants)
+            ? prod.variants.find((v) => v._id && v._id.toString() === (item.variantId ? item.variantId.toString() : ''))
+            : null;
+          if (!matchedVariant) {
+            return res.status(400).json({
+              success: false,
+              message: `A selected option for "${prod.name}" is no longer available. Please update your cart.`,
+            });
+          }
+          if (matchedVariant.isAvailable === false) {
+            return res.status(400).json({
+              success: false,
+              message: `Option "${matchedVariant.name}" for "${prod.name}" is currently unavailable. Please update your cart.`,
+            });
+          }
+          unitPrice = matchedVariant.price;
+          variantName = matchedVariant.name;
+          variantId = matchedVariant._id;
+        }
+
+        const pricePaise = Math.round(unitPrice * 100);
         const subtotalPaise = pricePaise * item.quantity;
         itemTotalPaise += subtotalPaise;
 
         itemSnapshots.push({
           product: prod._id,
           productName: prod.name,
+          variantId: variantId || null,
+          variantName: variantName || '',
           image: prod.images && prod.images.length > 0 ? prod.images[0] : '',
           quantity: item.quantity,
-          unitPrice: prod.price,
+          unitPrice,
           subtotal: subtotalPaise / 100,
         });
       }
@@ -739,12 +766,18 @@ class OrderController {
         const itemSnapshots = [];
 
         const serviceDateToday = getKolkataDateString();
-        const itemsToReserve = cart.items.map((it) => {
-          const prod = cartProductMap.get(it.product.toString());
+        const aggregatedReserveMap = new Map();
+        for (const it of cart.items) {
+          const pid = it.product.toString();
+          aggregatedReserveMap.set(pid, (aggregatedReserveMap.get(pid) || 0) + it.quantity);
+        }
+
+        const itemsToReserve = Array.from(aggregatedReserveMap.entries()).map(([productId, quantity]) => {
+          const prod = cartProductMap.get(productId);
           return {
-            productId: it.product,
+            productId,
             productName: prod ? prod.name : 'Food Item',
-            quantity: it.quantity,
+            quantity,
           };
         });
 
@@ -757,10 +790,31 @@ class OrderController {
             quantity: it.quantity,
             serviceDate: serviceDateToday,
           });
+        }
 
-          const product = cartProductMap.get(it.productId.toString());
-          const pricePaise = Math.round(product.price * 100);
-          const subtotalPaise = pricePaise * it.quantity;
+        for (const item of cart.items) {
+          const product = cartProductMap.get(item.product.toString());
+          let unitPrice = product.price;
+          let variantName = '';
+          let variantId = null;
+
+          if (product.hasVariants) {
+            const matchedVariant = Array.isArray(product.variants)
+              ? product.variants.find((v) => v._id && v._id.toString() === (item.variantId ? item.variantId.toString() : ''))
+              : null;
+            if (!matchedVariant) {
+              throw new Error(`A selected option for "${product.name}" is no longer available. Please update your cart.`);
+            }
+            if (matchedVariant.isAvailable === false) {
+              throw new Error(`Option "${matchedVariant.name}" for "${product.name}" is currently unavailable. Please update your cart.`);
+            }
+            unitPrice = matchedVariant.price;
+            variantName = matchedVariant.name;
+            variantId = matchedVariant._id;
+          }
+
+          const pricePaise = Math.round(unitPrice * 100);
+          const subtotalPaise = pricePaise * item.quantity;
           itemTotalPaise += subtotalPaise;
 
           const productImg =
@@ -775,9 +829,11 @@ class OrderController {
           itemSnapshots.push({
             product: product._id,
             productName: product.name,
+            variantId: variantId || null,
+            variantName: variantName || '',
             image: productImg,
-            quantity: it.quantity,
-            unitPrice: product.price,
+            quantity: item.quantity,
+            unitPrice,
             subtotal: subtotalPaise / 100,
           });
         }

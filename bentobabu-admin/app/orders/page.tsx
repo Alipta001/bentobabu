@@ -376,6 +376,7 @@ function OrdersContent() {
                         <div className="min-w-0">
                           <div className="font-medium text-[#1F271F] line-clamp-1">
                             {order.items[0]?.productName || "Bento Item"}
+                            {order.items[0]?.variantName ? ` (${order.items[0].variantName})` : ""}
                           </div>
                           {order.items.length > 1 && (
                             <div className="text-[10px] text-[#B99A60] font-semibold">
@@ -930,6 +931,11 @@ function OrdersContent() {
                           <div className="font-bold text-[#1F271F] line-clamp-1">
                             {item.quantity}x {item.productName}
                           </div>
+                          {item.variantName && (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 mt-0.5">
+                              {item.variantName}
+                            </span>
+                          )}
                           <div className="text-[11px] text-[#667266]">
                             ₹{item.price} each
                           </div>

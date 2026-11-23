@@ -72,34 +72,90 @@ export const cartSlice = createSlice({
       state.items = action.payload;
       saveState(state);
     },
-    addToCart: (state, action: PayloadAction<{ product: Product; quantity?: number }>) => {
-      const { product, quantity = 1 } = action.payload;
-      const existing = state.items.find((item) => item.product.id === product.id);
+    addToCart: (
+      state,
+      action: PayloadAction<{
+        product: Product;
+        quantity?: number;
+        variantId?: string | null;
+        variantName?: string | null;
+        unitPrice?: number;
+      }>
+    ) => {
+      const { product, quantity = 1, variantId = null, variantName = null, unitPrice } = action.payload;
+      const targetVariantId = variantId ? String(variantId) : null;
+      const existing = state.items.find(
+        (item) =>
+          item.product.id === product.id &&
+          (item.variantId ? String(item.variantId) : null) === targetVariantId
+      );
+
+      const effectiveUnitPrice = unitPrice !== undefined ? unitPrice : product.price;
 
       if (existing) {
         existing.quantity += quantity;
+        if (unitPrice !== undefined) existing.unitPrice = unitPrice;
+        if (variantName) existing.variantName = variantName;
       } else {
-        state.items.push({ product, quantity });
+        state.items.push({
+          product,
+          quantity,
+          variantId: targetVariantId,
+          variantName,
+          unitPrice: effectiveUnitPrice,
+        });
       }
       saveState(state);
     },
     updateQuantity: (
       state,
-      action: PayloadAction<{ productId: string; quantity: number }>
+      action: PayloadAction<{ productId: string; quantity: number; variantId?: string | null }>
     ) => {
-      const { productId, quantity } = action.payload;
+      const { productId, quantity, variantId } = action.payload;
+      const targetVariantId = variantId !== undefined ? (variantId ? String(variantId) : null) : undefined;
       if (quantity <= 0) {
-        state.items = state.items.filter((item) => item.product.id !== productId);
+        state.items = state.items.filter(
+          (item) =>
+            !(
+              item.product.id === productId &&
+              (targetVariantId !== undefined
+                ? (item.variantId ? String(item.variantId) : null) === targetVariantId
+                : true)
+            )
+        );
       } else {
-        const item = state.items.find((it) => it.product.id === productId);
+        const item = state.items.find(
+          (it) =>
+            it.product.id === productId &&
+            (targetVariantId !== undefined
+              ? (it.variantId ? String(it.variantId) : null) === targetVariantId
+              : true)
+        );
         if (item) {
           item.quantity = quantity;
         }
       }
       saveState(state);
     },
-    removeFromCart: (state, action: PayloadAction<string>) => {
-      state.items = state.items.filter((item) => item.product.id !== action.payload);
+    removeFromCart: (
+      state,
+      action: PayloadAction<string | { productId: string; variantId?: string | null }>
+    ) => {
+      if (typeof action.payload === "string") {
+        state.items = state.items.filter((item) => item.product.id !== action.payload);
+      } else {
+        const { productId, variantId } = action.payload;
+        const targetVariantId = variantId ? String(variantId) : null;
+        state.items = state.items.filter(
+          (item) =>
+            !(
+              item.product.id === productId &&
+              (targetVariantId !== null
+                ? (item.variantId ? String(item.variantId) : null) === targetVariantId
+                : true)
+            )
+        );
+      }
       saveState(state);
     },
     applyCoupon: (state, action: PayloadAction<Coupon | null>) => {

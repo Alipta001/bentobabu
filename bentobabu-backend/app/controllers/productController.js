@@ -35,6 +35,73 @@ const normalizeDietaryTags = (tags = []) => {
   return Array.from(result);
 };
 
+const validateAndNormalizeVariants = (hasVariants, variantLabel, rawVariants) => {
+  const isEnabled = Boolean(hasVariants);
+  if (!isEnabled) {
+    return {
+      hasVariants: false,
+      variantLabel: typeof variantLabel === 'string' && variantLabel.trim() ? variantLabel.trim() : 'Choose Option',
+      variants: [],
+    };
+  }
+
+  if (!Array.isArray(rawVariants) || rawVariants.length === 0) {
+    throw new Error('Products with variants must have at least one variant option');
+  }
+
+  const seenNames = new Set();
+  const normalized = [];
+
+  for (let i = 0; i < rawVariants.length; i++) {
+    const v = rawVariants[i];
+    if (!v || typeof v !== 'object') {
+      throw new Error(`Variant at index ${i} is invalid`);
+    }
+
+    const name = typeof v.name === 'string' ? v.name.trim() : '';
+    if (!name) {
+      throw new Error(`Variant at position ${i + 1} must have a non-empty name`);
+    }
+
+    const canonicalName = name.toLowerCase();
+    if (seenNames.has(canonicalName)) {
+      throw new Error(`Duplicate variant name "${name}" is not permitted for the same product`);
+    }
+    seenNames.add(canonicalName);
+
+    const price = typeof v.price === 'number' ? v.price : Number(v.price);
+    if (isNaN(price) || price < 0) {
+      throw new Error(`Variant "${name}" must have a valid non-negative price`);
+    }
+
+    const isAvailable = v.isAvailable !== undefined ? Boolean(v.isAvailable) : true;
+    const sortOrder = Number.isInteger(Number(v.sortOrder)) ? Number(v.sortOrder) : i + 1;
+
+    const variantDoc = {
+      name,
+      price,
+      isAvailable,
+      sortOrder,
+    };
+
+    if (v._id && mongoose.Types.ObjectId.isValid(v._id)) {
+      variantDoc._id = v._id;
+    } else if (v.id && mongoose.Types.ObjectId.isValid(v.id)) {
+      variantDoc._id = v.id;
+    }
+
+    normalized.push(variantDoc);
+  }
+
+  const label = typeof variantLabel === 'string' && variantLabel.trim() ? variantLabel.trim() : 'Choose Option';
+
+  return {
+    hasVariants: true,
+    variantLabel: label,
+    variants: normalized,
+  };
+};
+
 class ProductController {
   /**
    * GET /api/v1/products
@@ -423,6 +490,9 @@ class ProductController {
         isActive,
         preparationTime,
         preparationTimeMinutes,
+        hasVariants,
+        variantLabel,
+        variants,
       } = req.body;
 
       if (!name || typeof name !== 'string' || !name.trim()) {
@@ -432,11 +502,32 @@ class ProductController {
         });
       }
 
-      if (price === undefined || typeof price !== 'number' || price < 0) {
+      let normalizedVariantsData;
+      try {
+        normalizedVariantsData = validateAndNormalizeVariants(
+          hasVariants,
+          variantLabel,
+          variants
+        );
+      } catch (err) {
         return res.status(400).json({
           success: false,
-          message: 'A valid non-negative product price is required',
+          message: err.message,
         });
+      }
+
+      let resolvedPrice = price;
+      if (normalizedVariantsData.hasVariants) {
+        if (resolvedPrice === undefined || typeof resolvedPrice !== 'number' || resolvedPrice < 0) {
+          resolvedPrice = Math.min(...normalizedVariantsData.variants.map((v) => v.price));
+        }
+      } else {
+        if (resolvedPrice === undefined || typeof resolvedPrice !== 'number' || resolvedPrice < 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'A valid non-negative product price is required',
+          });
+        }
       }
 
       // Support multiple categories or legacy single category assignment
@@ -549,7 +640,7 @@ class ProductController {
         images: resolvedImages,
         imagesData: resolvedImagesData,
         video: video && typeof video === 'object' && video.secureUrl ? video : undefined,
-        price,
+        price: resolvedPrice,
         compareAtPrice: typeof compareAtPrice === 'number' && compareAtPrice >= 0 ? compareAtPrice : null,
         ingredients: Array.isArray(ingredients) ? ingredients : [],
         portionSize: typeof portionSize === 'string' ? portionSize.trim() : '',
@@ -562,6 +653,9 @@ class ProductController {
         isAvailable: initialAvailability,
         isFeatured: Boolean(isFeatured),
         isActive: isActive !== undefined ? Boolean(isActive) : true,
+        hasVariants: normalizedVariantsData.hasVariants,
+        variantLabel: normalizedVariantsData.variantLabel,
+        variants: normalizedVariantsData.variants,
       });
 
       // Link any uploaded Media assets to this product
@@ -636,6 +730,9 @@ class ProductController {
         isFeatured,
         preparationTime,
         preparationTimeMinutes,
+        hasVariants,
+        variantLabel,
+        variants,
       } = req.body;
 
       if (name !== undefined) {
@@ -816,6 +913,36 @@ class ProductController {
             });
           }
           product.preparationTime = p;
+        }
+      }
+
+      if (hasVariants !== undefined || variants !== undefined || variantLabel !== undefined) {
+        const targetHasVariants = hasVariants !== undefined ? Boolean(hasVariants) : Boolean(product.hasVariants);
+        const targetLabel = variantLabel !== undefined ? variantLabel : product.variantLabel;
+        const targetVariants = variants !== undefined ? variants : product.variants;
+
+        let normalizedVariantsData;
+        try {
+          normalizedVariantsData = validateAndNormalizeVariants(
+            targetHasVariants,
+            targetLabel,
+            targetVariants
+          );
+        } catch (err) {
+          return res.status(400).json({
+            success: false,
+            message: err.message,
+          });
+        }
+
+        product.hasVariants = normalizedVariantsData.hasVariants;
+        product.variantLabel = normalizedVariantsData.variantLabel;
+        product.variants = normalizedVariantsData.variants;
+
+        if (product.hasVariants && product.variants.length > 0) {
+          if (price === undefined && (product.price === undefined || product.price === null || product.price === 0)) {
+            product.price = Math.min(...product.variants.map((v) => v.price));
+          }
         }
       }
 

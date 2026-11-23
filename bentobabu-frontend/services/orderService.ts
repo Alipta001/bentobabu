@@ -54,6 +54,8 @@ export const normalizeOrder = (ord: any): Order => {
         productId: it.product?._id || it.product?.id || it.productId || it.product || "",
         product: it.product,
         productName: it.productName || it.product?.name || "Bento Meal",
+        variantId: it.variantId || null,
+        variantName: it.variantName || "",
         productImage: it.image || it.productImage || it.product?.images?.[0] || "",
         image: it.image || it.productImage || it.product?.images?.[0] || "",
         price: it.unitPrice || it.price || 0,

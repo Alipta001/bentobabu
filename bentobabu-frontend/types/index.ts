@@ -47,6 +47,15 @@ export interface ProductVideo {
   mediaId?: string;
 }
 
+export interface ProductVariant {
+  _id?: string;
+  id?: string;
+  name: string;
+  price: number;
+  isAvailable: boolean;
+  sortOrder?: number;
+}
+
 export interface Product {
   id: string;
   _id?: string;
@@ -85,11 +94,17 @@ export interface Product {
   ingredients?: string[];
   allergens?: string[];
   tags?: string[];
+  hasVariants?: boolean;
+  variantLabel?: string;
+  variants?: ProductVariant[];
 }
 
 export interface CartItem {
   product: Product;
   quantity: number;
+  variantId?: string | null;
+  variantName?: string | null;
+  unitPrice?: number;
 }
 
 export interface CartState {
@@ -186,6 +201,8 @@ export interface OrderItem {
   productId: string;
   product?: string | Product;
   productName: string;
+  variantId?: string | null;
+  variantName?: string;
   image?: string;
   productImage?: string;
   price: number;

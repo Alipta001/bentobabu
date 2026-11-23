@@ -159,7 +159,9 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
           <div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-lg font-bold text-[#354B35]">
-                ₹{product.price}
+                {product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0
+                  ? `From ₹${Math.min(...product.variants.map((v) => v.price))}`
+                  : `₹${product.price}`}
               </span>
               {product.originalPrice && product.originalPrice > product.price && (
                 <span className="text-xs text-[#5F6D5F] line-through">
@@ -192,6 +194,13 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
             <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
               Sold Out
             </span>
+          ) : product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0 ? (
+            <Link
+              href={`/product/${product.slug}`}
+              className="flex items-center gap-1 px-3.5 py-2 rounded-full text-xs font-semibold shadow-xs bg-[#354B35] text-[#F7F3EA] hover:bg-[#253525] hover:scale-102 transition-all cursor-pointer"
+            >
+              <span>Select Option</span>
+            </Link>
           ) : quantityInCart > 0 ? (
             <div className="flex items-center gap-2 bg-[#354B35] text-[#F7F3EA] rounded-full p-1 shadow-sm">
               <button

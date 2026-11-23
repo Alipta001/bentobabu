@@ -31,6 +31,30 @@ const nutritionSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const productVariantSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: [true, 'Variant name is required'],
+      trim: true,
+    },
+    price: {
+      type: Number,
+      required: [true, 'Variant price is required'],
+      min: [0, 'Variant price cannot be negative'],
+    },
+    isAvailable: {
+      type: Boolean,
+      default: true,
+    },
+    sortOrder: {
+      type: Number,
+      default: 1,
+    },
+  },
+  { _id: true }
+);
+
 const productSchema = new mongoose.Schema(
   {
     name: {
@@ -124,6 +148,20 @@ const productSchema = new mongoose.Schema(
     },
     allergens: {
       type: [String],
+      default: [],
+    },
+    hasVariants: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    variantLabel: {
+      type: String,
+      default: 'Choose Option',
+      trim: true,
+    },
+    variants: {
+      type: [productVariantSchema],
       default: [],
     },
     preparationTime: {

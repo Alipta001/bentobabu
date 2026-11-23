@@ -315,7 +315,7 @@ export default function CheckoutPage() {
 
   // Fallback calculation if backend summary pending
   const clientSubtotal = cartItems.reduce(
-    (acc, item) => acc + item.product.price * item.quantity,
+    (acc, item) => acc + (item.unitPrice ?? item.product.price) * item.quantity,
     0
   );
   const clientDiscount = appliedCoupon
@@ -1012,22 +1012,31 @@ export default function CheckoutPage() {
 
                   {/* Items list preview */}
                   <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1">
-                    {cartItems.map((item) => (
-                      <div
-                        key={item.product.id}
-                        className="flex items-center justify-between text-xs"
-                      >
-                        <div className="flex-1 pr-2 truncate">
-                          <span className="font-bold text-[#354B35]">
-                            {item.quantity}x
-                          </span>{" "}
-                          <span className="text-[#222922]">{item.product.name}</span>
+                    {cartItems.map((item) => {
+                      const itemPrice = item.unitPrice ?? item.product.price;
+                      const itemKey = `${item.product.id}-${item.variantId || "default"}`;
+                      return (
+                        <div
+                          key={itemKey}
+                          className="flex items-center justify-between text-xs"
+                        >
+                          <div className="flex-1 pr-2 truncate">
+                            <span className="font-bold text-[#354B35]">
+                              {item.quantity}x
+                            </span>{" "}
+                            <span className="text-[#222922]">{item.product.name}</span>
+                            {item.variantName && (
+                              <span className="ml-1.5 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                {item.variantName}
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-bold text-[#222922]">
+                            ₹{itemPrice * item.quantity}
+                          </span>
                         </div>
-                        <span className="font-bold text-[#222922]">
-                          ₹{item.product.price * item.quantity}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Bill Breakdown */}

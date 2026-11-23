@@ -16,6 +16,15 @@ const orderItemSnapshotSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    variantId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    variantName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     quantity: {
       type: Number,
       required: [true, 'Quantity is required'],

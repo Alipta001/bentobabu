@@ -54,12 +54,26 @@ export function useCartSync() {
   }, [user, dispatch]);
 
   const addItem = useCallback(
-    async (product: Product, quantity = 1) => {
+    async (
+      product: Product,
+      quantity = 1,
+      variantId?: string | null,
+      variantName?: string | null,
+      unitPrice?: number
+    ) => {
       // Optimistic update
-      dispatch(localAddToCart({ product, quantity }));
+      dispatch(
+        localAddToCart({
+          product,
+          quantity,
+          variantId: variantId || null,
+          variantName: variantName || null,
+          unitPrice,
+        })
+      );
       if (user) {
         try {
-          await cartService.addItem(product.id, quantity);
+          await cartService.addItem(product.id, quantity, variantId);
         } catch (err) {
           console.error("Failed to sync add item to server cart:", err);
         }
@@ -69,15 +83,15 @@ export function useCartSync() {
   );
 
   const setQuantity = useCallback(
-    async (productId: string, quantity: number) => {
+    async (productId: string, quantity: number, variantId?: string | null) => {
       // Optimistic update
-      dispatch(localUpdateQuantity({ productId, quantity }));
+      dispatch(localUpdateQuantity({ productId, quantity, variantId }));
       if (user) {
         try {
           if (quantity <= 0) {
-            await cartService.removeItem(productId);
+            await cartService.removeItem(productId, variantId);
           } else {
-            await cartService.updateQuantity(productId, quantity);
+            await cartService.updateQuantity(productId, quantity, variantId);
           }
         } catch (err) {
           console.error("Failed to sync quantity update to server cart:", err);
@@ -88,12 +102,12 @@ export function useCartSync() {
   );
 
   const removeItem = useCallback(
-    async (productId: string) => {
+    async (productId: string, variantId?: string | null) => {
       // Optimistic update
-      dispatch(localRemoveFromCart(productId));
+      dispatch(localRemoveFromCart({ productId, variantId }));
       if (user) {
         try {
-          await cartService.removeItem(productId);
+          await cartService.removeItem(productId, variantId);
         } catch (err) {
           console.error("Failed to sync item removal to server cart:", err);
         }

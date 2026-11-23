@@ -1,6 +1,6 @@
 import adminApiClient from "@/api/axios/axios";
 import { ADMIN_API_ENDPOINTS } from "@/api/endPoints/endPoints";
-import { Product, DietaryType, ProductMediaImage, ProductVideo } from "@/types";
+import { Product, DietaryType, ProductMediaImage, ProductVideo, ProductVariant } from "@/types";
 import { categoryService } from "./categoryService";
 
 export interface BackendProduct {
@@ -35,6 +35,9 @@ export interface BackendProduct {
   isAvailable?: boolean;
   isActive?: boolean;
   isFeatured?: boolean;
+  hasVariants?: boolean;
+  variantLabel?: string;
+  variants?: ProductVariant[];
   createdAt?: string;
 }
 
@@ -170,6 +173,18 @@ export const mapBackendProduct = (p: BackendProduct): Product => {
       servingSize: p.portionSize || "1 portion",
       ingredients: p.ingredients || [],
       allergens: p.allergens || [],
+      hasVariants: p.hasVariants ?? false,
+      variantLabel: p.variantLabel || "Choose Option",
+      variants: Array.isArray(p.variants)
+        ? p.variants.map((v) => ({
+            _id: v._id || v.id,
+            id: v.id || v._id,
+            name: v.name,
+            price: v.price,
+            isAvailable: v.isAvailable ?? true,
+            sortOrder: v.sortOrder ?? 1,
+          }))
+        : [],
     nutritionalInfo: p.nutrition
       ? {
           calories: p.nutrition.calories ?? 0,
@@ -280,6 +295,17 @@ export const productService = {
       isAvailable: data.isAvailable ?? true,
       isFeatured: data.isBestseller ?? false,
       isActive: true,
+      hasVariants: Boolean(data.hasVariants),
+      variantLabel: data.variantLabel || "Choose Option",
+      variants: Array.isArray(data.variants)
+        ? data.variants.map((v, i) => ({
+            name: v.name.trim(),
+            price: Number(v.price) || 0,
+            isAvailable: v.isAvailable ?? true,
+            sortOrder: v.sortOrder ?? i + 1,
+            ...(v._id || v.id ? { _id: v._id || v.id } : {}),
+          }))
+        : [],
     };
 
     const res = await adminApiClient.post<{
@@ -343,6 +369,19 @@ export const productService = {
       payload.dietaryTags = mapDietaryToTags(data.dietary);
     }
     if (data.allergens !== undefined) payload.allergens = data.allergens;
+    if (data.hasVariants !== undefined) payload.hasVariants = Boolean(data.hasVariants);
+    if (data.variantLabel !== undefined) payload.variantLabel = data.variantLabel;
+    if (data.variants !== undefined) {
+      payload.variants = Array.isArray(data.variants)
+        ? data.variants.map((v, i) => ({
+            name: v.name.trim(),
+            price: Number(v.price) || 0,
+            isAvailable: v.isAvailable ?? true,
+            sortOrder: v.sortOrder ?? i + 1,
+            ...(v._id || v.id ? { _id: v._id || v.id } : {}),
+          }))
+        : [];
+    }
     if (data.nutritionalInfo) {
       payload.nutrition = {
         calories: data.nutritionalInfo.calories ?? 0,

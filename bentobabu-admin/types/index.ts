@@ -45,6 +45,15 @@ export interface Category {
   itemCount?: number;
 }
 
+export interface ProductVariant {
+  _id?: string;
+  id?: string;
+  name: string;
+  price: number;
+  isAvailable: boolean;
+  sortOrder?: number;
+}
+
 export interface Product {
   id: string;
   slug: string;
@@ -75,6 +84,9 @@ export interface Product {
   nutritionalInfo?: NutritionalInfo;
   ingredients?: string[];
   allergens?: string[];
+  hasVariants?: boolean;
+  variantLabel?: string;
+  variants?: ProductVariant[];
   createdAt: string;
 }
 
@@ -82,6 +94,8 @@ export interface OrderItem {
   productId: string;
   productName: string;
   productImage: string;
+  variantId?: string;
+  variantName?: string;
   price: number;
   quantity: number;
   dietary?: DietaryType;

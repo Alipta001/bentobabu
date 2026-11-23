@@ -109,6 +109,11 @@ export default async function OrderSuccessPage({ params }: OrderSuccessPageProps
                           <div className="font-bold text-[#222922]">
                             {item.quantity}x {item.productName}
                           </div>
+                          {item.variantName && (
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 mt-0.5">
+                              {item.variantName}
+                            </span>
+                          )}
                           <div className="text-[11px] text-[#6B776A]">
                             ₹{item.price} each
                           </div>
