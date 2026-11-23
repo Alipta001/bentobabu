@@ -86,7 +86,7 @@ export function MediaImageUpload({
 
         updatedImages.push({
           publicId: res.media.publicId || "",
-          secureUrl: res.deliveryUrls?.card || res.media.secureUrl,
+          secureUrl: res.media?.secureUrl || res.deliveryUrls?.original || res.deliveryUrls?.card || "",
           format: res.media.format,
           sizeBytes: res.optimizedSize,
           width: res.media.width,

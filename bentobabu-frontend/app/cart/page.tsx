@@ -25,6 +25,7 @@ import { useCartSync } from "@/hooks/useCartSync";
 import { cartService } from "@/services/cartService";
 import { useDeliveryConfig } from "@/hooks/useQueries";
 import { useOrderingStatus } from "@/context/OrderingStatusContext";
+import { getOptimizedImageUrl, isCloudinaryUrl } from "@/utils/mediaUrl";
 
 export default function CartPage() {
   const dispatch = useAppDispatch();
@@ -162,11 +163,12 @@ export default function CartPage() {
                       <div className="flex items-center gap-4">
                         <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-[#EDE8DE] shrink-0 border border-[#E5DFC5]">
                           <Image
-                            src={item.product.imageUrl}
+                            src={getOptimizedImageUrl(item.product.imageUrl, "thumbnail")}
                             alt={item.product.name}
                             fill
                             sizes="80px"
                             className="object-cover"
+                            unoptimized={isCloudinaryUrl(item.product.imageUrl)}
                           />
                         </div>
                         <div className="space-y-1">

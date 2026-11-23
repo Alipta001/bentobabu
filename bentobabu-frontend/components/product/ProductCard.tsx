@@ -10,7 +10,7 @@ import { useAppSelector } from "@/store/hooks";
 import { useCartSync } from "@/hooks/useCartSync";
 import { useToast } from "@/context/ToastContext";
 import { useOrderingStatus } from "@/context/OrderingStatusContext";
-import { getOptimizedImageUrl } from "@/utils/mediaUrl";
+import { getOptimizedImageUrl, isCloudinaryUrl } from "@/utils/mediaUrl";
 import { stripHtmlTags } from "@/utils/textFormat";
 
 interface ProductCardProps {
@@ -81,8 +81,9 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
           priority={priority}
           fetchPriority={priority ? "high" : "auto"}
           loading={priority ? "eager" : "lazy"}
-          sizes="(max-width: 640px) 380px, (max-width: 1024px) 50vw, 25vw"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
           className="object-cover group-hover:scale-105 transition-transform duration-500"
+          unoptimized={isCloudinaryUrl(product.imageUrl)}
         />
 
         {/* Dietary Badge Top Left */}

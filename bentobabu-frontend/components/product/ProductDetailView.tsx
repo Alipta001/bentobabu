@@ -24,7 +24,7 @@ import { ProductReviewsSection } from "@/components/product/ProductReviewsSectio
 import { useCartSync } from "@/hooks/useCartSync";
 import { useToast } from "@/context/ToastContext";
 import { useOrderingStatus } from "@/context/OrderingStatusContext";
-import { getOptimizedImageUrl } from "@/utils/mediaUrl";
+import { getOptimizedImageUrl, isCloudinaryUrl } from "@/utils/mediaUrl";
 import { deduplicateUrls } from "@/services/productService";
 import { ProductDescription } from "@/components/product/ProductDescription";
 
@@ -209,6 +209,7 @@ export function ProductDetailView({
                 loading="eager"
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 className="object-cover transition-all duration-300"
+                unoptimized={isCloudinaryUrl(activeImage)}
               />
               <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
                 <DietaryBadge type={product.dietary} />
@@ -245,6 +246,7 @@ export function ProductDetailView({
                     fill
                     sizes="80px"
                     className="object-cover"
+                    unoptimized={isCloudinaryUrl(img)}
                   />
                 </button>
               ))}

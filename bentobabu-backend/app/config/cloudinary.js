@@ -234,12 +234,13 @@ const getUsage = async () => {
 
 /**
  * Fixed delivery presets to strictly avoid transformation sprawl
- * Preset widths: thumbnail = 320, card = 640, detail = 1200
+ * Preset widths: thumbnail = 320, card = 960, detail = 1600
+ * Notice: quality is not set to auto to avoid aggressive lossy re-encoding over pre-compressed WebP.
  */
 const DELIVERY_PRESETS = {
-  thumbnail: { width: 320, crop: 'limit', quality: 'auto' },
-  card: { width: 640, crop: 'limit', quality: 'auto' },
-  detail: { width: 1200, crop: 'limit', quality: 'auto' },
+  thumbnail: { width: 320, crop: 'limit' },
+  card: { width: 960, crop: 'limit' },
+  detail: { width: 1600, crop: 'limit' },
 };
 
 /**
@@ -258,15 +259,17 @@ const getDeliveryUrl = (publicId, preset = 'card') => {
   const client = mockCloudinary || configureCloudinary();
   const transformation = DELIVERY_PRESETS[preset] || DELIVERY_PRESETS.card;
 
+  const transform = {
+    width: transformation.width,
+    crop: transformation.crop,
+  };
+  if (transformation.quality) {
+    transform.quality = transformation.quality;
+  }
+
   return client.url(publicId, {
     secure: true,
-    transformation: [
-      {
-        width: transformation.width,
-        crop: transformation.crop,
-        quality: transformation.quality,
-      },
-    ],
+    transformation: [transform],
   });
 };
 
