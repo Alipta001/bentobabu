@@ -106,6 +106,8 @@ class DeliveryController {
         kitchenPinSetting,
         kitchenLatSetting,
         kitchenLngSetting,
+        cutoffSetting,
+        advanceDaysSetting,
       ] = await Promise.all([
         SystemSetting.findOne({ key: { $in: ['MINIMUM_ORDER_VALUE', 'MINIMUM_ORDER_AMOUNT'] } }).lean(),
         SystemSetting.findOne({ key: 'DELIVERY_CHARGE_ENABLED' }).lean(),
@@ -116,6 +118,8 @@ class DeliveryController {
         SystemSetting.findOne({ key: 'KITCHEN_PINCODE' }).lean(),
         SystemSetting.findOne({ key: 'KITCHEN_LATITUDE' }).lean(),
         SystemSetting.findOne({ key: 'KITCHEN_LONGITUDE' }).lean(),
+        SystemSetting.findOne({ key: 'DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES' }).lean(),
+        SystemSetting.findOne({ key: 'MAX_ADVANCE_BOOKING_DAYS' }).lean(),
       ]);
 
       const minimumOrderValue = (minOrderSetting && typeof minOrderSetting.value === 'number')
@@ -127,6 +131,17 @@ class DeliveryController {
         ? chargeAmountSetting.value
         : 30;
 
+      const bookingCutoffMinutes = typeof cutoffSetting?.value === 'number' && cutoffSetting.value >= 0
+        ? cutoffSetting.value
+        : 0;
+      const maxAdvanceBookingDays = typeof advanceDaysSetting?.value === 'number' && advanceDaysSetting.value >= 0
+        ? advanceDaysSetting.value
+        : 3;
+
+      const { getKolkataDateString, addDays } = require('../utils/businessDate');
+      const todayKolkata = getKolkataDateString();
+      const latestBookableDate = addDays(todayKolkata, maxAdvanceBookingDays);
+
       const kitchenLat = typeof kitchenLatSetting?.value === 'number' ? kitchenLatSetting.value : 22.7666909;
       const kitchenLng = typeof kitchenLngSetting?.value === 'number' ? kitchenLngSetting.value : 88.3788318;
 
@@ -137,6 +152,10 @@ class DeliveryController {
           minimumOrderAmount: minimumOrderValue,
           deliveryChargeEnabled,
           deliveryChargeAmount,
+          bookingCutoffMinutes,
+          maxAdvanceBookingDays,
+          todayKolkata,
+          latestBookableDate,
           otpRequired: isDeliveryOtpRequired(),
           centralKitchen: {
             name: kitchenNameSetting?.value || 'BentoBabu Central Kitchen',
@@ -220,6 +239,11 @@ class DeliveryController {
           remainingCapacity: slot.remainingCapacity,
           scheduleSource: slot.scheduleSource,
           isActive: slot.isActive,
+          isAvailable: slot.isAvailable,
+          isPastWindow: slot.isPastWindow,
+          isCutoffPassed: slot.isCutoffPassed,
+          cutoffTimeStr: slot.cutoffTimeStr,
+          bookingCutoffMinutes: slot.bookingCutoffMinutes,
         }));
 
       res.status(200).json({
@@ -227,6 +251,8 @@ class DeliveryController {
         serviceable: true,
         state: scheduleResult.state,
         message: scheduleResult.message,
+        bookingCutoffMinutes: scheduleResult.bookingCutoffMinutes,
+        maxAdvanceBookingDays: scheduleResult.maxAdvanceBookingDays,
         data: availableSlots,
         allSlots: scheduleResult.slots,
       });

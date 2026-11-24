@@ -111,10 +111,11 @@ class OrderController {
           });
         }
 
-        if (slot.bookedCount >= slot.capacity) {
+        const slotValidation = await DeliverySlotService.validateSlotForBooking(slot);
+        if (!slotValidation.isValid) {
           return res.status(400).json({
             success: false,
-            message: 'Selected delivery slot is fully booked. Please choose another slot.',
+            message: slotValidation.message,
           });
         }
       }
@@ -694,6 +695,21 @@ class OrderController {
             });
           }
           reservedSlotId = slot._id;
+
+          // Revalidate dynamic booking controls immediately before proceeding
+          const slotValidation = await DeliverySlotService.validateSlotForBooking(slot);
+          if (!slotValidation.isValid) {
+            if (session) {
+              await session.abortTransaction();
+              session.endSession();
+            } else {
+              await DeliverySlot.updateOne({ _id: slot._id }, { $inc: { bookedCount: -1 } });
+            }
+            return res.status(400).json({
+              success: false,
+              message: slotValidation.message,
+            });
+          }
         }
 
         // 4. Fetch Customer Cart

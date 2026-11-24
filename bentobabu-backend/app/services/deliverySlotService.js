@@ -4,11 +4,13 @@ const {
   WeeklyDeliverySchedule,
   DateDeliverySchedule,
   Order,
+  SystemSetting,
 } = require('../models');
 const {
   getKolkataDateString,
   getKolkataTimeString,
   isValidDateString,
+  addDays,
   getDayOfWeek,
   getDayName,
 } = require('../utils/businessDate');
@@ -121,6 +123,39 @@ class DeliverySlotService {
         isClosed: false,
         closureReason: '',
         overrideMode: 'INHERIT',
+        slots: [],
+      };
+    }
+
+    // Retrieve global delivery booking controls
+    const [cutoffSetting, advanceDaysSetting] = await Promise.all([
+      SystemSetting.findOne({ key: 'DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES' }).lean(),
+      SystemSetting.findOne({ key: 'MAX_ADVANCE_BOOKING_DAYS' }).lean(),
+    ]);
+
+    const bookingCutoffMinutes =
+      cutoffSetting && typeof cutoffSetting.value === 'number' && cutoffSetting.value >= 0
+        ? cutoffSetting.value
+        : 0;
+
+    const maxAdvanceBookingDays =
+      advanceDaysSetting && typeof advanceDaysSetting.value === 'number' && advanceDaysSetting.value >= 0
+        ? advanceDaysSetting.value
+        : 3;
+
+    const latestBookableDate = addDays(todayStr, maxAdvanceBookingDays);
+
+    if (!forAdmin && dateStr > latestBookableDate) {
+      return {
+        state: 'ADVANCE_BOOKING_EXCEEDED',
+        message: 'Orders can currently be placed only within the permitted advance booking period. Please select another delivery date.',
+        date: dateStr,
+        dayOfWeek,
+        isClosed: false,
+        closureReason: '',
+        overrideMode: 'INHERIT',
+        bookingCutoffMinutes,
+        maxAdvanceBookingDays,
         slots: [],
       };
     }
@@ -305,10 +340,24 @@ class DeliverySlotService {
     synchronizedSlots.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
     // 7. Calculate availability and accurate state
+    const nowMs = Date.now();
     const formattedSlots = synchronizedSlots.map((s) => {
       const remainingCapacity = Math.max(0, s.capacity - (s.bookedCount || 0));
+
+      // Calculate slot cut-off timing in Asia/Kolkata
+      let isCutoffPassed = false;
+      let cutoffTimeStr = null;
+
+      if (bookingCutoffMinutes > 0 && s.startTime) {
+        const slotStartMs = Date.parse(`${dateStr}T${s.startTime}:00+05:30`);
+        const cutoffMs = slotStartMs - (bookingCutoffMinutes * 60 * 1000);
+        isCutoffPassed = nowMs >= cutoffMs;
+        const cutoffDate = new Date(cutoffMs);
+        cutoffTimeStr = getKolkataTimeString(cutoffDate);
+      }
+
       const isPastWindow = isToday && s.endTime <= currentTimeStr;
-      const isAvailable = s.isActive && remainingCapacity > 0 && !isPastWindow;
+      const isAvailable = s.isActive && remainingCapacity > 0 && !isCutoffPassed && !isPastWindow;
 
       return {
         id: s._id.toString(),
@@ -325,6 +374,9 @@ class DeliverySlotService {
         isActive: s.isActive,
         isAvailable,
         isPastWindow,
+        isCutoffPassed,
+        cutoffTimeStr,
+        bookingCutoffMinutes,
         scheduleSource: s.scheduleSource || 'WEEKLY',
       };
     });
@@ -342,9 +394,11 @@ class DeliverySlotService {
       if (slotsWithCapacity.length === 0) {
         state = 'ALL_FULL';
         message = 'All delivery slots are fully booked. Please select another delivery date.';
-      } else if (isToday && slotsWithCapacity.every((s) => s.isPastWindow)) {
+      } else if (slotsWithCapacity.every((s) => s.isCutoffPassed || (isToday && s.isPastWindow))) {
         state = 'BOOKING_CLOSED';
-        message = "Booking for today's delivery windows has closed.";
+        message = isToday
+          ? "Booking for today's delivery windows has closed."
+          : 'Booking for this delivery date has closed.';
       } else {
         state = 'AVAILABLE';
         message = 'Delivery slots are available for booking.';
@@ -359,8 +413,78 @@ class DeliverySlotService {
       isClosed: false,
       closureReason: '',
       overrideMode,
+      bookingCutoffMinutes,
+      maxAdvanceBookingDays,
       slots: formattedSlots,
     };
+  }
+
+  /**
+   * Validates whether a specific DeliverySlot is currently eligible for order booking.
+   * Checks advance booking days and advance booking cut-off minutes.
+   *
+   * @param {Object} slot - DeliverySlot document or plain object
+   * @returns {Promise<{ isValid: boolean, message?: string }>}
+   */
+  static async validateSlotForBooking(slot) {
+    if (!slot || !slot.isActive) {
+      return { isValid: false, message: 'Selected delivery slot is inactive or invalid' };
+    }
+
+    if (slot.bookedCount >= slot.capacity) {
+      return { isValid: false, message: 'Selected delivery slot is fully booked. Please choose another slot.' };
+    }
+
+    const [cutoffSetting, advanceDaysSetting] = await Promise.all([
+      SystemSetting.findOne({ key: 'DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES' }).lean(),
+      SystemSetting.findOne({ key: 'MAX_ADVANCE_BOOKING_DAYS' }).lean(),
+    ]);
+
+    const bookingCutoffMinutes =
+      cutoffSetting && typeof cutoffSetting.value === 'number' && cutoffSetting.value >= 0
+        ? cutoffSetting.value
+        : 0;
+
+    const maxAdvanceBookingDays =
+      advanceDaysSetting && typeof advanceDaysSetting.value === 'number' && advanceDaysSetting.value >= 0
+        ? advanceDaysSetting.value
+        : 3;
+
+    const todayStr = getKolkataDateString();
+    const currentTimeStr = getKolkataTimeString();
+    const latestBookableDate = addDays(todayStr, maxAdvanceBookingDays);
+
+    const slotDateStr = slot.dateStr || (slot.date ? getKolkataDateString(slot.date) : null);
+    if (!slotDateStr) {
+      return { isValid: false, message: 'Delivery slot is missing date information.' };
+    }
+
+    if (slotDateStr < todayStr) {
+      return { isValid: false, message: 'Delivery cannot be scheduled for past dates.' };
+    }
+
+    if (slotDateStr > latestBookableDate) {
+      return {
+        isValid: false,
+        message: 'Orders can currently be placed only within the permitted advance booking period. Please select another delivery date.',
+      };
+    }
+
+    // Cut-off timing check
+    const nowMs = Date.now();
+    const slotStartMs = Date.parse(`${slotDateStr}T${slot.startTime}:00+05:30`);
+    const cutoffMs = slotStartMs - (bookingCutoffMinutes * 60 * 1000);
+    const isCutoffPassed = bookingCutoffMinutes > 0 && nowMs >= cutoffMs;
+    const isPastWindow = slotDateStr === todayStr && currentTimeStr >= slot.endTime;
+
+    if (isCutoffPassed || isPastWindow) {
+      return {
+        isValid: false,
+        message: 'This delivery slot is no longer available for new orders. Please select another delivery time.',
+      };
+    }
+
+    return { isValid: true };
   }
 
   /**

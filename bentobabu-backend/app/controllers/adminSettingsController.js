@@ -22,6 +22,8 @@ const DEFAULT_SETTINGS = {
   ],
   OPENING_TIME: '10:00',
   CLOSING_TIME: '22:00',
+  DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES: 0,
+  MAX_ADVANCE_BOOKING_DAYS: 3,
   ORDER_ACCEPTANCE_ENABLED: true,
   MAINTENANCE_MODE: false,
   KITCHEN_NAME: 'BentoBabu Central Kitchen',
@@ -214,6 +216,30 @@ class AdminSettingsController {
             break;
           }
 
+          case 'DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES': {
+            const cutoff = Number(val);
+            if (!Number.isInteger(cutoff) || cutoff < 0 || cutoff > 1440) {
+              return res.status(400).json({
+                success: false,
+                message: 'DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES must be an integer between 0 and 1440 minutes.',
+              });
+            }
+            updatesToApply[key] = cutoff;
+            break;
+          }
+
+          case 'MAX_ADVANCE_BOOKING_DAYS': {
+            const days = Number(val);
+            if (!Number.isInteger(days) || days < 0 || days > 30) {
+              return res.status(400).json({
+                success: false,
+                message: 'MAX_ADVANCE_BOOKING_DAYS must be an integer between 0 and 30 days.',
+              });
+            }
+            updatesToApply[key] = days;
+            break;
+          }
+
           case 'OPERATING_DAYS':
             if (!Array.isArray(val) || val.length === 0) {
               return res.status(400).json({
@@ -357,8 +383,14 @@ class AdminSettingsController {
 
       await Promise.all(upsertPromises);
 
-      // Invalidate public ordering status cache immediately
+      // Invalidate public ordering status and delivery slot caches immediately
       await redisDel('cache:ordering_status');
+      try {
+        const DeliverySlotService = require('../services/deliverySlotService');
+        await DeliverySlotService.invalidateCache();
+      } catch (err) {
+        console.warn('[AdminSettingsController] DeliverySlotService cache invalidation warning:', err.message);
+      }
 
       const allMerged = await AdminSettingsController.getAllMergedSettings();
 

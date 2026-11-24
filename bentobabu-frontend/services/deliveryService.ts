@@ -138,6 +138,10 @@ export const deliveryService = {
         scheduleSource: s.scheduleSource || "WEEKLY",
         isActive: s.isActive !== false,
         isAvailable: s.isAvailable !== false,
+        isPastWindow: Boolean(s.isPastWindow),
+        isCutoffPassed: Boolean(s.isCutoffPassed),
+        cutoffTimeStr: s.cutoffTimeStr || null,
+        bookingCutoffMinutes: typeof s.bookingCutoffMinutes === "number" ? s.bookingCutoffMinutes : undefined,
       }));
 
       return {
@@ -145,6 +149,8 @@ export const deliveryService = {
         state,
         message,
         serviceable,
+        bookingCutoffMinutes: typeof raw?.bookingCutoffMinutes === "number" ? raw.bookingCutoffMinutes : undefined,
+        maxAdvanceBookingDays: typeof raw?.maxAdvanceBookingDays === "number" ? raw.maxAdvanceBookingDays : undefined,
       };
     } catch (err) {
       console.error("[deliveryService] Error fetching slots:", err);
@@ -158,12 +164,16 @@ export const deliveryService = {
   },
 
   /**
-   * Retrieve platform delivery configuration (admin-configured minimum order value and delivery fees)
+   * Retrieve platform delivery configuration (admin-configured minimum order value, delivery fees, and booking controls)
    */
   async getConfig(): Promise<{
     minimumOrderValue: number;
     deliveryChargeEnabled: boolean;
     deliveryChargeAmount: number;
+    bookingCutoffMinutes: number;
+    maxAdvanceBookingDays: number;
+    todayKolkata: string;
+    latestBookableDate: string;
   }> {
     try {
       const response = await apiClient.get<
@@ -172,6 +182,10 @@ export const deliveryService = {
           minimumOrderAmount: number;
           deliveryChargeEnabled: boolean;
           deliveryChargeAmount: number;
+          bookingCutoffMinutes?: number;
+          maxAdvanceBookingDays?: number;
+          todayKolkata?: string;
+          latestBookableDate?: string;
         }>
       >(API_ENDPOINTS.DELIVERY.CONFIG);
 
@@ -182,12 +196,20 @@ export const deliveryService = {
         minimumOrderValue: typeof data?.minimumOrderValue === "number" ? data.minimumOrderValue : 0,
         deliveryChargeEnabled: data?.deliveryChargeEnabled ?? true,
         deliveryChargeAmount: typeof data?.deliveryChargeAmount === "number" ? data.deliveryChargeAmount : 30,
+        bookingCutoffMinutes: typeof data?.bookingCutoffMinutes === "number" ? data.bookingCutoffMinutes : 0,
+        maxAdvanceBookingDays: typeof data?.maxAdvanceBookingDays === "number" ? data.maxAdvanceBookingDays : 3,
+        todayKolkata: data?.todayKolkata || "",
+        latestBookableDate: data?.latestBookableDate || "",
       };
     } catch {
       return {
         minimumOrderValue: 0,
         deliveryChargeEnabled: true,
         deliveryChargeAmount: 30,
+        bookingCutoffMinutes: 0,
+        maxAdvanceBookingDays: 3,
+        todayKolkata: "",
+        latestBookableDate: "",
       };
     }
   },

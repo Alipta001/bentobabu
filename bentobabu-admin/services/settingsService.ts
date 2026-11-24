@@ -17,6 +17,8 @@ export interface BackendSystemSettings {
   CLOSING_TIME?: string;
   ORDER_ACCEPTANCE_ENABLED?: boolean;
   MAINTENANCE_MODE?: boolean;
+  DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES?: number;
+  MAX_ADVANCE_BOOKING_DAYS?: number;
   KITCHEN_NAME?: string;
   KITCHEN_LANDMARK?: string;
   KITCHEN_ADDRESS?: string;
@@ -49,6 +51,8 @@ const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
   deliveryChargeEnabled: s.DELIVERY_CHARGE_ENABLED ?? true,
   deliveryChargeAmount: s.DELIVERY_CHARGE_AMOUNT ?? s.DEFAULT_DELIVERY_FEE ?? 30,
   minimumOrderValue: s.MINIMUM_ORDER_VALUE ?? s.MINIMUM_ORDER_AMOUNT ?? 0,
+  deliverySlotBookingCutoffMinutes: typeof s.DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES === "number" ? s.DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES : 0,
+  maxAdvanceBookingDays: typeof s.MAX_ADVANCE_BOOKING_DAYS === "number" ? s.MAX_ADVANCE_BOOKING_DAYS : 3,
   isOrderingEnabled: s.ORDER_ACCEPTANCE_ENABLED ?? true,
   fssaiStatus: s.FSSAI_STATUS || "APPLICATION_SUBMITTED",
   fssaiNumber: s.FSSAI_NUMBER || "",
@@ -100,6 +104,12 @@ export const settingsService = {
     if (data.minimumOrderValue !== undefined) {
       backendPayload.MINIMUM_ORDER_VALUE = Number(data.minimumOrderValue);
       backendPayload.MINIMUM_ORDER_AMOUNT = Number(data.minimumOrderValue);
+    }
+    if (data.deliverySlotBookingCutoffMinutes !== undefined) {
+      backendPayload.DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES = Number(data.deliverySlotBookingCutoffMinutes);
+    }
+    if (data.maxAdvanceBookingDays !== undefined) {
+      backendPayload.MAX_ADVANCE_BOOKING_DAYS = Number(data.maxAdvanceBookingDays);
     }
     if (data.operatingHours && data.operatingHours.includes("-")) {
       const parts = data.operatingHours.split("-").map((p) => p.trim());

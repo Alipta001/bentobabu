@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   FileText,
   ShieldCheck,
+  Calendar,
   Upload,
   ExternalLink,
   Globe,
@@ -530,6 +531,83 @@ function SettingsForm({ initialSettings }: { initialSettings: BusinessSettings }
                 Standard cloud kitchen food service GST is 5% (no ITC).
               </p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Delivery Booking Controls */}
+      <div className="bg-white p-6 rounded-2xl border border-[#E5DFD3] shadow-xs space-y-4">
+        <div className="flex items-center gap-2 pb-3 border-b border-[#E5DFD3]">
+          <Clock className="w-4 h-4 text-[#354B35]" />
+          <div>
+            <h3 className="font-serif text-base font-bold text-[#1E2B1E]">
+              Delivery Booking Controls
+            </h3>
+            <p className="text-xs text-[#354B35]/70">
+              Operational controls for initial launch: configure advance slot cut-off minutes and maximum future booking days.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <div>
+            <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+              Delivery Slot Booking Cut-off (Minutes)
+            </label>
+            <div className="relative">
+              <Clock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#354B35]/50" />
+              <input
+                type="number"
+                required
+                min={0}
+                max={1440}
+                step={1}
+                value={formData.deliverySlotBookingCutoffMinutes ?? 0}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    deliverySlotBookingCutoffMinutes: Math.max(
+                      0,
+                      Math.min(1440, Math.floor(Number(e.target.value) || 0))
+                    ),
+                  })
+                }
+                className="w-full pl-9 pr-3 py-2 bg-white border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+              />
+            </div>
+            <p className="text-[10px] text-[#354B35]/60 mt-1">
+              Minutes before slot start when booking closes (0 = no advance cutoff; e.g. 60 = 1 hr before slot start).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+              Maximum Advance Booking Days
+            </label>
+            <div className="relative">
+              <Calendar className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#354B35]/50" />
+              <input
+                type="number"
+                required
+                min={0}
+                max={30}
+                step={1}
+                value={formData.maxAdvanceBookingDays ?? 3}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    maxAdvanceBookingDays: Math.max(
+                      0,
+                      Math.min(30, Math.floor(Number(e.target.value) || 0))
+                    ),
+                  })
+                }
+                className="w-full pl-9 pr-3 py-2 bg-white border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+              />
+            </div>
+            <p className="text-[10px] text-[#354B35]/60 mt-1">
+              How many days ahead customers can select dates (0 = today only, 1 = today + tomorrow, 3 = today + 3 days).
+            </p>
           </div>
         </div>
       </div>

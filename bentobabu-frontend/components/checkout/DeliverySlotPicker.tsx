@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Clock, Calendar, AlertCircle, CheckCircle2, Ban, CalendarX, Lock } from "lucide-react";
-import { useDeliverySlots } from "@/hooks/useQueries";
+import { useDeliverySlots, useDeliveryConfig } from "@/hooks/useQueries";
 import { DeliverySlot } from "@/types";
 
 interface DeliverySlotPickerProps {
@@ -45,12 +45,30 @@ export function DeliverySlotPicker({
   selectedSlotId,
   onSelectSlot,
 }: DeliverySlotPickerProps) {
-  // Generate 4 upcoming dates in Asia/Kolkata (Today, Tomorrow, +2, +3)
-  const dateOptions = useMemo(() => {
-    return [0, 1, 2, 3].map((offset) => getKolkataDateString(offset));
-  }, []);
+  const { data: deliveryConfig } = useDeliveryConfig();
+  const maxAdvanceDays = typeof deliveryConfig?.maxAdvanceBookingDays === "number"
+    ? Math.max(0, Math.min(30, deliveryConfig.maxAdvanceBookingDays))
+    : 3;
 
-  const [selectedDate, setSelectedDate] = useState<string>(dateOptions[0].dateStr);
+  // Dynamically generate dates in Asia/Kolkata from Today (0) up to maxAdvanceBookingDays
+  const dateOptions = useMemo(() => {
+    const options = [];
+    for (let offset = 0; offset <= maxAdvanceDays; offset++) {
+      options.push(getKolkataDateString(offset));
+    }
+    return options.length > 0 ? options : [getKolkataDateString(0)];
+  }, [maxAdvanceDays]);
+
+  const [selectedDate, setSelectedDate] = useState<string>(() => dateOptions[0]?.dateStr || "");
+
+  // If maxAdvanceDays changes and current selectedDate is outside allowed options, reset to today
+  useEffect(() => {
+    const isDateValid = dateOptions.some((opt) => opt.dateStr === selectedDate);
+    if (!isDateValid && dateOptions[0]) {
+      setSelectedDate(dateOptions[0].dateStr);
+      onSelectSlot(null);
+    }
+  }, [dateOptions, selectedDate, onSelectSlot]);
 
   const { data: slotResult, isLoading, error } = useDeliverySlots(pincode, selectedDate);
 
@@ -72,12 +90,19 @@ export function DeliverySlotPicker({
     return slotResult.message || "";
   }, [slotResult]);
 
-  // Auto-select first available slot if none selected or if selected slot not in current date
+  // Auto-select first bookable slot if none selected or if selected slot not in current date or no longer available
   useEffect(() => {
     if (slots.length > 0) {
+      const isBookable = (s: DeliverySlot) =>
+        s.isActive &&
+        s.isAvailable !== false &&
+        !s.isCutoffPassed &&
+        !s.isPastWindow &&
+        Math.max(0, s.capacity - s.bookedCount) > 0;
+
       const currentSelected = slots.find((s) => (s.id || s._id) === selectedSlotId);
-      if (!currentSelected) {
-        const firstAvailable = slots.find((s) => s.isActive && (s.capacity - s.bookedCount > 0));
+      if (!currentSelected || !isBookable(currentSelected)) {
+        const firstAvailable = slots.find(isBookable);
         if (firstAvailable) {
           onSelectSlot(firstAvailable);
         } else {
@@ -136,7 +161,27 @@ export function DeliverySlotPicker({
         </div>
       ) : slots.length === 0 ? (
         <div className="p-4 rounded-2xl border text-xs space-y-1.5 transition-all">
-          {scheduleState === "ALL_FULL" ? (
+          {scheduleState === "ADVANCE_BOOKING_EXCEEDED" ? (
+            <div className="bg-amber-50/80 -m-4 p-4 rounded-2xl border border-amber-200 text-amber-900 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <CalendarX className="w-4 h-4 text-amber-700" />
+                <span>Advance Booking Period Exceeded</span>
+              </div>
+              <p className="text-amber-800 text-[11px] leading-relaxed">
+                {scheduleMessage || "Orders can currently be placed only within the permitted advance booking period. Please select another delivery date."}
+              </p>
+            </div>
+          ) : scheduleState === "PAST_DATE" ? (
+            <div className="bg-amber-50/80 -m-4 p-4 rounded-2xl border border-amber-200 text-amber-900 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <CalendarX className="w-4 h-4 text-amber-700" />
+                <span>Past Date Selected</span>
+              </div>
+              <p className="text-amber-800 text-[11px] leading-relaxed">
+                {scheduleMessage || "Delivery cannot be scheduled for past dates. Please choose today or an upcoming date."}
+              </p>
+            </div>
+          ) : scheduleState === "ALL_FULL" ? (
             <div className="bg-amber-50/80 -m-4 p-4 rounded-2xl border border-amber-200 text-amber-900 space-y-1">
               <div className="flex items-center gap-1.5 font-bold">
                 <Ban className="w-4 h-4 text-amber-700" />
@@ -192,7 +237,9 @@ export function DeliverySlotPicker({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {slots.map((slot) => {
             const slotId = slot.id || slot._id;
-            const isFull = slot.bookedCount >= slot.capacity || !slot.isActive;
+            const isFull = slot.bookedCount >= slot.capacity;
+            const isCutoffOrPast = Boolean(slot.isCutoffPassed || slot.isPastWindow || slot.isAvailable === false);
+            const isDisabled = !slot.isActive || isFull || isCutoffOrPast;
             const isSelected = selectedSlotId === slotId;
             const remaining = Math.max(0, slot.capacity - slot.bookedCount);
             const slotLabel = slot.label || `${slot.startTime} – ${slot.endTime}`;
@@ -201,10 +248,10 @@ export function DeliverySlotPicker({
               <button
                 key={slotId}
                 type="button"
-                disabled={isFull}
+                disabled={isDisabled}
                 onClick={() => onSelectSlot(slot)}
                 className={`p-3.5 rounded-2xl border text-left transition-all flex items-center justify-between cursor-pointer ${
-                  isFull
+                  isDisabled
                     ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60"
                     : isSelected
                     ? "bg-[#354B35]/5 border-[#354B35] text-[#222922] shadow-xs"
@@ -220,8 +267,14 @@ export function DeliverySlotPicker({
                     {slot.startTime} – {slot.endTime}
                   </div>
                   <div className="text-[10px]">
-                    {isFull ? (
+                    {!slot.isActive ? (
+                      <span className="text-rose-600 font-semibold">Unavailable</span>
+                    ) : isFull ? (
                       <span className="text-rose-600 font-semibold">Slot Full</span>
+                    ) : slot.isCutoffPassed ? (
+                      <span className="text-orange-700 font-semibold">Booking Closed (Cut-off reached)</span>
+                    ) : slot.isPastWindow ? (
+                      <span className="text-orange-700 font-semibold">Slot Ended</span>
                     ) : remaining <= 5 ? (
                       <span className="text-amber-700 font-semibold">Only {remaining} slots left!</span>
                     ) : (

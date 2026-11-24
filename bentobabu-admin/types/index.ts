@@ -328,6 +328,8 @@ export interface BusinessSettings {
   deliveryChargeEnabled?: boolean;
   deliveryChargeAmount?: number;
   minimumOrderValue?: number;
+  deliverySlotBookingCutoffMinutes?: number;
+  maxAdvanceBookingDays?: number;
   isOrderingEnabled: boolean;
   fssaiStatus?: FssaiStatus;
   fssaiNumber?: string;

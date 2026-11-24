@@ -303,13 +303,19 @@ export interface DeliverySlot {
   scheduleSource?: "WEEKLY" | "DATE_ADDITION" | "DATE_OVERRIDE" | "CUSTOM" | string;
   isActive: boolean;
   isAvailable?: boolean;
+  isPastWindow?: boolean;
+  isCutoffPassed?: boolean;
+  cutoffTimeStr?: string | null;
+  bookingCutoffMinutes?: number;
 }
 
 export interface DeliverySlotsResult {
   slots: DeliverySlot[];
-  state: "AVAILABLE" | "NO_SCHEDULE" | "ALL_FULL" | "BOOKING_CLOSED" | "DELIVERY_CLOSED" | "UNSERVICEABLE" | string;
+  state: "AVAILABLE" | "NO_SCHEDULE" | "ALL_FULL" | "BOOKING_CLOSED" | "DELIVERY_CLOSED" | "UNSERVICEABLE" | "ADVANCE_BOOKING_EXCEEDED" | "PAST_DATE" | string;
   message: string;
   serviceable: boolean;
+  bookingCutoffMinutes?: number;
+  maxAdvanceBookingDays?: number;
 }
 
 export interface CheckoutSummary {
