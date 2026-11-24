@@ -6,6 +6,8 @@ export interface BackendSystemSettings {
   BUSINESS_NAME?: string;
   SUPPORT_EMAIL?: string;
   SUPPORT_PHONE?: string;
+  SUPPORT_WHATSAPP?: string;
+  SUPPORT_HOURS?: string;
   MINIMUM_ORDER_AMOUNT?: number;
   MINIMUM_ORDER_VALUE?: number;
   DEFAULT_DELIVERY_FEE?: number;
@@ -32,6 +34,10 @@ export interface BackendSystemSettings {
   GST_CERTIFICATE_URL?: string;
   WEBSITE_URL?: string;
   BUSINESS_ADDRESS?: string;
+  INSTAGRAM_URL?: string;
+  FACEBOOK_URL?: string;
+  TWITTER_URL?: string;
+  LINKEDIN_URL?: string;
 }
 
 const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
@@ -39,6 +45,8 @@ const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
   tagline: "Mindful Indian Bento & Clean Meal Boxes",
   supportEmail: s.SUPPORT_EMAIL || "bentobabuofficial@gmail.com",
   supportPhone: s.SUPPORT_PHONE || "+91 8584085669",
+  supportWhatsapp: s.SUPPORT_WHATSAPP || s.SUPPORT_PHONE || "+91 8584085669",
+  supportHours: s.SUPPORT_HOURS || `${s.OPENING_TIME || "10:00"} - ${s.CLOSING_TIME || "22:00"}`,
   kitchenName: s.KITCHEN_NAME || "BentoBabu Central Kitchen",
   kitchenLandmark: s.KITCHEN_LANDMARK || "Apollo Pharmacy / Apollo 24|7",
   kitchenAddress: s.KITCHEN_ADDRESS || "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India",
@@ -61,6 +69,10 @@ const mapSettings = (s: BackendSystemSettings): BusinessSettings => ({
   gstCertificateUrl: s.GST_CERTIFICATE_URL || "",
   websiteUrl: s.WEBSITE_URL || "https://bentobabu.com",
   businessAddress: s.BUSINESS_ADDRESS || "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India",
+  instagramUrl: s.INSTAGRAM_URL || "https://instagram.com/bentobabu",
+  facebookUrl: s.FACEBOOK_URL || "https://facebook.com/bentobabu",
+  twitterUrl: s.TWITTER_URL || "https://twitter.com/bentobabu",
+  linkedinUrl: s.LINKEDIN_URL || "https://linkedin.com/company/bentobabu",
 });
 
 export const settingsService = {
@@ -82,6 +94,8 @@ export const settingsService = {
     if (data.businessName !== undefined) backendPayload.BUSINESS_NAME = data.businessName;
     if (data.supportEmail !== undefined) backendPayload.SUPPORT_EMAIL = data.supportEmail;
     if (data.supportPhone !== undefined) backendPayload.SUPPORT_PHONE = data.supportPhone;
+    if (data.supportWhatsapp !== undefined) backendPayload.SUPPORT_WHATSAPP = data.supportWhatsapp;
+    if (data.supportHours !== undefined) backendPayload.SUPPORT_HOURS = data.supportHours;
     if (data.kitchenName !== undefined) backendPayload.KITCHEN_NAME = data.kitchenName;
     if (data.kitchenLandmark !== undefined) backendPayload.KITCHEN_LANDMARK = data.kitchenLandmark;
     if (data.kitchenAddress !== undefined) backendPayload.KITCHEN_ADDRESS = data.kitchenAddress;
@@ -95,6 +109,10 @@ export const settingsService = {
     if (data.gstCertificateUrl !== undefined) backendPayload.GST_CERTIFICATE_URL = data.gstCertificateUrl;
     if (data.websiteUrl !== undefined) backendPayload.WEBSITE_URL = data.websiteUrl;
     if (data.businessAddress !== undefined) backendPayload.BUSINESS_ADDRESS = data.businessAddress;
+    if (data.instagramUrl !== undefined) backendPayload.INSTAGRAM_URL = data.instagramUrl;
+    if (data.facebookUrl !== undefined) backendPayload.FACEBOOK_URL = data.facebookUrl;
+    if (data.twitterUrl !== undefined) backendPayload.TWITTER_URL = data.twitterUrl;
+    if (data.linkedinUrl !== undefined) backendPayload.LINKEDIN_URL = data.linkedinUrl;
     if (data.isOrderingEnabled !== undefined) backendPayload.ORDER_ACCEPTANCE_ENABLED = data.isOrderingEnabled;
     if (data.deliveryChargeEnabled !== undefined) backendPayload.DELIVERY_CHARGE_ENABLED = data.deliveryChargeEnabled;
     if (data.deliveryChargeAmount !== undefined) {

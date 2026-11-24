@@ -22,6 +22,8 @@ import {
   Globe,
   AlertCircle,
   Loader2,
+  MessageSquare,
+  Share2,
 } from "lucide-react";
 import { useAdminSettings, useUpdateSettings } from "@/hooks/useAdminQueries";
 import { mediaService } from "@/services/mediaService";
@@ -364,7 +366,7 @@ function SettingsForm({ initialSettings }: { initialSettings: BusinessSettings }
 
           <div>
             <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
-              Support Hotline / WhatsApp
+              Support Hotline Phone
             </label>
             <div className="relative">
               <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#354B35]/50" />
@@ -378,6 +380,50 @@ function SettingsForm({ initialSettings }: { initialSettings: BusinessSettings }
                 className="w-full pl-9 pr-3 py-2 bg-[#F9F7F1] border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
               />
             </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+              WhatsApp Support Helpline
+            </label>
+            <div className="relative">
+              <MessageSquare className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#354B35]/50" />
+              <input
+                type="text"
+                placeholder="+91 85840 85669"
+                value={formData.supportWhatsapp || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, supportWhatsapp: e.target.value })
+                }
+                className="w-full pl-9 pr-3 py-2 bg-[#F9F7F1] border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+              />
+            </div>
+            <p className="text-[10px] text-[#354B35]/60 mt-1">
+              Direct chat link used across website header, footer, and support cards.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+              Support & Order Assistance Hours
+            </label>
+            <div className="relative">
+              <Clock className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#354B35]/50" />
+              <input
+                type="text"
+                placeholder="7:00 AM – 10:30 PM (Daily)"
+                value={formData.supportHours || ""}
+                onChange={(e) =>
+                  setFormData({ ...formData, supportHours: e.target.value })
+                }
+                className="w-full pl-9 pr-3 py-2 bg-[#F9F7F1] border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+              />
+            </div>
+            <p className="text-[10px] text-[#354B35]/60 mt-1">
+              Displayed in customer header, footer, and help desk pages.
+            </p>
           </div>
         </div>
 
@@ -819,7 +865,7 @@ function SettingsForm({ initialSettings }: { initialSettings: BusinessSettings }
               rows={2}
               value={
                 formData.businessAddress ||
-                "Chandanpukur Bazar, Barrackpore, West Bengal - 700120"
+                "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India"
               }
               onChange={(e) =>
                 setFormData({
@@ -833,6 +879,83 @@ function SettingsForm({ initialSettings }: { initialSettings: BusinessSettings }
           <p className="text-[10px] text-[#354B35]/60 mt-1">
             Official commercial address printed on tax invoices and payment receipts.
           </p>
+        </div>
+      </div>
+
+      {/* Social Media & Digital Channels */}
+      <div className="bg-white p-6 rounded-2xl border border-[#E5DFD3] shadow-xs space-y-4">
+        <div className="flex items-center gap-2 pb-3 border-b border-[#E5DFD3]">
+          <Share2 className="w-4 h-4 text-[#354B35]" />
+          <div>
+            <h3 className="font-serif text-base font-bold text-[#1E2B1E]">
+              Social Media & Digital Channels
+            </h3>
+            <p className="text-xs text-[#354B35]/70">
+              Configure official links for social community channels rendered in the customer storefront footer.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+              Instagram Profile URL
+            </label>
+            <input
+              type="url"
+              placeholder="https://instagram.com/bentobabu"
+              value={formData.instagramUrl || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, instagramUrl: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+              Facebook Page URL
+            </label>
+            <input
+              type="url"
+              placeholder="https://facebook.com/bentobabu"
+              value={formData.facebookUrl || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, facebookUrl: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+              Twitter / X URL
+            </label>
+            <input
+              type="url"
+              placeholder="https://twitter.com/bentobabu"
+              value={formData.twitterUrl || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, twitterUrl: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
+              LinkedIn Company URL
+            </label>
+            <input
+              type="url"
+              placeholder="https://linkedin.com/company/bentobabu"
+              value={formData.linkedinUrl || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, linkedinUrl: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white border border-[#E5DFD3] rounded-xl text-xs focus:outline-none focus:border-[#354B35]"
+            />
+          </div>
         </div>
       </div>
 

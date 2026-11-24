@@ -11,23 +11,18 @@ class SupportController {
    */
   static async getSupportConfig(req, res, next) {
     try {
-      const [emailSetting, phoneSetting, whatsappSetting, hoursSetting, addressSetting] = await Promise.all([
-        SystemSetting.findOne({ key: 'SUPPORT_EMAIL' }).lean(),
-        SystemSetting.findOne({ key: 'SUPPORT_PHONE' }).lean(),
-        SystemSetting.findOne({ key: 'SUPPORT_WHATSAPP' }).lean(),
-        SystemSetting.findOne({ key: 'SUPPORT_HOURS' }).lean(),
-        SystemSetting.findOne({ key: 'KITCHEN_ADDRESS' }).lean(),
-      ]);
+      res.set({
+        'Cache-Control': 'public, max-age=60, stale-while-revalidate=120',
+      });
 
-      const email = emailSetting?.value || process.env.SUPPORT_EMAIL || 'bentobabuofficial@gmail.com';
-      let phone = phoneSetting?.value || process.env.SUPPORT_PHONE || '+91 8584085669';
-      const phoneDigits = String(phone).replace(/\D/g, '');
-      if (phoneDigits.includes('9876543210') || phoneDigits.includes('98765') || phoneDigits.includes('99999')) {
-        phone = '+91 8584085669';
-      }
-      const whatsapp = whatsappSetting?.value || process.env.SUPPORT_WHATSAPP || null;
-      const operatingHours = hoursSetting?.value || '7:00 AM – 10:30 PM (Daily)';
-      const kitchenAddress = addressSetting?.value || 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India';
+      const AdminSettingsController = require('./adminSettingsController');
+      const settings = await AdminSettingsController.getAllMergedSettings();
+
+      const email = settings.SUPPORT_EMAIL || 'bentobabuofficial@gmail.com';
+      const phone = settings.SUPPORT_PHONE || '+91 8584085669';
+      const whatsapp = settings.SUPPORT_WHATSAPP || settings.SUPPORT_PHONE || '+91 8584085669';
+      const operatingHours = settings.SUPPORT_HOURS || `${settings.OPENING_TIME || '10:00'} - ${settings.CLOSING_TIME || '22:00'} (Daily)`;
+      const address = settings.BUSINESS_ADDRESS || settings.KITCHEN_ADDRESS || 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India';
 
       const isWhatsAppConfigured = Boolean(
         whatsapp || (process.env.WHATSAPP_ENABLED === 'true' && process.env.WHATSAPP_PHONE_NUMBER_ID)
@@ -40,7 +35,7 @@ class SupportController {
           phone,
           whatsapp: isWhatsAppConfigured ? (whatsapp || phone) : null,
           isWhatsAppConfigured,
-          address: kitchenAddress,
+          address,
           operatingHours,
           categories: [
             { key: 'ORDER_ISSUE', label: 'Order Issue', description: 'Delays, wrong items, packaging issues' },

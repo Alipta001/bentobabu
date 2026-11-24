@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { BrandContactCard, BrandSupportHelplineText } from "@/components/common/BrandContactCard";
 
 export const metadata: Metadata = {
   title: "Terms of Service | BentoBabu",
@@ -262,7 +263,7 @@ export default function TermsOfServicePage() {
                 <li className="flex items-start gap-2.5">
                   <RotateCcw className="w-4 h-4 text-[#354B35] shrink-0 mt-1" />
                   <span>
-                    <strong className="text-[#222922]">Paid Orders:</strong> If you paid online via Razorpay and need to request cancellation before preparation, please contact Customer Support immediately (+91 8584085669 / bentobabuofficial@gmail.com) for verification and refund processing.
+                    <strong className="text-[#222922]">Paid Orders:</strong> If you paid online via Razorpay and need to request cancellation before preparation, please contact Customer Support immediately (<BrandSupportHelplineText />) for verification and refund processing.
                   </span>
                 </li>
               </ul>
@@ -560,56 +561,7 @@ export default function TermsOfServicePage() {
               <p className="text-sm sm:text-base text-[#4A554A] leading-relaxed">
                 For questions, clarifications, order assistance, or feedback regarding these Terms of Service, please reach out to our team:
               </p>
-              <div className="p-5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5] space-y-3 text-xs sm:text-sm text-[#4A554A]">
-                <div className="flex items-center gap-3">
-                  <div className="font-semibold text-[#222922] w-28">Business Name:</div>
-                  <div className="font-medium text-[#222922]">BentoBabu</div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="font-semibold text-[#222922] w-28">Support Email:</div>
-                  <a
-                    href="mailto:bentobabuofficial@gmail.com"
-                    className="text-[#354B35] font-semibold underline"
-                  >
-                    bentobabuofficial@gmail.com
-                  </a>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="font-semibold text-[#222922] w-28">Support Phone:</div>
-                  <a
-                    href="tel:+918584085669"
-                    className="text-[#354B35] font-medium"
-                  >
-                    +91 8584085669
-                  </a>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="font-semibold text-[#222922] w-28 shrink-0">Operating Location:</div>
-                  <div>Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India – 700122</div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="font-semibold text-[#222922] w-28">Official Website:</div>
-                  <a
-                    href="https://bentobabu.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#354B35] font-semibold underline inline-flex items-center gap-1"
-                  >
-                    https://bentobabu.com
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="font-semibold text-[#222922] w-28">Privacy Policy:</div>
-                  <Link
-                    href="/google-privacy-policy"
-                    className="text-[#354B35] font-semibold underline inline-flex items-center gap-1"
-                  >
-                    https://bentobabu.com/google-privacy-policy
-                    <ExternalLink className="w-3 h-3" />
-                  </Link>
-                </div>
-              </div>
+              <BrandContactCard labelWidth="w-28" showWebsite={true} showPrivacyPolicy={true} />
             </section>
           </div>
 

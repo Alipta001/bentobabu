@@ -24,7 +24,7 @@ export const VERIFIED_CENTRAL_KITCHEN: CentralKitchenInfo = {
   name: "BentoBabu Central Kitchen",
   landmark: "Apollo Pharmacy / Apollo 24|7",
   address: "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India",
-  pincode: "700120",
+  pincode: "700122",
   latitude: 22.7666909,
   longitude: 88.3788318,
   googleMapsUrl: "https://www.google.com/maps?q=22.7666909,88.3788318",
@@ -44,7 +44,7 @@ function getKitchenPopupHtml(kitchen: CentralKitchenInfo, coords: [number, numbe
         Landmark: ${kitchen.landmark || "Apollo Pharmacy / Apollo 24|7"}
       </div>
       <div style="font-size: 11px; color: #64748B; margin-bottom: 6px; line-height: 1.35;">
-        ${kitchen.address || "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India"} - ${kitchen.pincode || "700120"}
+        ${kitchen.address || "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal, India"} - ${kitchen.pincode || "700122"}
       </div>
       <div style="font-size: 10px; color: #94A3B8; font-family: monospace; margin-bottom: 8px;">
         Coordinates: ${coords[0].toFixed(7)}, ${coords[1].toFixed(7)}

@@ -8,6 +8,8 @@ import { authService } from "@/services/authService";
 import { deliveryService } from "@/services/deliveryService";
 import { notificationService } from "@/services/notificationService";
 import { videoService } from "@/services/videoService";
+import { brandService } from "@/services/brandService";
+import { useBrandConfig, BRAND_QUERY_KEY } from "@/hooks/useBrandConfig";
 import { CartItem, ProductFilterOptions, Address, VideoFilterOptions } from "@/types";
 import { INITIAL_PRODUCTS } from "@/lib/data/products";
 
@@ -31,6 +33,7 @@ export const QUERY_KEYS = {
   VIDEOS: (filters?: VideoFilterOptions) => ["videos", filters],
   FEATURED_VIDEOS: (limit?: number) => ["videos", "featured", limit],
   VIDEO: (slug: string) => ["video", slug],
+  BRAND: BRAND_QUERY_KEY,
 };
 
 export function useCategories() {
@@ -314,4 +317,7 @@ export function useVideo(slug: string) {
     staleTime: 60 * 1000,
   });
 }
+
+export { useBrandConfig };
+
 

@@ -37,6 +37,11 @@ export interface BrandConfig {
     code: string;
     symbol: string;
   };
+  fssai?: {
+    status?: string;
+    number?: string;
+  };
+  websiteUrl?: string;
 }
 
 export const brandConfig: BrandConfig = {
@@ -54,7 +59,7 @@ export const brandConfig: BrandConfig = {
     email: "bentobabuofficial@gmail.com",
     phone: "+91 85840 85669",
     whatsapp: "+91 85840 85669",
-    address: "Chandanpukur Bazar, Barrackpore, West Bengal 700120",
+    address: "Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India",
     operatingHours: "7:00 AM – 10:30 PM (Daily)",
   },
   social: {
@@ -73,5 +78,10 @@ export const brandConfig: BrandConfig = {
     code: "INR",
     symbol: "₹",
   },
+  fssai: {
+    status: "APPLICATION_SUBMITTED",
+    number: "11223344000123",
+  },
+  websiteUrl: "https://bentobabu.com",
 };
 

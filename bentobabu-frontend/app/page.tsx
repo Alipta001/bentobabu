@@ -17,7 +17,8 @@ import { CategoryCard } from "@/components/category/CategoryCard";
 import { VideoCard } from "@/components/video/VideoCard";
 import { FaqAccordion } from "@/components/home/FaqAccordion";
 import { NewsletterForm } from "@/components/home/NewsletterForm";
-import { brandConfig } from "@/config/brand";
+import { BrandConfig, brandConfig } from "@/config/brand";
+import { mergeBrandConfig } from "@/services/brandService";
 import { INITIAL_PRODUCTS } from "@/lib/data/products";
 import { Category, Product, VideoContent } from "@/types";
 import { normalizeProduct } from "@/services/productService";
@@ -26,10 +27,11 @@ async function getHomeData(): Promise<{
   categories: Category[];
   bestsellers: Product[];
   featuredVideos: VideoContent[];
+  brand: BrandConfig;
 }> {
   try {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1";
-    const [categoriesRes, bestsellersRes, videosRes] = await Promise.allSettled([
+    const [categoriesRes, bestsellersRes, videosRes, settingsRes] = await Promise.allSettled([
       fetch(`${apiUrl}/categories`, { next: { revalidate: 60 } }).then((r) =>
         r.ok ? r.json() : null
       ),
@@ -37,6 +39,9 @@ async function getHomeData(): Promise<{
         r.ok ? r.json() : null
       ),
       fetch(`${apiUrl}/videos/featured?limit=3`, { next: { revalidate: 60 } }).then((r) =>
+        r.ok ? r.json() : null
+      ),
+      fetch(`${apiUrl}/settings/public`, { next: { revalidate: 60 } }).then((r) =>
         r.ok ? r.json() : null
       ),
     ]);
@@ -71,12 +76,18 @@ async function getHomeData(): Promise<{
       }
     }
 
-    return { categories, bestsellers, featuredVideos };
+    let brand: BrandConfig = brandConfig;
+    if (settingsRes.status === "fulfilled" && settingsRes.value?.data) {
+      brand = mergeBrandConfig(settingsRes.value.data);
+    }
+
+    return { categories, bestsellers, featuredVideos, brand };
   } catch {
     return {
       categories: [],
       bestsellers: [],
       featuredVideos: [],
+      brand: brandConfig,
     };
   }
 }
@@ -109,7 +120,7 @@ const faqs = [
 ];
 
 export default async function HomePage() {
-  const { categories, bestsellers, featuredVideos } = await getHomeData();
+  const { categories, bestsellers, featuredVideos, brand } = await getHomeData();
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F3EA]">
@@ -514,7 +525,7 @@ export default async function HomePage() {
                     <ArrowRight className="w-4 h-4" />
                   </Link>
                   <a
-                    href={`https://wa.me/${brandConfig.contact.whatsapp.replace(/[^0-9]/g, "")}?text=Hi,%20I%20am%20interested%20in%20Bento%20Babu%20meal%20plans`}
+                    href={`https://wa.me/${brand.contact.whatsapp.replace(/[^0-9]/g, "")}?text=Hi,%20I%20am%20interested%20in%20Bento%20Babu%20meal%20plans`}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-white/30 text-white text-xs font-semibold hover:bg-white/10 transition-colors"

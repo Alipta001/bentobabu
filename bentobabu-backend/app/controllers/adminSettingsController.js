@@ -5,6 +5,8 @@ const DEFAULT_SETTINGS = {
   BUSINESS_NAME: 'Bento Babu',
   SUPPORT_EMAIL: 'bentobabuofficial@gmail.com',
   SUPPORT_PHONE: '+91 8584085669',
+  SUPPORT_WHATSAPP: '+91 8584085669',
+  SUPPORT_HOURS: '10:00 AM – 10:00 PM (Daily)',
   MINIMUM_ORDER_AMOUNT: 99,
   MINIMUM_ORDER_VALUE: 99,
   DEFAULT_DELIVERY_FEE: 30,
@@ -38,6 +40,10 @@ const DEFAULT_SETTINGS = {
   GSTIN: '',
   GST_CERTIFICATE_URL: '',
   WEBSITE_URL: 'https://bentobabu.com',
+  INSTAGRAM_URL: 'https://instagram.com/bentobabu',
+  FACEBOOK_URL: 'https://facebook.com/bentobabu',
+  TWITTER_URL: 'https://twitter.com/bentobabu',
+  LINKEDIN_URL: 'https://linkedin.com/company/bentobabu',
   BUSINESS_ADDRESS: 'Chandanpukur (Nonachandanpukur) Bazar, Barrackpore, West Bengal - 700122, India',
 };
 
@@ -63,16 +69,20 @@ class AdminSettingsController {
 
     storedSettings.forEach((item) => {
       if (ALLOWED_SETTING_KEYS.includes(item.key)) {
-        if (item.key === 'SUPPORT_PHONE') {
+        if (item.key === 'SUPPORT_PHONE' || item.key === 'SUPPORT_WHATSAPP') {
           const digits = String(item.value || '').replace(/\D/g, '');
-          if (digits.includes('9876543210') || digits.includes('98765') || digits.includes('99999')) {
-            settingsMap[item.key] = DEFAULT_SETTINGS.SUPPORT_PHONE;
+          if (digits === '9876543210' || digits.startsWith('98765') || digits.startsWith('99999')) {
+            settingsMap[item.key] = DEFAULT_SETTINGS[item.key];
             return;
           }
         }
         settingsMap[item.key] = item.value;
       }
     });
+
+    if (!settingsMap.SUPPORT_WHATSAPP) {
+      settingsMap.SUPPORT_WHATSAPP = settingsMap.SUPPORT_PHONE;
+    }
 
     return settingsMap;
   }
@@ -161,6 +171,59 @@ class AdminSettingsController {
               });
             }
             updatesToApply[key] = `+91 ${phoneDigits}`;
+            break;
+          }
+
+          case 'SUPPORT_WHATSAPP': {
+            const strVal = String(val === null || val === undefined ? '' : val).trim();
+            if (!strVal) {
+              updatesToApply[key] = '';
+              break;
+            }
+            const rawDigits = strVal.replace(/\D/g, '');
+            let phoneDigits = rawDigits;
+            if (rawDigits.length === 12 && rawDigits.startsWith('91')) {
+              phoneDigits = rawDigits.slice(2);
+            }
+            if (phoneDigits.length !== 10) {
+              return res.status(400).json({
+                success: false,
+                message: 'SUPPORT_WHATSAPP must be a valid 10-digit mobile number, or left empty.',
+              });
+            }
+            if (phoneDigits === '9876543210' || phoneDigits.startsWith('98765') || phoneDigits === '9999999999') {
+              return res.status(400).json({
+                success: false,
+                message: 'SUPPORT_WHATSAPP cannot be the legacy test placeholder number.',
+              });
+            }
+            updatesToApply[key] = `+91 ${phoneDigits}`;
+            break;
+          }
+
+          case 'SUPPORT_HOURS': {
+            if (typeof val !== 'string' || !val.trim()) {
+              return res.status(400).json({
+                success: false,
+                message: 'SUPPORT_HOURS must be a non-empty string.',
+              });
+            }
+            updatesToApply[key] = val.trim();
+            break;
+          }
+
+          case 'INSTAGRAM_URL':
+          case 'FACEBOOK_URL':
+          case 'TWITTER_URL':
+          case 'LINKEDIN_URL': {
+            const urlStr = String(val === null || val === undefined ? '' : val).trim();
+            if (urlStr && !/^https?:\/\//i.test(urlStr)) {
+              return res.status(400).json({
+                success: false,
+                message: `${key} must be a valid web URL starting with http:// or https://.`,
+              });
+            }
+            updatesToApply[key] = urlStr;
             break;
           }
 
@@ -383,8 +446,10 @@ class AdminSettingsController {
 
       await Promise.all(upsertPromises);
 
-      // Invalidate public ordering status and delivery slot caches immediately
+      // Invalidate public ordering status, brand settings, and delivery slot caches immediately
       await redisDel('cache:ordering_status');
+      await redisDel('cache:public_settings');
+      await redisDel('cache:support_config');
       try {
         const DeliverySlotService = require('../services/deliverySlotService');
         await DeliverySlotService.invalidateCache();

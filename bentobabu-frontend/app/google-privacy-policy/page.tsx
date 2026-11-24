@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { BrandContactCard, BrandSupportEmailLink } from "@/components/common/BrandContactCard";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | BentoBabu",
@@ -298,12 +299,7 @@ export default function GooglePrivacyPolicyPage() {
                 </div>
                 <p className="text-xs sm:text-sm text-[#4A554A] leading-relaxed">
                   You have the right to request the complete deletion of your BentoBabu account and all associated Google user data at any time. To request deletion, please contact our support team at{" "}
-                  <a
-                    href="mailto:bentobabuofficial@gmail.com?subject=Data%20Deletion%20Request"
-                    className="text-[#354B35] font-semibold underline"
-                  >
-                    bentobabuofficial@gmail.com
-                  </a>{" "}
+                  <BrandSupportEmailLink subject="Data Deletion Request" />{" "}
                   with the subject line &quot;Data Deletion Request&quot;. Upon verifying account ownership, your profile, Google identifier link, and personal records will be permanently purged from our active systems within thirty (30) days.
                 </p>
               </div>
@@ -429,46 +425,7 @@ export default function GooglePrivacyPolicyPage() {
               <p className="text-sm sm:text-base text-[#4A554A] leading-relaxed">
                 If you have questions, comments, or data privacy requests concerning this policy or BentoBabu&apos;s privacy practices, please contact us using the details below:
               </p>
-              <div className="p-5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5] space-y-3 text-xs sm:text-sm text-[#4A554A]">
-                <div className="flex items-center gap-3">
-                  <div className="font-semibold text-[#222922] w-24">Brand:</div>
-                  <div className="font-medium text-[#222922]">BentoBabu</div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="font-semibold text-[#222922] w-24">Email:</div>
-                  <a
-                    href="mailto:bentobabuofficial@gmail.com"
-                    className="text-[#354B35] font-semibold underline"
-                  >
-                    bentobabuofficial@gmail.com
-                  </a>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="font-semibold text-[#222922] w-24">Phone:</div>
-                  <a
-                    href="tel:+918584085669"
-                    className="text-[#354B35] font-medium"
-                  >
-                    +91 8584085669
-                  </a>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="font-semibold text-[#222922] w-24 shrink-0">Address:</div>
-                  <div>Chandanpukur (Nonachandanpur) Bazar, Barrackpore, West Bengal – 700122, India.</div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="font-semibold text-[#222922] w-24">Website:</div>
-                  <a
-                    href="https://bentobabu.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#354B35] font-semibold underline inline-flex items-center gap-1"
-                  >
-                    https://bentobabu.com
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
+              <BrandContactCard labelWidth="w-24" showWebsite={true} />
             </section>
           </div>
 

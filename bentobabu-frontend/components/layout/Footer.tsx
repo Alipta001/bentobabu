@@ -13,9 +13,11 @@ import {
   MapPin,
 } from "lucide-react";
 import { brandConfig } from "@/config/brand";
+import { useBrandConfig } from "@/hooks/useBrandConfig";
 import { useCategories } from "@/hooks/useQueries";
 
 export function Footer() {
+  const brand = useBrandConfig();
   const { data: categories = [] } = useCategories();
   return (
     <footer className="bg-[#243324] text-[#EDE8DE] pt-16 pb-12 border-t border-[#354B35]">
@@ -70,12 +72,12 @@ export function Footer() {
             <Link
               href="/"
               className="inline-flex items-center group py-1"
-              aria-label={brandConfig.name}
+              aria-label={brand.name}
             >
               <div className="relative h-13 sm:h-14 px-3.5 py-1.5 rounded-2xl bg-[#F7F3EA] shadow-xs flex items-center group-hover:scale-102 transition-transform duration-200">
                 <Image
                   src={brandConfig.logo.imagePath}
-                  alt={brandConfig.name}
+                  alt={brand.name}
                   width={220}
                   height={110}
                   className="h-full w-auto max-w-[200px] object-contain"
@@ -83,11 +85,11 @@ export function Footer() {
               </div>
             </Link>
             <p className="text-xs leading-relaxed text-[#B5C4B1] max-w-sm">
-              {brandConfig.description}
+              {brand.description}
             </p>
             <div className="flex items-center gap-3 pt-2 text-[#B99A60]">
               <a
-                href={brandConfig.social.instagram}
+                href={brand.social.instagram}
                 target="_blank"
                 rel="noreferrer"
                 className="w-9 h-9 rounded-full bg-[#354B35] flex items-center justify-center hover:bg-[#B99A60] hover:text-[#243324] transition-colors"
@@ -98,7 +100,7 @@ export function Footer() {
                 </svg>
               </a>
               <a
-                href={brandConfig.social.facebook}
+                href={brand.social.facebook}
                 target="_blank"
                 rel="noreferrer"
                 className="w-9 h-9 rounded-full bg-[#354B35] flex items-center justify-center hover:bg-[#B99A60] hover:text-[#243324] transition-colors"
@@ -109,7 +111,7 @@ export function Footer() {
                 </svg>
               </a>
               <a
-                href={brandConfig.social.twitter}
+                href={brand.social.twitter}
                 target="_blank"
                 rel="noreferrer"
                 className="w-9 h-9 rounded-full bg-[#354B35] flex items-center justify-center hover:bg-[#B99A60] hover:text-[#243324] transition-colors"
@@ -120,7 +122,7 @@ export function Footer() {
                 </svg>
               </a>
               <a
-                href={brandConfig.social.linkedin}
+                href={brand.social.linkedin}
                 target="_blank"
                 rel="noreferrer"
                 className="w-9 h-9 rounded-full bg-[#354B35] flex items-center justify-center hover:bg-[#B99A60] hover:text-[#243324] transition-colors"
@@ -212,19 +214,29 @@ export function Footer() {
             <ul className="space-y-2.5 text-xs text-[#EDE8DE]/80">
               <li className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-[#B99A60] shrink-0 mt-0.5" />
-                <span>{brandConfig.contact.address}</span>
+                <span>{brand.contact.address}</span>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-[#B99A60] shrink-0" />
-                <span>{brandConfig.contact.phone}</span>
+                <a
+                  href={`tel:${brand.contact.phone.replace(/[^0-9+]/g, "")}`}
+                  className="hover:text-white transition-colors"
+                >
+                  {brand.contact.phone}
+                </a>
               </li>
               <li className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-[#B99A60] shrink-0" />
-                <span>{brandConfig.contact.email}</span>
+                <a
+                  href={`mailto:${brand.contact.email}`}
+                  className="hover:text-white transition-colors"
+                >
+                  {brand.contact.email}
+                </a>
               </li>
               <li className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-[#B99A60] shrink-0" />
-                <span>{brandConfig.contact.operatingHours}</span>
+                <span>{brand.contact.operatingHours}</span>
               </li>
             </ul>
           </div>
@@ -233,7 +245,7 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-[#8A9A86] gap-4">
           <div>
-            &copy; {new Date().getFullYear()} {brandConfig.name}. All rights reserved.
+            &copy; {new Date().getFullYear()} {brand.name}. All rights reserved.
           </div>
           <div className="flex flex-wrap items-center gap-6">
             <span>Privacy Policy</span>
@@ -249,7 +261,7 @@ export function Footer() {
             >
               Terms of Service
             </Link>
-            <span>FSSAI License No. 11223344000123</span>
+            <span>FSSAI License No. {brand.fssai?.number || "11223344000123"}</span>
           </div>
         </div>
       </div>

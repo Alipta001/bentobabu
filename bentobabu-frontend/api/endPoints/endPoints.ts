@@ -95,6 +95,8 @@ export const API_ENDPOINTS = {
   },
   SETTINGS: {
     ORDERING_STATUS: "/settings/ordering-status",
+    PUBLIC: "/settings/public",
+    BRAND: "/settings/brand",
   },
   SERVICE_EXPANSION: {
     VOTE: "/service-expansion/vote",

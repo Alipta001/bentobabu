@@ -28,6 +28,7 @@ import {
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
+import { useBrandConfig } from "@/hooks/useBrandConfig";
 import { supportService, CreateTicketPayload } from "@/services/supportService";
 import { orderService } from "@/services/orderService";
 import {
@@ -84,6 +85,7 @@ const CATEGORY_CARDS = [
 ];
 
 export default function SupportPage() {
+  const brand = useBrandConfig();
   const { user, isAuthenticated } = useAuth();
 
   // Tab: "faqs" | "tickets"
@@ -580,11 +582,11 @@ export default function SupportPage() {
                 <span>Helpline Phone</span>
               </div>
               <p className="text-gray-600 font-mono font-semibold">
-                {config?.phone || "+91 85840 85669"}
+                {config?.phone || brand.contact.phone}
               </p>
               <div className="flex items-center gap-1 text-[11px] text-gray-500">
                 <Clock className="w-3 h-3" />
-                <span>{config?.operatingHours || "7:00 AM – 10:30 PM (Daily)"}</span>
+                <span>{config?.operatingHours || brand.contact.operatingHours}</span>
               </div>
             </div>
 
@@ -594,10 +596,10 @@ export default function SupportPage() {
                 <span>Email Support</span>
               </div>
               <a
-                href={`mailto:${config?.email || "bentobabuofficial@gmail.com"}`}
+                href={`mailto:${config?.email || brand.contact.email}`}
                 className="text-gray-600 hover:text-[#C86D51] font-medium block truncate"
               >
-                {config?.email || "bentobabuofficial@gmail.com"}
+                {config?.email || brand.contact.email}
               </a>
               <span className="text-[11px] text-gray-500 block">
                 Typical reply in under 2 hours
@@ -609,9 +611,9 @@ export default function SupportPage() {
                 <MessageSquare className="w-4 h-4 text-emerald-600" />
                 <span>WhatsApp Business</span>
               </div>
-              {config?.isWhatsAppConfigured && config.whatsapp ? (
+              {(config?.isWhatsAppConfigured && config.whatsapp) || brand.contact.whatsapp ? (
                 <a
-                  href={`https://wa.me/${config.whatsapp.replace(/\D/g, "")}`}
+                  href={`https://wa.me/${(config?.whatsapp || brand.contact.whatsapp).replace(/\D/g, "")}`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-emerald-700 font-bold hover:underline inline-flex items-center gap-1"
@@ -632,7 +634,7 @@ export default function SupportPage() {
                 <span>Central Kitchen</span>
               </div>
               <p className="text-gray-600 text-[11px] leading-relaxed line-clamp-2">
-                {config?.address || "Chandanpukur Bazar, Barrackpore, West Bengal 700120"}
+                {config?.address || brand.contact.address}
               </p>
             </div>
           </div>

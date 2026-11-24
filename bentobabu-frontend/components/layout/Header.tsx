@@ -24,6 +24,7 @@ import {
   Video,
 } from "lucide-react";
 import { brandConfig } from "@/config/brand";
+import { useBrandConfig } from "@/hooks/useBrandConfig";
 import { useAppSelector } from "@/store/hooks";
 import { selectCartItemCount } from "@/store/cartSlice";
 import { useCategories } from "@/hooks/useQueries";
@@ -34,6 +35,7 @@ import { buildLoginUrl, buildRegisterUrl } from "@/lib/authRedirect";
 const emptySubscribe = () => () => {};
 
 export function Header() {
+  const brand = useBrandConfig();
   const pathname = usePathname();
   const router = useRouter();
   const isMounted = React.useSyncExternalStore(
@@ -103,14 +105,14 @@ export function Header() {
           </div>
           <div className="hidden md:flex items-center gap-5 text-xs text-[#DFC89B]/90 shrink-0">
             <a
-              href={`tel:${brandConfig.contact.phone.replace(/[^0-9+]/g, "")}`}
+              href={`tel:${brand.contact.phone.replace(/[^0-9+]/g, "")}`}
               className="flex items-center gap-1.5 hover:text-[#F7F3EA] transition-colors"
             >
               <Phone className="w-3.5 h-3.5 text-[#B99A60]" />
-              <span>{brandConfig.contact.phone}</span>
+              <span>{brand.contact.phone}</span>
             </a>
             <span className="text-white/30">•</span>
-            <span className="text-[#EDE8DE]/80">{brandConfig.contact.operatingHours}</span>
+            <span className="text-[#EDE8DE]/80">{brand.contact.operatingHours}</span>
           </div>
         </div>
       </div>
@@ -122,12 +124,12 @@ export function Header() {
           <Link
             href="/"
             className="flex items-center group shrink-0 py-1"
-            aria-label={brandConfig.name}
+            aria-label={brand.name}
           >
             <div className="relative h-12 sm:h-14 md:h-15 w-auto flex items-center group-hover:scale-102 transition-transform duration-200">
               <Image
                 src={brandConfig.logo.imagePath}
-                alt={brandConfig.name}
+                alt={brand.name}
                 width={220}
                 height={110}
                 className="h-12 sm:h-14 md:h-15 w-auto max-w-[220px] object-contain drop-shadow-xs"
@@ -587,14 +589,14 @@ export function Header() {
           {/* Quick Contact & WhatsApp Support */}
           <div className="pt-2 border-t border-[#E8E2D2] flex items-center justify-between text-xs text-[#6B776A] px-1">
             <a
-              href={`tel:${brandConfig.contact.phone.replace(/[^0-9+]/g, "")}`}
+              href={`tel:${brand.contact.phone.replace(/[^0-9+]/g, "")}`}
               className="flex items-center gap-1.5 hover:text-[#354B35]"
             >
               <Phone className="w-3.5 h-3.5 text-[#B99A60]" />
-              <span>{brandConfig.contact.phone}</span>
+              <span>{brand.contact.phone}</span>
             </a>
             <a
-              href={`https://wa.me/${brandConfig.contact.whatsapp.replace(/[^0-9]/g, "")}?text=Hi,%20I%20have%20a%20question%20about%20my%20order`}
+              href={`https://wa.me/${brand.contact.whatsapp.replace(/[^0-9]/g, "")}?text=Hi,%20I%20have%20a%20question%20about%20my%20order`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 font-semibold text-[#354B35] hover:text-[#253525]"

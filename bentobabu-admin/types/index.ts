@@ -316,6 +316,8 @@ export interface BusinessSettings {
   tagline: string;
   supportEmail: string;
   supportPhone: string;
+  supportWhatsapp?: string;
+  supportHours?: string;
   kitchenName?: string;
   kitchenLandmark?: string;
   kitchenAddress: string;
@@ -338,6 +340,10 @@ export interface BusinessSettings {
   gstCertificateUrl?: string;
   websiteUrl?: string;
   businessAddress?: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
+  twitterUrl?: string;
+  linkedinUrl?: string;
 }
 
 export interface ProductMediaImage {
