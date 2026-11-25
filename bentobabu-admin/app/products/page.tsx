@@ -10,6 +10,7 @@ import {
   X,
   Flame,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AdminShell } from "@/components/layout/AdminShell";
@@ -54,6 +55,7 @@ function ProductsContent() {
     video: undefined,
     isAvailable: true,
     isBestseller: false,
+    isSignatureItem: false,
     isDailyMenu: true,
     stockQuantity: 25,
     lowStockThreshold: 8,
@@ -100,6 +102,7 @@ function ProductsContent() {
       video: undefined,
       isAvailable: true,
       isBestseller: false,
+      isSignatureItem: false,
       isDailyMenu: true,
       stockQuantity: 25,
       lowStockThreshold: 8,
@@ -140,6 +143,7 @@ function ProductsContent() {
       video: p.video || undefined,
       isAvailable: p.isAvailable,
       isBestseller: p.isBestseller || false,
+      isSignatureItem: p.isSignatureItem || false,
       isDailyMenu: p.isDailyMenu ?? true,
       stockQuantity: p.stockQuantity,
       lowStockThreshold: p.lowStockThreshold,
@@ -310,10 +314,16 @@ function ProductsContent() {
                           className="w-12 h-12 rounded-xl object-cover border border-[#E5DFC5]"
                         />
                         <div>
-                          <div className="font-bold text-[#1F271F] flex items-center gap-1.5">
+                          <div className="font-bold text-[#1F271F] flex items-center gap-1.5 flex-wrap">
                             <span>{p.name}</span>
                             {p.isBestseller && (
                               <Flame className="w-3.5 h-3.5 text-[#B99A60]" />
+                            )}
+                            {p.isSignatureItem && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#DFC89B]/35 text-[#755C2B] border border-[#B99A60]/40">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                Signature
+                              </span>
                             )}
                           </div>
                           <div className="text-[11px] text-[#667266]">
@@ -813,6 +823,39 @@ function ProductsContent() {
                       ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Signature Item Toggle */}
+              <div className="p-4 rounded-2xl bg-[#F7F3EA] border border-[#E5DFC5] flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <div className="font-bold text-[#1F271F] flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-[#B99A60]" />
+                    <span>Signature Item</span>
+                    {formData.isSignatureItem && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#354B35] text-white">
+                        Featured
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[#667266]">
+                    Feature this product in the Signature Items section on the customer website.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={formData.isSignatureItem || false}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        isSignatureItem: e.target.checked,
+                      })
+                    }
+                    className="sr-only peer"
+                    aria-label="Signature Item"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#354B35]"></div>
+                </label>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

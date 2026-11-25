@@ -80,6 +80,7 @@ export interface Product {
   isAvailable: boolean;
   isBestseller?: boolean;
   isFeatured?: boolean;
+  isSignatureItem?: boolean;
   isChefSpecial?: boolean;
   averageRating?: number;
   totalReviews?: number;
@@ -353,6 +354,7 @@ export interface ProductFilterOptions {
   maxPrice?: number;
   minPrice?: number;
   minProtein?: number;
+  isSignatureItem?: boolean;
   sortBy?: "popularity" | "price-asc" | "price-desc" | "newest" | string;
   page?: number;
   limit?: number;

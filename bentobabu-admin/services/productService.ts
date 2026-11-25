@@ -35,6 +35,7 @@ export interface BackendProduct {
   isAvailable?: boolean;
   isActive?: boolean;
   isFeatured?: boolean;
+  isSignatureItem?: boolean;
   hasVariants?: boolean;
   variantLabel?: string;
   variants?: ProductVariant[];
@@ -164,6 +165,7 @@ export const mapBackendProduct = (p: BackendProduct): Product => {
       isAvailable: p.isAvailable ?? true,
       isActive: p.isActive ?? true,
       isBestseller: p.isFeatured ?? false,
+      isSignatureItem: Boolean(p.isSignatureItem),
       isDailyMenu: p.mealTypes?.includes("DAILY_MENU") ?? false,
       stockQuantity: p.stockQuantity ?? 0,
       lowStockThreshold: p.lowStockThreshold ?? 5,
@@ -294,6 +296,7 @@ export const productService = {
       lowStockThreshold: data.lowStockThreshold ?? 5,
       isAvailable: data.isAvailable ?? true,
       isFeatured: data.isBestseller ?? false,
+      isSignatureItem: Boolean(data.isSignatureItem),
       isActive: true,
       hasVariants: Boolean(data.hasVariants),
       variantLabel: data.variantLabel || "Choose Option",
@@ -364,6 +367,7 @@ export const productService = {
     }
     if (data.servingSize !== undefined) payload.portionSize = data.servingSize;
     if (data.isBestseller !== undefined) payload.isFeatured = data.isBestseller;
+    if (data.isSignatureItem !== undefined) payload.isSignatureItem = Boolean(data.isSignatureItem);
     if (data.dietary !== undefined) {
       payload.dietary = data.dietary;
       payload.dietaryTags = mapDietaryToTags(data.dietary);

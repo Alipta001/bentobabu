@@ -113,6 +113,7 @@ export const normalizeProduct = (item: any): Product => {
     isAvailable: item.isAvailable !== false,
     isBestseller: item.isBestseller ?? item.isFeatured ?? false,
     isFeatured: item.isFeatured ?? false,
+    isSignatureItem: Boolean(item.isSignatureItem),
     isChefSpecial: item.isChefSpecial ?? false,
     preparationTime: prepTime,
     preparationTimeMinutes: prepTime,
@@ -172,6 +173,10 @@ export const productService = {
 
       if (filters?.mealTypes) {
         params.mealTypes = filters.mealTypes;
+      }
+
+      if (typeof filters?.isSignatureItem === "boolean") {
+        params.isSignatureItem = String(filters.isSignatureItem);
       }
 
       if (typeof filters?.maxPrice === "number" && filters.maxPrice < 1000) {

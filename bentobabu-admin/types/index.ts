@@ -74,6 +74,7 @@ export interface Product {
   isAvailable: boolean;
   isActive?: boolean;
   isBestseller?: boolean;
+  isSignatureItem?: boolean;
   isDailyMenu?: boolean;
   stockQuantity: number;
   lowStockThreshold: number;

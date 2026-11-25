@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   ArrowUpDown,
   RotateCcw,
+  Sparkles,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -96,6 +97,16 @@ export default function MenuPage() {
     error,
     refetch,
   } = useProducts(filterPayload);
+
+  const signatureProducts = useMemo(() => {
+    const seen = new Set<string>();
+    return products.filter((p) => {
+      if (!p.isSignatureItem || !p.isAvailable) return false;
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [products]);
 
   const toggleDietary = (type: DietaryType) => {
     setSelectedDietary((prev) =>
@@ -433,15 +444,56 @@ export default function MenuPage() {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <h2 className="sr-only">Available Meals</h2>
-                  <div className="text-xs text-[#4F5B4F] font-medium flex items-center justify-between">
-                    <span>Showing {products.length} fresh healthy dishes</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {products.map((product, idx) => (
-                      <ProductCard key={product.id} product={product} priority={idx === 0} />
-                    ))}
+                <div className="space-y-10">
+                  {signatureProducts.length > 0 && (
+                    <section
+                      aria-labelledby="signature-items-heading"
+                      className="space-y-4 pb-8 border-b border-[#E5DFC5]"
+                    >
+                      <div className="flex items-end justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[#755C2B]">
+                            <Sparkles className="w-3.5 h-3.5 text-[#B99A60]" />
+                            <span>Chef&apos;s Curation</span>
+                          </div>
+                          <h2
+                            id="signature-items-heading"
+                            className="font-serif text-2xl sm:text-3xl font-bold text-[#243324]"
+                          >
+                            Signature Items
+                          </h2>
+                          <p className="text-xs sm:text-sm text-[#4A584A]">
+                            Our specially selected favourites.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {signatureProducts.map((product, idx) => (
+                          <ProductCard
+                            key={`signature-${product.id}`}
+                            product={product}
+                            priority={idx === 0}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  <div className="space-y-4">
+                    <h2 className="sr-only">Available Meals</h2>
+                    <div className="text-xs text-[#4F5B4F] font-medium flex items-center justify-between">
+                      <span>Showing {products.length} fresh healthy dishes</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {products.map((product, idx) => (
+                        <ProductCard
+                          key={product.id}
+                          product={product}
+                          priority={signatureProducts.length === 0 && idx === 0}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}

@@ -196,6 +196,11 @@ const productSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    isSignatureItem: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     averageRating: {
       type: Number,
       default: 0,

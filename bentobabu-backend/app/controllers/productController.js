@@ -128,6 +128,12 @@ class ProductController {
         filter.isActive = true;
       }
 
+      if (req.query.isSignatureItem === 'true') {
+        filter.isSignatureItem = true;
+      } else if (req.query.isSignatureItem === 'false') {
+        filter.isSignatureItem = false;
+      }
+
       // Resolve business date and daily menu availability
       const businessDate =
         req.query.date && typeof req.query.date === 'string' && isValidDateString(req.query.date.trim())
@@ -319,6 +325,7 @@ class ProductController {
           category: primaryCategory,
           categories: populatedCategories,
           isAvailable: isAvailableToday,
+          isSignatureItem: Boolean(p.isSignatureItem),
         };
       });
 
@@ -452,6 +459,7 @@ class ProductController {
       productResponse.category = product.category || (populatedCategories.length > 0 ? populatedCategories[0] : null);
       productResponse.categories = populatedCategories;
       productResponse.isAvailable = isAvailableToday;
+      productResponse.isSignatureItem = Boolean(product.isSignatureItem);
 
       res.status(200).json({
         success: true,
@@ -487,6 +495,7 @@ class ProductController {
         stockQuantity,
         isAvailable,
         isFeatured,
+        isSignatureItem,
         isActive,
         preparationTime,
         preparationTimeMinutes,
@@ -499,6 +508,13 @@ class ProductController {
         return res.status(400).json({
           success: false,
           message: 'Product name is required and must be a non-empty string',
+        });
+      }
+
+      if (isSignatureItem !== undefined && typeof isSignatureItem !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          message: 'isSignatureItem must be a boolean value',
         });
       }
 
@@ -652,6 +668,7 @@ class ProductController {
         stockQuantity: initialStock,
         isAvailable: initialAvailability,
         isFeatured: Boolean(isFeatured),
+        isSignatureItem: Boolean(isSignatureItem),
         isActive: isActive !== undefined ? Boolean(isActive) : true,
         hasVariants: normalizedVariantsData.hasVariants,
         variantLabel: normalizedVariantsData.variantLabel,
@@ -728,6 +745,7 @@ class ProductController {
         nutrition,
         allergens,
         isFeatured,
+        isSignatureItem,
         preparationTime,
         preparationTimeMinutes,
         hasVariants,
@@ -899,6 +917,15 @@ class ProductController {
       if (nutrition !== undefined && typeof nutrition === 'object') product.nutrition = nutrition;
       if (allergens !== undefined && Array.isArray(allergens)) product.allergens = allergens;
       if (isFeatured !== undefined) product.isFeatured = Boolean(isFeatured);
+      if (isSignatureItem !== undefined) {
+        if (typeof isSignatureItem !== 'boolean') {
+          return res.status(400).json({
+            success: false,
+            message: 'isSignatureItem must be a boolean value',
+          });
+        }
+        product.isSignatureItem = isSignatureItem;
+      }
 
       const rawPrepTime = preparationTime !== undefined ? preparationTime : preparationTimeMinutes;
       if (rawPrepTime !== undefined) {
