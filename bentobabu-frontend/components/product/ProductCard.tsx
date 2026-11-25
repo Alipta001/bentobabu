@@ -16,9 +16,10 @@ import { stripHtmlTags } from "@/utils/textFormat";
 interface ProductCardProps {
   product: Product;
   priority?: boolean;
+  deliveryDate?: string;
 }
 
-function ProductCardComponent({ product, priority = false }: ProductCardProps) {
+function ProductCardComponent({ product, priority = false, deliveryDate }: ProductCardProps) {
   const { addItem, setQuantity } = useCartSync();
   const { showToast } = useToast();
   const { acceptingOrders } = useOrderingStatus();
@@ -70,10 +71,14 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
     setQuantity(product.id, quantityInCart - 1);
   };
 
+  const productHref = deliveryDate
+    ? `/product/${product.slug}?date=${encodeURIComponent(deliveryDate)}`
+    : `/product/${product.slug}`;
+
   return (
     <div className="group relative flex flex-col bg-white rounded-3xl border border-[#E5DFC5] shadow-xs hover:shadow-xl hover:border-[#354B35]/30 transition-all duration-300 overflow-hidden">
       {/* Product Image & Badges */}
-      <Link href={`/product/${product.slug}`} className="relative aspect-4/3 w-full overflow-hidden bg-[#EDE8DE] block">
+      <Link href={productHref} className="relative aspect-4/3 w-full overflow-hidden bg-[#EDE8DE] block">
         <Image
           src={getOptimizedImageUrl(product.imageUrl, "card")}
           alt={product.name}
@@ -133,7 +138,7 @@ function ProductCardComponent({ product, priority = false }: ProductCardProps) {
             </div>
           )}
 
-          <Link href={`/product/${product.slug}`} className="block">
+          <Link href={productHref} className="block">
             <h3 className="font-serif text-lg font-bold text-[#222922] group-hover:text-[#354B35] transition-colors line-clamp-1">
               {product.name}
             </h3>

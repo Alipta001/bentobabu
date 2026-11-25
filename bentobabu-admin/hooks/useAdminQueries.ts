@@ -445,6 +445,22 @@ export function useDailyMenu(date?: string) {
   return useQuery({
     queryKey: ["admin", "dailyMenu", date],
     queryFn: () => menuService.getDailyMenu(date),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+}
+
+export function useToggleDailyMenuItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { date: string; productId: string; isAvailable: boolean }) =>
+      menuService.toggleDailyItem(payload),
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(["admin", "dailyMenu", variables.date], data);
+      queryClient.invalidateQueries({ queryKey: ["admin", "dailyMenu"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "weeklyMenu"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
   });
 }
 
@@ -457,7 +473,8 @@ export function useSaveDailyMenu() {
       isPublished?: boolean;
       notes?: string;
     }) => menuService.saveDailyMenu(payload),
-    onSuccess: (_, variables) => {
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(["admin", "dailyMenu", variables.date], data);
       queryClient.invalidateQueries({ queryKey: ["admin", "dailyMenu"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "dailyMenu", variables.date] });
       queryClient.invalidateQueries({ queryKey: ["admin", "weeklyMenu"] });

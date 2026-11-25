@@ -23,6 +23,7 @@ import { AdminShell } from "@/components/layout/AdminShell";
 import {
   useDailyMenu,
   useSaveDailyMenu,
+  useToggleDailyMenuItem,
   useContinueYesterday,
   useWeeklyMenu,
   useSaveWeeklyMenu,
@@ -58,34 +59,75 @@ export default function AdminDailyMenuPage() {
   const [dailyDraft, setDailyDraft] = useState<Record<string, boolean>>({});
   const [isDailyDirty, setIsDailyDirty] = useState(false);
   const [dailyActionMessage, setDailyActionMessage] = useState<string | null>(null);
+  const [dailyErrorMessage, setDailyErrorMessage] = useState<string | null>(null);
+  const [togglingProductId, setTogglingProductId] = useState<string | null>(null);
 
   // Daily queries and mutations
   const { data: dailyData, isLoading: isDailyLoading } = useDailyMenu(selectedDate);
   const saveDailyMutation = useSaveDailyMenu();
+  const toggleDailyItemMutation = useToggleDailyMenuItem();
   const continueYesterdayMutation = useContinueYesterday();
 
   // Synchronize draft state when dailyData loads or date changes
   useEffect(() => {
-    if (dailyData?.items) {
+    if (dailyData?.items && !isDailyDirty) {
       const map: Record<string, boolean> = {};
       dailyData.items.forEach((item) => {
         map[item.product.id] = item.isAvailable;
       });
       setDailyDraft(map);
-      setIsDailyDirty(false);
     }
-  }, [dailyData, selectedDate]);
+  }, [dailyData, selectedDate, isDailyDirty]);
 
-  // Handle individual dish toggle in daily view
-  const handleToggleDailyItem = (productId: string) => {
-    setDailyDraft((prev) => {
-      const current = prev[productId] !== undefined ? prev[productId] : true;
-      return {
-        ...prev,
-        [productId]: !current,
-      };
-    });
-    setIsDailyDirty(true);
+  // Reset dirty state when selectedDate changes
+  useEffect(() => {
+    setIsDailyDirty(false);
+    setDailyErrorMessage(null);
+  }, [selectedDate]);
+
+  // Handle individual dish toggle in daily view: persists immediately to MongoDB
+  const handleToggleDailyItem = async (productId: string) => {
+    if (togglingProductId) return;
+    const current =
+      dailyDraft[productId] !== undefined
+        ? dailyDraft[productId]
+        : dailyData?.items.find((i) => i.product.id === productId)?.isAvailable ?? true;
+    const nextAvailable = !current;
+
+    setTogglingProductId(productId);
+    setDailyErrorMessage(null);
+
+    try {
+      const updated = await toggleDailyItemMutation.mutateAsync({
+        date: selectedDate,
+        productId,
+        isAvailable: nextAvailable,
+      });
+
+      if (updated?.items) {
+        const map: Record<string, boolean> = {};
+        updated.items.forEach((item) => {
+          map[item.product.id] = item.isAvailable;
+        });
+        setDailyDraft(map);
+      } else {
+        setDailyDraft((prev) => ({ ...prev, [productId]: nextAvailable }));
+      }
+      setIsDailyDirty(false);
+      setDailyActionMessage(
+        `Availability updated for ${formatDateLabel(selectedDate)}.`
+      );
+      setTimeout(() => setDailyActionMessage(null), 2500);
+    } catch (err: any) {
+      setDailyActionMessage(null);
+      setDailyErrorMessage(
+        err?.response?.data?.message ||
+          err?.message ||
+          "Failed to update product availability. Please try again."
+      );
+    } finally {
+      setTogglingProductId(null);
+    }
   };
 
   // Quick batch actions
@@ -298,6 +340,13 @@ export default function AdminDailyMenuPage() {
       {/* ======================================================== */}
       {activeTab === "daily" && (
         <div className="space-y-6">
+          {dailyErrorMessage && (
+            <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-2xl flex items-center gap-2 text-xs font-semibold animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{dailyErrorMessage}</span>
+            </div>
+          )}
+
           {dailyActionMessage && (
             <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-2xl flex items-center gap-2 text-xs font-semibold animate-in fade-in">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -506,8 +555,9 @@ export default function AdminDailyMenuPage() {
                       </span>
 
                       <button
+                        disabled={togglingProductId === item.product.id}
                         onClick={() => handleToggleDailyItem(item.product.id)}
-                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer ${
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50 ${
                           isItemAvailable
                             ? "bg-emerald-100 text-emerald-900 hover:bg-emerald-200"
                             : "bg-rose-100 text-rose-900 hover:bg-rose-200"

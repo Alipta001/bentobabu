@@ -7,11 +7,14 @@ import { productService } from "@/services/productService";
 
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ date?: string }>;
 }
 
-export default async function ProductDetailPage({ params }: ProductPageProps) {
+export default async function ProductDetailPage({ params, searchParams }: ProductPageProps) {
   const { slug } = await params;
-  const product = await productService.getBySlug(slug);
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const deliveryDate = resolvedSearchParams?.date;
+  const product = await productService.getBySlug(slug, deliveryDate);
 
   if (!product) {
     notFound();

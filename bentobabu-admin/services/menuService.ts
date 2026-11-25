@@ -94,6 +94,22 @@ export const menuService = {
   },
 
   /**
+   * Toggle a single product's daily availability and persist immediately
+   */
+  async toggleDailyItem(payload: {
+    date: string;
+    productId: string;
+    isAvailable: boolean;
+  }): Promise<DailyMenuData> {
+    const res = await adminApiClient.patch<{
+      success: boolean;
+      data: DailyMenuData;
+      message: string;
+    }>(ADMIN_API_ENDPOINTS.MENU.TOGGLE_DAILY_ITEM, payload);
+    return res.data.data;
+  },
+
+  /**
    * Copy yesterday's menu configuration to target date
    */
   async continueYesterday(targetDate: string): Promise<DailyMenuData> {

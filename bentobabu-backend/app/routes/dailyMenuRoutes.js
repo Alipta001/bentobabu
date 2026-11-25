@@ -9,6 +9,7 @@ router.get('/daily', DailyMenuController.getDailyMenu);
 
 // Admin-only Daily Menu endpoints
 router.post('/daily', authenticate, authorize('ADMIN'), DailyMenuController.saveDailyMenu);
+router.patch('/daily/item', authenticate, authorize('ADMIN'), DailyMenuController.toggleDailyMenuItem);
 router.post('/daily/continue-yesterday', authenticate, authorize('ADMIN'), DailyMenuController.continueYesterday);
 
 // Admin-only Weekly Menu endpoints

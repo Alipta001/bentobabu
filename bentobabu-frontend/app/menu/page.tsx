@@ -10,6 +10,7 @@ import {
   ArrowUpDown,
   RotateCcw,
   Sparkles,
+  Calendar,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -17,26 +18,48 @@ import { ProductCard } from "@/components/product/ProductCard";
 import { useProducts, useCategories } from "@/hooks/useQueries";
 import { DietaryType, ProductFilterOptions } from "@/types";
 
+function getKolkataToday(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function addDaysKolkata(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}
+
 function UrlParamsSync({
   onCategorySync,
   onSearchSync,
+  onDateSync,
 }: {
   onCategorySync: (cat: string) => void;
   onSearchSync: (q: string) => void;
+  onDateSync: (date: string) => void;
 }) {
   const searchParams = useSearchParams();
   const urlCategory = searchParams.get("category") || "";
   const urlSearch = searchParams.get("search") || "";
+  const urlDate = searchParams.get("date") || "";
 
   useEffect(() => {
     if (urlCategory) onCategorySync(urlCategory);
     if (urlSearch) onSearchSync(urlSearch);
-  }, [urlCategory, urlSearch, onCategorySync, onSearchSync]);
+    if (urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate)) onDateSync(urlDate);
+  }, [urlCategory, urlSearch, urlDate, onCategorySync, onSearchSync, onDateSync]);
 
   return null;
 }
 
 export default function MenuPage() {
+  const todayKolkata = useMemo(() => getKolkataToday(), []);
+  const tomorrowKolkata = useMemo(() => addDaysKolkata(todayKolkata, 1), [todayKolkata]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => getKolkataToday());
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [debouncedSearch, setDebouncedSearch] = useState<string>("");
@@ -63,6 +86,10 @@ export default function MenuPage() {
     setDebouncedSearch((prev) => prev || q);
   }, []);
 
+  const handleDateSync = React.useCallback((date: string) => {
+    setSelectedDate(date);
+  }, []);
+
   // Synchronize category from URL query parameters (slug to id)
   useEffect(() => {
     if (selectedCategory && categories.length > 0) {
@@ -86,8 +113,9 @@ export default function MenuPage() {
       dietary: selectedDietary.length > 0 ? selectedDietary : undefined,
       maxPrice: maxPrice < 500 ? maxPrice : undefined,
       sortBy,
+      date: selectedDate || undefined,
     }),
-    [isAllCategory, selectedCategory, debouncedSearch, selectedDietary, maxPrice, sortBy]
+    [isAllCategory, selectedCategory, debouncedSearch, selectedDietary, maxPrice, sortBy, selectedDate]
   );
 
   const {
@@ -131,7 +159,11 @@ export default function MenuPage() {
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F3EA]">
       <Suspense fallback={null}>
-        <UrlParamsSync onCategorySync={handleCategorySync} onSearchSync={handleSearchSync} />
+        <UrlParamsSync
+          onCategorySync={handleCategorySync}
+          onSearchSync={handleSearchSync}
+          onDateSync={handleDateSync}
+        />
       </Suspense>
       <Header />
 
@@ -150,6 +182,46 @@ export default function MenuPage() {
                 Filter by targeted wellness category, dietary preferences, or price to find the
                 exact nutrition your body requires today.
               </p>
+            </div>
+
+            {/* Delivery Date Availability Selector */}
+            <div className="mt-5 flex flex-wrap items-center gap-2.5">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#354B35]">
+                <Calendar className="w-3.5 h-3.5 text-[#755C2B]" />
+                <span>Delivery Date:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedDate(todayKolkata)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                  selectedDate === todayKolkata
+                    ? "bg-[#354B35] text-white border-[#354B35]"
+                    : "bg-[#F7F3EA] text-[#222922] border-[#E5DFC5] hover:border-[#354B35]"
+                }`}
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDate(tomorrowKolkata)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                  selectedDate === tomorrowKolkata
+                    ? "bg-[#354B35] text-white border-[#354B35]"
+                    : "bg-[#F7F3EA] text-[#222922] border-[#E5DFC5] hover:border-[#354B35]"
+                }`}
+              >
+                Tomorrow
+              </button>
+              <input
+                type="date"
+                min={todayKolkata}
+                value={selectedDate}
+                onChange={(e) => {
+                  if (e.target.value) setSelectedDate(e.target.value);
+                }}
+                aria-label="Select delivery date"
+                className="px-3 py-1.5 rounded-full text-xs font-medium bg-[#F7F3EA] border border-[#E5DFC5] text-[#222922] focus:outline-none focus:border-[#354B35]"
+              />
             </div>
 
             {/* Quick Search & Sort Bar */}
@@ -474,6 +546,7 @@ export default function MenuPage() {
                             key={`signature-${product.id}`}
                             product={product}
                             priority={idx === 0}
+                            deliveryDate={selectedDate}
                           />
                         ))}
                       </div>
@@ -491,6 +564,7 @@ export default function MenuPage() {
                           key={product.id}
                           product={product}
                           priority={signatureProducts.length === 0 && idx === 0}
+                          deliveryDate={selectedDate}
                         />
                       ))}
                     </div>

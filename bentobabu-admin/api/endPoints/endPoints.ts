@@ -114,6 +114,7 @@ export const ADMIN_API_ENDPOINTS = {
   MENU: {
     DAILY: "/menu/daily",
     SAVE_DAILY: "/menu/daily",
+    TOGGLE_DAILY_ITEM: "/menu/daily/item",
     CONTINUE_YESTERDAY: "/menu/daily/continue-yesterday",
     WEEKLY: "/menu/weekly",
     SAVE_WEEKLY: "/menu/weekly",

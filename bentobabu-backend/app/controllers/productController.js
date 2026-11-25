@@ -415,7 +415,12 @@ class ProductController {
         });
       }
 
-      const cacheKey = 'cache:products:detail:' + slug.toLowerCase().trim();
+      const targetDate =
+        req.query.date && typeof req.query.date === 'string' && isValidDateString(req.query.date.trim())
+          ? req.query.date.trim()
+          : getKolkataDateString();
+
+      const cacheKey = `cache:products:detail:${slug.toLowerCase().trim()}:${targetDate}`;
       const cached = await redisGet(cacheKey);
       if (cached) {
         return res.status(200).json({
@@ -438,9 +443,8 @@ class ProductController {
         });
       }
 
-      // Check today's daily menu availability
-      const todayStr = getKolkataDateString();
-      const dailyMenu = await DailyMenu.findOne({ date: todayStr, isPublished: true }).lean();
+      // Check target date's daily menu availability
+      const dailyMenu = await DailyMenu.findOne({ date: targetDate, isPublished: true }).lean();
       let isAvailableToday = Boolean(product.isAvailable);
       if (isAvailableToday && dailyMenu && Array.isArray(dailyMenu.items)) {
         const itemEntry = dailyMenu.items.find((it) => {

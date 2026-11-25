@@ -175,6 +175,90 @@ class DailyMenuController {
   }
 
   /**
+   * PATCH /api/v1/menu/daily/item
+   * ADMIN only: Persist a single product's availability toggle for a specific date immediately
+   */
+  static async toggleDailyMenuItem(req, res, next) {
+    try {
+      const { date, productId, isAvailable } = req.body;
+
+      if (!date || !isValidDateString(String(date).trim())) {
+        return res.status(400).json({
+          success: false,
+          message: 'A valid date string (YYYY-MM-DD) is required.',
+        });
+      }
+      const targetDate = String(date).trim();
+
+      if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'A valid productId is required.',
+        });
+      }
+
+      if (typeof isAvailable !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          message: 'isAvailable must be a boolean.',
+        });
+      }
+
+      const prod = await Product.findById(productId).select('_id isActive').lean();
+      if (!prod) {
+        return res.status(404).json({
+          success: false,
+          message: 'Product not found.',
+        });
+      }
+
+      let dailyDoc = await DailyMenu.findOne({ date: targetDate });
+      if (!dailyDoc) {
+        // Initialize from current resolved availability so other products retain their state
+        const currentResolved = await DailyMenuController.resolveDateAvailability(targetDate);
+        const initialItems = currentResolved.items.map((it) => ({
+          product: new mongoose.Types.ObjectId(it.product.id),
+          isAvailable: it.product.id === String(productId) ? isAvailable : it.isAvailable,
+        }));
+        dailyDoc = await DailyMenu.create({
+          date: targetDate,
+          items: initialItems,
+          isPublished: true,
+          lastUpdatedBy:
+            req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : null,
+        });
+      } else {
+        const idx = (dailyDoc.items || []).findIndex(
+          (it) => it.product && it.product.toString() === String(productId)
+        );
+        if (idx >= 0) {
+          dailyDoc.items[idx].isAvailable = isAvailable;
+        } else {
+          dailyDoc.items.push({
+            product: new mongoose.Types.ObjectId(productId),
+            isAvailable,
+          });
+        }
+        dailyDoc.isPublished = true;
+        dailyDoc.lastUpdatedBy =
+          req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id) ? req.user.id : null;
+        await dailyDoc.save();
+      }
+
+      await redisDelPattern('cache:products:*');
+      const resolved = await DailyMenuController.resolveDateAvailability(targetDate);
+
+      return res.status(200).json({
+        success: true,
+        message: `Product availability for ${targetDate} updated.`,
+        data: resolved,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * POST /api/v1/menu/daily/continue-yesterday
    * ADMIN only: Copy yesterday's menu availability configuration to target date
    */

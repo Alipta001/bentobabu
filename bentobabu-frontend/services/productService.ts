@@ -225,11 +225,14 @@ export const productService = {
     }
   },
 
-  async getBySlug(slug: string): Promise<Product | null> {
+  async getBySlug(slug: string, date?: string): Promise<Product | null> {
     try {
       const response = await apiClient.get<
         ApiResponse<{ product: any }> | { product: any } | any
-      >(API_ENDPOINTS.PRODUCTS.DETAIL(slug));
+      >(
+        API_ENDPOINTS.PRODUCTS.DETAIL(slug),
+        date ? { params: { date } } : undefined
+      );
 
       const raw = response.data;
       let item: any = null;
