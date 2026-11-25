@@ -146,6 +146,51 @@ export function useAdminOrders(params?: { status?: string; search?: string }) {
   });
 }
 
+export function useAdminOrdersWithSummary(params?: {
+  status?: string;
+  search?: string;
+  deliveryDateFilter?: string;
+  deliveryDate?: string;
+  deliverySlotKey?: string;
+  page?: number;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: ["admin", "orders", "summary", params],
+    queryFn: () => orderService.getAllWithSummary(params),
+    refetchInterval: (query) => (query.state.error ? false : 12000),
+  });
+}
+
+export function useAcknowledgePreparation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => orderService.acknowledgePreparation(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
+  });
+}
+
+export function useAdminReminderSettings() {
+  return useQuery({
+    queryKey: ["admin", "delivery", "reminderSettings"],
+    queryFn: () => deliveryService.getReminderSettings(),
+  });
+}
+
+export function useUpdateReminderSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reminderMinutes: Record<string, number>) =>
+      deliveryService.updateReminderSettings(reminderMinutes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "delivery", "reminderSettings"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+    },
+  });
+}
+
 export function useAdminOrder(id: string) {
   return useQuery({
     queryKey: ["admin", "orders", id],

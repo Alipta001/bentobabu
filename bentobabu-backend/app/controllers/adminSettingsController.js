@@ -26,6 +26,12 @@ const DEFAULT_SETTINGS = {
   CLOSING_TIME: '22:00',
   DELIVERY_SLOT_BOOKING_CUTOFF_MINUTES: 0,
   MAX_ADVANCE_BOOKING_DAYS: 3,
+  PREPARATION_REMINDER_MINUTES: {
+    morning: 120,
+    noon: 120,
+    evening: 60,
+    night: 60,
+  },
   ORDER_ACCEPTANCE_ENABLED: true,
   MAINTENANCE_MODE: false,
   KITCHEN_NAME: 'BentoBabu Central Kitchen',
@@ -303,6 +309,30 @@ class AdminSettingsController {
             break;
           }
 
+          case 'PREPARATION_REMINDER_MINUTES': {
+            if (!val || typeof val !== 'object' || Array.isArray(val)) {
+              return res.status(400).json({
+                success: false,
+                message: 'PREPARATION_REMINDER_MINUTES must be an object mapping slot keys to minutes.',
+              });
+            }
+            const sanitizedMap = {};
+            for (const [slotKey, minsVal] of Object.entries(val)) {
+              const cleanKey = String(slotKey || '').trim().toLowerCase();
+              if (!cleanKey) continue;
+              const mins = Number(minsVal);
+              if (!Number.isInteger(mins) || mins < 0 || mins > 1440) {
+                return res.status(400).json({
+                  success: false,
+                  message: `Reminder minutes for slot "${cleanKey}" must be an integer between 0 and 1440.`,
+                });
+              }
+              sanitizedMap[cleanKey] = mins;
+            }
+            updatesToApply[key] = sanitizedMap;
+            break;
+          }
+
           case 'OPERATING_DAYS':
             if (!Array.isArray(val) || val.length === 0) {
               return res.status(400).json({
@@ -455,6 +485,17 @@ class AdminSettingsController {
         await DeliverySlotService.invalidateCache();
       } catch (err) {
         console.warn('[AdminSettingsController] DeliverySlotService cache invalidation warning:', err.message);
+      }
+
+      if (updatesToApply.PREPARATION_REMINDER_MINUTES) {
+        try {
+          const { PreparationReminderService } = require('../services/preparationReminderService');
+          await PreparationReminderService.recalculateAllUpcomingReminders(
+            updatesToApply.PREPARATION_REMINDER_MINUTES
+          );
+        } catch (remErr) {
+          console.warn('[AdminSettingsController] Reminder recalculation warning:', remErr.message);
+        }
       }
 
       const allMerged = await AdminSettingsController.getAllMergedSettings();

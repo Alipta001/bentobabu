@@ -104,6 +104,47 @@ export interface OrderItem {
 
 export type ReceiptStatus = "PENDING" | "GENERATING" | "STORED" | "FAILED";
 
+export type PreparationReminderStatus =
+  | "NOT_APPLICABLE"
+  | "UPCOMING"
+  | "DUE"
+  | "LATE_PREP"
+  | "ACKNOWLEDGED"
+  | "CANCELLED"
+  | "COMPLETED";
+
+export interface PreparationReminder {
+  reminderAt?: string | null;
+  leadMinutes?: number | null;
+  status: PreparationReminderStatus;
+  sentAt?: string | null;
+  acknowledgedAt?: string | null;
+  acknowledgedBy?: { id?: string; _id?: string; name?: string; email?: string; role?: string } | string | null;
+  isLatePrep?: boolean;
+}
+
+export interface DateOrderSlotSummary {
+  slotKey: string;
+  label: string;
+  startTime?: string | null;
+  orderCount: number;
+  totalItems: number;
+}
+
+export interface DateOrderSummary {
+  totalOrders: number;
+  totalItems: number;
+  slots: DateOrderSlotSummary[];
+}
+
+export interface SlotReminderSetting {
+  slotKey: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+  reminderMinutes: number;
+}
+
 export interface OrderReceiptMetadata {
   status: ReceiptStatus;
   storageProvider?: string;
@@ -142,6 +183,12 @@ export interface Order {
     type: "home" | "work" | "other";
   };
   deliverySlot?: string;
+  deliveryDateStr?: string | null;
+  deliverySlotKey?: string | null;
+  deliverySlotLabel?: string;
+  deliverySlotStartTime?: string | null;
+  deliverySlotEndTime?: string | null;
+  preparationReminder?: PreparationReminder;
   deliveryNotes?: string;
   cancellationReason?: string;
   cancellationRequest?: CancellationRequest | null;

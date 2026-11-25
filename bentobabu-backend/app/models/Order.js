@@ -224,6 +224,57 @@ const orderSchema = new mongoose.Schema(
       ref: 'DeliverySlot',
       default: null,
     },
+    deliveryDateStr: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
+    },
+    deliverySlotKey: {
+      type: String,
+      default: null,
+      trim: true,
+      index: true,
+    },
+    deliverySlotLabel: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    deliverySlotStartTime: {
+      type: String,
+      default: null,
+    },
+    deliverySlotEndTime: {
+      type: String,
+      default: null,
+    },
+    preparationReminder: {
+      reminderAt: { type: Date, default: null, index: true },
+      leadMinutes: { type: Number, default: null },
+      status: {
+        type: String,
+        enum: [
+          'NOT_APPLICABLE',
+          'UPCOMING',
+          'DUE',
+          'LATE_PREP',
+          'ACKNOWLEDGED',
+          'CANCELLED',
+          'COMPLETED',
+        ],
+        default: 'NOT_APPLICABLE',
+        index: true,
+      },
+      sentAt: { type: Date, default: null },
+      acknowledgedAt: { type: Date, default: null },
+      acknowledgedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      isLatePrep: { type: Boolean, default: false },
+      lockToken: { type: String, default: null },
+      lockExpiresAt: { type: Date, default: null },
+      attempts: { type: Number, default: 0 },
+      lastError: { type: String, default: null },
+    },
     coupon: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Coupon',
@@ -401,6 +452,8 @@ orderSchema.index(
 );
 orderSchema.index({ orderStatus: 1, createdAt: -1 });
 orderSchema.index({ paymentStatus: 1, createdAt: -1 });
+orderSchema.index({ deliveryDateStr: 1, deliverySlotKey: 1, orderStatus: 1 });
+orderSchema.index({ 'preparationReminder.status': 1, 'preparationReminder.reminderAt': 1 });
 
 const Order = mongoose.model('Order', orderSchema);
 

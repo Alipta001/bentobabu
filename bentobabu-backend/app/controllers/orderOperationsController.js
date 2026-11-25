@@ -886,6 +886,13 @@ class OrderOperationsController {
           eventType: 'ORDER_DELIVERED',
         }).catch((e) => console.error('[Notification] ORDER_DELIVERED dispatch error:', e.message));
 
+        try {
+          const { PreparationReminderService } = require('../services/preparationReminderService');
+          await PreparationReminderService.completeReminderForOrder(updatedOrder._id);
+        } catch (remErr) {
+          console.error('[OrderOperations] Reminder completion error:', remErr.message);
+        }
+
         emitOrderEvent(req, 'order:delivered', {
           orderId: updatedOrder._id,
           orderNumber: updatedOrder.orderNumber,

@@ -1,9 +1,14 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
-const { Order, User, DeliveryPartnerPresence, CancellationRequest } = require('../models');
+const { Order, User, DeliveryPartnerPresence, CancellationRequest, DeliverySlot } = require('../models');
 const CancellationService = require('../services/cancellationService');
 const { redisDelPattern } = require('../config/redis');
 const NotificationDispatcher = require('../utils/notificationDispatcher');
+const {
+  getKolkataDateString,
+  getTomorrow,
+  isValidDateString,
+} = require('../utils/businessDate');
 
 /**
  * Class-based Controller for Admin Order Management
@@ -27,6 +32,9 @@ class AdminOrderController {
         assignedDeliveryPartner,
         startDate,
         endDate,
+        deliveryDateFilter,
+        deliveryDate,
+        deliverySlotKey,
         sortBy = 'createdAt',
         sortOrder = 'desc',
       } = req.query;
@@ -65,7 +73,20 @@ class AdminOrderController {
         filter.assignedDeliveryPartner = assignedDeliveryPartner;
       }
 
-      if (startDate && endDate) {
+      // Date-wise delivery filtering using Asia/Kolkata boundaries
+      const todayKolkata = getKolkataDateString();
+      const tomorrowKolkata = getTomorrow(todayKolkata);
+      const normalizedDateFilter = String(deliveryDateFilter || '').trim().toLowerCase();
+
+      if (normalizedDateFilter === 'today') {
+        filter.deliveryDateStr = todayKolkata;
+      } else if (normalizedDateFilter === 'tomorrow') {
+        filter.deliveryDateStr = tomorrowKolkata;
+      } else if (normalizedDateFilter === 'upcoming') {
+        filter.deliveryDateStr = { $gte: todayKolkata };
+      } else if (deliveryDate && isValidDateString(String(deliveryDate).trim())) {
+        filter.deliveryDateStr = String(deliveryDate).trim();
+      } else if (startDate && endDate) {
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
         const end = new Date(endDate);
@@ -73,19 +94,56 @@ class AdminOrderController {
         filter.createdAt = { $gte: start, $lte: end };
       }
 
+      const summaryMatchFilter = { ...filter };
+
+      if (deliverySlotKey && typeof deliverySlotKey === 'string' && deliverySlotKey.trim() && deliverySlotKey !== 'all') {
+        filter.deliverySlotKey = deliverySlotKey.trim().toLowerCase();
+      }
+
       const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
 
-      const [orders, totalOrders] = await Promise.all([
+      const [orders, totalOrders, slotAggregation] = await Promise.all([
         Order.find(filter)
           .populate('user', 'name email phone')
-          .populate('deliverySlot', 'date label startTime endTime')
+          .populate('deliverySlot', 'date dateStr slotKey label startTime endTime')
           .populate('assignedDeliveryPartner', 'name phone')
+          .populate('preparationReminder.acknowledgedBy', 'name email role')
           .populate('items.product', 'name images imagesData price isAvailable')
           .sort(sort)
           .skip(skip)
           .limit(limitNum)
           .lean(),
         Order.countDocuments(filter),
+        Order.aggregate([
+          { $match: summaryMatchFilter },
+          {
+            $addFields: {
+              resolvedSlotKey: { $ifNull: ['$deliverySlotKey', 'unscheduled'] },
+              resolvedSlotLabel: { $ifNull: ['$deliverySlotLabel', 'Unscheduled'] },
+              resolvedStartTime: { $ifNull: ['$deliverySlotStartTime', '99:99'] },
+              orderItemQty: {
+                $sum: {
+                  $map: {
+                    input: { $ifNull: ['$items', []] },
+                    as: 'it',
+                    in: { $ifNull: ['$$it.quantity', 0] },
+                  },
+                },
+              },
+            },
+          },
+          {
+            $group: {
+              _id: '$resolvedSlotKey',
+              slotKey: { $first: '$resolvedSlotKey' },
+              label: { $first: '$resolvedSlotLabel' },
+              startTime: { $first: '$resolvedStartTime' },
+              orderCount: { $sum: 1 },
+              totalItems: { $sum: '$orderItemQty' },
+            },
+          },
+          { $sort: { startTime: 1, slotKey: 1 } },
+        ]),
       ]);
 
       const normalizedOrders = orders.map((ord) => {
@@ -104,13 +162,35 @@ class AdminOrderController {
             };
           });
         }
-        return ord;
+        const slotObj = typeof ord.deliverySlot === 'object' && ord.deliverySlot !== null ? ord.deliverySlot : null;
+        return {
+          ...ord,
+          deliveryDateStr: ord.deliveryDateStr || slotObj?.dateStr || (slotObj?.date ? getKolkataDateString(slotObj.date) : null),
+          deliverySlotKey: ord.deliverySlotKey || slotObj?.slotKey || null,
+          deliverySlotLabel: ord.deliverySlotLabel || slotObj?.label || '',
+          deliverySlotStartTime: ord.deliverySlotStartTime || slotObj?.startTime || null,
+          deliverySlotEndTime: ord.deliverySlotEndTime || slotObj?.endTime || null,
+          preparationReminder: ord.preparationReminder || { status: 'NOT_APPLICABLE' },
+        };
       });
+
+      const dateSummary = {
+        totalOrders: slotAggregation.reduce((acc, s) => acc + (s.orderCount || 0), 0),
+        totalItems: slotAggregation.reduce((acc, s) => acc + (s.totalItems || 0), 0),
+        slots: slotAggregation.map((s) => ({
+          slotKey: s.slotKey,
+          label: s.label,
+          startTime: s.startTime === '99:99' ? null : s.startTime,
+          orderCount: s.orderCount,
+          totalItems: s.totalItems,
+        })),
+      };
 
       return res.status(200).json({
         success: true,
         data: {
           orders: normalizedOrders,
+          dateSummary,
           pagination: {
             totalOrders,
             totalPages: Math.ceil(totalOrders / limitNum) || 1,
@@ -565,6 +645,99 @@ class AdminOrderController {
       return res.status(200).json({
         success: true,
         message: 'Order cancelled successfully by administrator.',
+        data: { order },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/v1/admin/orders/:id/acknowledge-preparation
+   * Record kitchen preparation acknowledgement timestamp and admin user
+   */
+  static async acknowledgePreparation(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { PreparationReminderService } = require('../services/preparationReminderService');
+      const order = await PreparationReminderService.acknowledgePreparation(
+        id,
+        req.user?._id || req.user?.id || null
+      );
+
+      await order.populate('preparationReminder.acknowledgedBy', 'name email role');
+      await redisDelPattern('cache:admin:dashboard:*').catch(() => {});
+
+      return res.status(200).json({
+        success: true,
+        message: 'Kitchen preparation acknowledged.',
+        data: { order },
+      });
+    } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          success: false,
+          message: error.message,
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/admin/orders/:id/schedule
+   * Update an order's delivery slot/date and automatically recalculate its preparation reminder
+   */
+  static async updateOrderSchedule(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { deliverySlotId } = req.body;
+
+      if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(deliverySlotId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Valid order ID and deliverySlotId are required.',
+        });
+      }
+
+      const [order, newSlot] = await Promise.all([
+        Order.findById(id),
+        DeliverySlot.findById(deliverySlotId),
+      ]);
+
+      if (!order) {
+        return res.status(404).json({ success: false, message: 'Order not found.' });
+      }
+      if (!newSlot) {
+        return res.status(404).json({ success: false, message: 'Target delivery slot not found.' });
+      }
+      if (order.orderStatus === 'CANCELLED' || order.orderStatus === 'DELIVERED') {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot reschedule a cancelled or delivered order.',
+        });
+      }
+
+      const oldSlotId = order.deliverySlot ? order.deliverySlot.toString() : null;
+      if (oldSlotId !== newSlot._id.toString()) {
+        if (oldSlotId) {
+          await DeliverySlot.updateOne({ _id: oldSlotId, bookedCount: { $gt: 0 } }, { $inc: { bookedCount: -1 } });
+        }
+        await DeliverySlot.updateOne({ _id: newSlot._id }, { $inc: { bookedCount: 1 } });
+      }
+
+      order.deliverySlot = newSlot._id;
+      const { PreparationReminderService } = require('../services/preparationReminderService');
+      await PreparationReminderService.scheduleOrRecalculateReminder(order, {
+        slotDoc: newSlot,
+        forceRecalculate: true,
+      });
+
+      await redisDelPattern('cache:admin:dashboard:*').catch(() => {});
+
+      return res.status(200).json({
+        success: true,
+        message: 'Order delivery schedule updated and preparation reminder recalculated.',
         data: { order },
       });
     } catch (error) {

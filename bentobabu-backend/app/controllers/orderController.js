@@ -1055,6 +1055,16 @@ class OrderController {
           DeliverySlotService.invalidateCache().catch(() => {});
         }
 
+        // Schedule or recalculate kitchen preparation reminder based on delivery date & slot
+        try {
+          const { PreparationReminderService } = require('../services/preparationReminderService');
+          await PreparationReminderService.scheduleOrRecalculateReminder(order, {
+            slotDoc: slot || null,
+          });
+        } catch (remErr) {
+          console.error('[OrderController] Preparation reminder schedule error:', remErr.message);
+        }
+
         // Safely dispatch notifications after order creation and transaction commit
         NotificationDispatcher.dispatch({
           userId: req.user.id,
@@ -1544,6 +1554,12 @@ class OrderController {
       // Safely dispatch order cancellation notification
       if (order.deliverySlot) {
         DeliverySlotService.invalidateCache().catch(() => {});
+      }
+      try {
+        const { PreparationReminderService } = require('../services/preparationReminderService');
+        await PreparationReminderService.cancelReminderForOrder(order._id);
+      } catch (remErr) {
+        console.error('[OrderController] Cancel reminder error:', remErr.message);
       }
       NotificationDispatcher.dispatch({
         userId: order.user,

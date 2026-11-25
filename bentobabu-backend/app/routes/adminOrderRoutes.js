@@ -11,6 +11,8 @@ router.get('/:id', AdminOrderController.getOrderById);
 router.get('/:id/history', AdminOrderController.getOrderHistory);
 router.patch('/:id/cancel', AdminOrderController.cancelOrder);
 router.put('/:id/assign-delivery', AdminOrderController.assignDeliveryPartner);
+router.post('/:id/acknowledge-preparation', AdminOrderController.acknowledgePreparation);
+router.patch('/:id/schedule', AdminOrderController.updateOrderSchedule);
 router.post('/:id/receipt/regenerate', OrderController.regenerateReceipt);
 
 module.exports = router;

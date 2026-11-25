@@ -22,6 +22,8 @@ import {
   Check,
   Ban,
   Lock,
+  Bell,
+  Save,
 } from "lucide-react";
 import {
   useAdminDeliveryZones,
@@ -39,6 +41,8 @@ import {
   useUpdateDateSchedule,
   useRestoreWeeklySchedule,
   useDeleteDeliverySlot,
+  useAdminReminderSettings,
+  useUpdateReminderSettings,
 } from "@/hooks/useAdminQueries";
 import { DeliveryZone } from "@/types";
 
@@ -70,7 +74,48 @@ function getTodayKolkataDate(): string {
 
 export default function DeliveryZonesPage() {
   const [activeTab, setActiveTab] = useState<"zones" | "slots">("zones");
-  const [slotSubTab, setSlotSubTab] = useState<"weekly" | "dates" | "capacity">("weekly");
+  const [slotSubTab, setSlotSubTab] = useState<"weekly" | "dates" | "capacity" | "reminders">("weekly");
+
+  const { data: reminderData, isLoading: reminderLoading } = useAdminReminderSettings();
+  const updateReminderSettingsMutation = useUpdateReminderSettings();
+  const [reminderDraft, setReminderDraft] = useState<Record<string, number> | null>(null);
+  const effectiveReminderMap = useMemo(() => {
+    const base: Record<string, number> = { ...(reminderData?.reminderMinutes || {}) };
+    if (reminderData?.slots) {
+      for (const s of reminderData.slots) {
+        if (base[s.slotKey] === undefined) {
+          base[s.slotKey] = s.reminderMinutes;
+        }
+      }
+    }
+    return reminderDraft ? { ...base, ...reminderDraft } : base;
+  }, [reminderData, reminderDraft]);
+
+  const handleSaveReminderSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload: Record<string, number> = {};
+      for (const [k, v] of Object.entries(effectiveReminderMap)) {
+        const mins = Math.floor(Number(v));
+        if (isNaN(mins) || mins < 0 || mins > 1440) {
+          showToast("error", `Reminder minutes for "${k}" must be between 0 and 1440.`);
+          return;
+        }
+        payload[k] = mins;
+      }
+      const res = await updateReminderSettingsMutation.mutateAsync(payload);
+      setReminderDraft(null);
+      showToast(
+        "success",
+        `Preparation reminder settings saved. ${res.recalculatedCount || 0} active order(s) updated.`
+      );
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Failed to save preparation reminder settings."
+      );
+    }
+  };
 
   // Notification State
   const [notification, setNotification] = useState<{
@@ -802,6 +847,18 @@ export default function DeliveryZonesPage() {
                 <BarChart3 className="w-3.5 h-3.5" />
                 <span>Live Capacity & Load Overview</span>
               </button>
+
+              <button
+                onClick={() => setSlotSubTab("reminders")}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  slotSubTab === "reminders"
+                    ? "bg-[#354B35] text-white shadow-xs"
+                    : "bg-[#F7F3EA] text-[#667266] hover:bg-[#EDE8DE] border border-[#E5DFC5]"
+                }`}
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>Preparation Reminder Settings</span>
+              </button>
             </div>
 
             {/* SUB-TAB A: WEEKLY RECURRING SCHEDULES */}
@@ -1318,6 +1375,102 @@ export default function DeliveryZonesPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* SUB-TAB D: PREPARATION REMINDER SETTINGS */}
+            {slotSubTab === "reminders" && (
+              <form
+                onSubmit={handleSaveReminderSettings}
+                className="bg-white rounded-3xl border border-[#E5DFC5] shadow-xs p-6 sm:p-8 space-y-6"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#F0ECE1]">
+                  <div>
+                    <h3 className="font-serif text-lg font-bold text-[#1E2B1E] flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-[#B99A60]" />
+                      <span>Preparation Reminder Settings</span>
+                    </h3>
+                    <p className="text-xs text-[#667266] mt-1">
+                      Configure how many minutes before each delivery slot starts (in Asia/Kolkata IST) the kitchen receives a preparation reminder. Set 0 minutes for a reminder at slot start.
+                    </p>
+                  </div>
+                </div>
+
+                {reminderLoading ? (
+                  <div className="py-10 text-center text-xs text-[#8A9A86]">
+                    Loading slot reminder settings...
+                  </div>
+                ) : (reminderData?.slots || []).length === 0 ? (
+                  <div className="py-10 text-center text-xs text-[#8A9A86]">
+                    No delivery slots configured yet.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {(reminderData?.slots || []).map((slot) => {
+                      const val = effectiveReminderMap[slot.slotKey] ?? slot.reminderMinutes ?? 60;
+                      return (
+                        <div
+                          key={slot.slotKey}
+                          className="p-4 rounded-2xl bg-[#F9F7F1] border border-[#E5DFC5] space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-bold text-sm text-[#1E2B1E]">
+                                {slot.label}
+                              </span>
+                              <span className="ml-2 text-[11px] font-mono text-[#667266]">
+                                ({slot.startTime} – {slot.endTime})
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white border border-[#E5DFC5] text-[#667266]">
+                              ID: {slot.slotKey}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 pt-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={1440}
+                              step={1}
+                              required
+                              value={val}
+                              onChange={(e) => {
+                                const next = Math.max(
+                                  0,
+                                  Math.min(1440, Math.floor(Number(e.target.value) || 0))
+                                );
+                                setReminderDraft((prev) => ({
+                                  ...(prev || effectiveReminderMap),
+                                  [slot.slotKey]: next,
+                                }));
+                              }}
+                              className="w-28 px-3 py-2 rounded-xl bg-white border border-[#E5DFC5] text-xs font-bold text-[#1E2B1E] focus:outline-none focus:border-[#354B35]"
+                            />
+                            <span className="text-xs text-[#667266]">
+                              minutes before slot start
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-3 border-t border-[#F0ECE1]">
+                  <button
+                    type="submit"
+                    disabled={updateReminderSettingsMutation.isPending}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#354B35] text-white text-xs font-semibold hover:bg-[#253525] transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>
+                      {updateReminderSettingsMutation.isPending
+                        ? "Saving & Recalculating..."
+                        : "Save Preparation Reminder Settings"}
+                    </span>
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         )}

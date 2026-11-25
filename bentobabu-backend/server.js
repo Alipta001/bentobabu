@@ -247,6 +247,10 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 const { startReceiptWorker, stopReceiptWorker } = require('./app/utils/receiptQueue');
+const {
+  startPreparationReminderWorker,
+  stopPreparationReminderWorker,
+} = require('./app/workers/preparationReminderWorker');
 
 let server = null;
 
@@ -256,6 +260,7 @@ const gracefulShutdown = (signal) => {
 
   try {
     stopReceiptWorker();
+    stopPreparationReminderWorker();
   } catch (queueErr) {
     console.error('[ReceiptQueue] Error stopping receipt worker:', queueErr.message);
   }
@@ -310,6 +315,13 @@ const startServer = async (port = env.port, host = env.host) => {
       startReceiptWorker();
     } catch (workerErr) {
       console.error('[ReceiptWorker] Failed to start receipt worker:', workerErr.message);
+    }
+
+    // Start durable kitchen preparation reminder worker
+    try {
+      startPreparationReminderWorker();
+    } catch (reminderErr) {
+      console.error('[PreparationReminderWorker] Failed to start worker:', reminderErr.message);
     }
 
     return new Promise((resolve, reject) => {

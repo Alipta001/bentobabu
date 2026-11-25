@@ -44,10 +44,18 @@ export interface BackendOrder {
   deliverySlot?: {
     _id: string;
     label?: string;
+    slotKey?: string;
     startTime?: string;
     endTime?: string;
     date?: string;
+    dateStr?: string;
   };
+  deliveryDateStr?: string | null;
+  deliverySlotKey?: string | null;
+  deliverySlotLabel?: string;
+  deliverySlotStartTime?: string | null;
+  deliverySlotEndTime?: string | null;
+  preparationReminder?: import("@/types").PreparationReminder;
   assignedDeliveryPartner?: {
     _id: string;
     id?: string;
@@ -138,7 +146,16 @@ export const mapBackendOrder = (o: BackendOrder): Order & { _backendId: string; 
       pincode: addr?.pincode || "700120",
       type: (addr?.addressType?.toLowerCase() || "home") as "home" | "work" | "other",
     },
-    deliverySlot: o.deliverySlot?.label || (o.deliverySlot ? `${o.deliverySlot.startTime || ""} - ${o.deliverySlot.endTime || ""}` : undefined),
+    deliverySlot:
+      o.deliverySlotLabel ||
+      o.deliverySlot?.label ||
+      (o.deliverySlot ? `${o.deliverySlot.startTime || ""} - ${o.deliverySlot.endTime || ""}` : undefined),
+    deliveryDateStr: o.deliveryDateStr || o.deliverySlot?.dateStr || null,
+    deliverySlotKey: o.deliverySlotKey || o.deliverySlot?.slotKey || null,
+    deliverySlotLabel: o.deliverySlotLabel || o.deliverySlot?.label || "",
+    deliverySlotStartTime: o.deliverySlotStartTime || o.deliverySlot?.startTime || null,
+    deliverySlotEndTime: o.deliverySlotEndTime || o.deliverySlot?.endTime || null,
+    preparationReminder: o.preparationReminder || { status: "NOT_APPLICABLE" },
     cancellationReason: o.cancellationReason,
     cancellationRequest: o.cancellationRequest || null,
     receipt: o.receipt
@@ -159,8 +176,23 @@ export const mapBackendOrder = (o: BackendOrder): Order & { _backendId: string; 
 };
 
 export const orderService = {
-  async getAll(params?: { status?: string; search?: string }): Promise<Order[]> {
-    const queryParams: Record<string, string | number> = { limit: 50 };
+  async getAllWithSummary(params?: {
+    status?: string;
+    search?: string;
+    deliveryDateFilter?: string;
+    deliveryDate?: string;
+    deliverySlotKey?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    orders: (Order & { _backendId: string; rawStatus: string })[];
+    dateSummary: import("@/types").DateOrderSummary;
+    pagination: { totalOrders: number; totalPages: number; currentPage: number; limit: number };
+  }> {
+    const queryParams: Record<string, string | number> = {
+      limit: params?.limit || 50,
+      page: params?.page || 1,
+    };
     if (params?.status && params.status !== "all") {
       let st = params.status.toUpperCase();
       if (st === "READY_FOR_DISPATCH") st = "READY_FOR_PICKUP";
@@ -169,17 +201,44 @@ export const orderService = {
     if (params?.search && params.search.trim()) {
       queryParams.orderNumber = params.search.trim();
     }
+    if (params?.deliveryDateFilter && params.deliveryDateFilter !== "all") {
+      queryParams.deliveryDateFilter = params.deliveryDateFilter;
+    }
+    if (params?.deliveryDate) {
+      queryParams.deliveryDate = params.deliveryDate;
+    }
+    if (params?.deliverySlotKey && params.deliverySlotKey !== "all") {
+      queryParams.deliverySlotKey = params.deliverySlotKey;
+    }
 
     const res = await adminApiClient.get<{
       success: boolean;
       data: {
         orders: BackendOrder[];
-        pagination: { totalOrders: number };
+        dateSummary?: import("@/types").DateOrderSummary;
+        pagination: { totalOrders: number; totalPages: number; currentPage: number; limit: number };
       };
     }>(ADMIN_API_ENDPOINTS.ORDERS.LIST, { params: queryParams });
 
     const rawList = res.data?.data?.orders || [];
-    return rawList.map(mapBackendOrder);
+    return {
+      orders: rawList.map(mapBackendOrder),
+      dateSummary: res.data?.data?.dateSummary || { totalOrders: rawList.length, totalItems: 0, slots: [] },
+      pagination: res.data?.data?.pagination || { totalOrders: rawList.length, totalPages: 1, currentPage: 1, limit: 50 },
+    };
+  },
+
+  async getAll(params?: { status?: string; search?: string }): Promise<Order[]> {
+    const res = await this.getAllWithSummary(params);
+    return res.orders;
+  },
+
+  async acknowledgePreparation(id: string): Promise<Order> {
+    const res = await adminApiClient.post<{
+      success: boolean;
+      data: { order: BackendOrder };
+    }>(ADMIN_API_ENDPOINTS.ORDERS.ACKNOWLEDGE_PREPARATION(id));
+    return mapBackendOrder(res.data?.data?.order || (res.data as unknown as BackendOrder));
   },
 
   async getById(id: string): Promise<Order | null> {

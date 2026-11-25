@@ -8,6 +8,7 @@ const {
 } = require('../models');
 const { normalizePincode } = require('../utils/pincode');
 const DeliverySlotService = require('../services/deliverySlotService');
+const { redisDelPattern } = require('../config/redis');
 const {
   isValidDateString,
   getDayOfWeek,
@@ -1058,6 +1059,115 @@ class AdminDeliveryController {
       return res.status(200).json({
         success: true,
         message: 'Delivery slot deleted successfully.',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/admin/delivery/reminder-settings
+   * Retrieve per-slot kitchen preparation reminder lead times (in minutes)
+   */
+  static async getReminderSettings(req, res, next) {
+    try {
+      const {
+        getReminderSettingsMap,
+        resolveReminderMinutes,
+      } = require('../services/preparationReminderService');
+
+      await DeliverySlotService.seedDefaultWeeklySchedule();
+      const [reminderMinutes, schedules] = await Promise.all([
+        getReminderSettingsMap(),
+        WeeklyDeliverySchedule.find().sort({ dayOfWeek: 1 }).lean(),
+      ]);
+
+      // Collect unique slots across the weekly schedule keyed by stable slotKey
+      const slotMap = new Map();
+      for (const sched of schedules) {
+        for (const s of sched.slots || []) {
+          const key = String(s.slotKey || '').trim().toLowerCase();
+          if (!key) continue;
+          if (!slotMap.has(key)) {
+            slotMap.set(key, {
+              slotKey: key,
+              label: s.label,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              reminderMinutes: resolveReminderMinutes(s, reminderMinutes),
+            });
+          }
+        }
+      }
+
+      const slots = Array.from(slotMap.values()).sort((a, b) =>
+        (a.startTime || '').localeCompare(b.startTime || '')
+      );
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          reminderMinutes,
+          slots,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PUT /api/v1/admin/delivery/reminder-settings
+   * Save per-slot kitchen preparation reminder lead times (in minutes) and recalculate upcoming reminders
+   */
+  static async updateReminderSettings(req, res, next) {
+    try {
+      const rawMap = req.body?.reminderMinutes || req.body?.PREPARATION_REMINDER_MINUTES || req.body;
+      if (!rawMap || typeof rawMap !== 'object' || Array.isArray(rawMap)) {
+        return res.status(400).json({
+          success: false,
+          message: 'reminderMinutes must be an object mapping slotKey to minutes.',
+        });
+      }
+
+      const sanitized = {};
+      for (const [rawKey, rawVal] of Object.entries(rawMap)) {
+        const cleanKey = String(rawKey || '').trim().toLowerCase();
+        if (!cleanKey) continue;
+        const mins = Number(rawVal);
+        if (!Number.isInteger(mins) || mins < 0 || mins > 1440) {
+          return res.status(400).json({
+            success: false,
+            message: `Reminder minutes for "${cleanKey}" must be an integer between 0 and 1440.`,
+          });
+        }
+        sanitized[cleanKey] = mins;
+      }
+
+      const { SystemSetting } = require('../models');
+      await SystemSetting.findOneAndUpdate(
+        { key: 'PREPARATION_REMINDER_MINUTES' },
+        { key: 'PREPARATION_REMINDER_MINUTES', value: sanitized },
+        { upsert: true, returnDocument: 'after', runValidators: true }
+      );
+
+      const {
+        PreparationReminderService,
+        getReminderSettingsMap,
+      } = require('../services/preparationReminderService');
+
+      const recalculatedCount = await PreparationReminderService.recalculateAllUpcomingReminders(sanitized);
+      await redisDelPattern('cache:admin:dashboard:*');
+
+      const updatedMap = await getReminderSettingsMap();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Preparation reminder settings saved and active order reminders recalculated.',
+        data: {
+          reminderMinutes: updatedMap,
+          recalculatedCount,
+        },
       });
     } catch (error) {
       next(error);

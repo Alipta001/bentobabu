@@ -558,6 +558,13 @@ class PaymentController {
         });
       }
 
+      try {
+        const { PreparationReminderService } = require('../services/preparationReminderService');
+        await PreparationReminderService.scheduleOrRecalculateReminder(confirmedOrder);
+      } catch (remErr) {
+        console.error('[PaymentController] Preparation reminder schedule error:', remErr.message);
+      }
+
       // Safely dispatch payment success and order confirmation notifications
       NotificationDispatcher.dispatch({
         userId: confirmedOrder.user,
@@ -747,6 +754,13 @@ class PaymentController {
               );
 
               if (confirmedOrder) {
+                try {
+                  const { PreparationReminderService } = require('../services/preparationReminderService');
+                  await PreparationReminderService.scheduleOrRecalculateReminder(confirmedOrder);
+                } catch (remErr) {
+                  console.error('[PaymentController] Webhook reminder schedule error:', remErr.message);
+                }
+
                 NotificationDispatcher.dispatch({
                   userId: confirmedOrder.user,
                   orderId: confirmedOrder._id,

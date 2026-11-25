@@ -61,6 +61,7 @@ const notificationSchema = new mongoose.Schema(
           'CANCELLATION_REQUESTED',
           'CANCELLATION_APPROVED',
           'CANCELLATION_REJECTED',
+          'PREPARATION_REMINDER',
         ],
         message: '{VALUE} is not a valid notification event type',
       },

@@ -774,6 +774,149 @@ class NotificationDispatcher {
       return { success: false, error: err.message };
     }
   }
+
+  /**
+   * Dispatch Kitchen Preparation Reminder notification to active ADMIN and KITCHEN staff.
+   * Reuses in-app Notification persistence (idempotent) + FCM Web Push.
+   */
+  static async dispatchPreparationReminder(orderInput) {
+    try {
+      const order =
+        orderInput && (orderInput._id || orderInput.orderNumber)
+          ? orderInput
+          : await Order.findById(orderInput).populate('deliverySlot').lean();
+
+      if (!order) {
+        return { success: false, reason: 'Order not found' };
+      }
+
+      const customerName = order.deliveryAddress?.fullName || order.user?.name || 'Customer';
+      const deliveryDate = order.deliveryDateStr || 'Scheduled Date';
+      const slotLabel = order.deliverySlotLabel || order.deliverySlot?.label || 'Delivery Slot';
+      const slotWindow =
+        order.deliverySlotStartTime && order.deliverySlotEndTime
+          ? `${order.deliverySlotStartTime}–${order.deliverySlotEndTime}`
+          : '';
+      const slotDisplay = slotWindow ? `${slotLabel} (${slotWindow})` : slotLabel;
+
+      const itemsSummary = Array.isArray(order.items)
+        ? order.items
+            .map((it) => `${it.productName}${it.variantName ? ` (${it.variantName})` : ''} × ${it.quantity}`)
+            .join(', ')
+        : '';
+
+      const reminderAt = order.preparationReminder?.reminderAt
+        ? new Intl.DateTimeFormat('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          }).format(new Date(order.preparationReminder.reminderAt)) + ' IST'
+        : 'Now';
+
+      const isLate = Boolean(order.preparationReminder?.isLatePrep);
+      const subject = isLate
+        ? `Late Prep Alert: Order #${order.orderNumber} (${slotLabel})`
+        : `Kitchen Prep Reminder: Order #${order.orderNumber} (${slotLabel})`;
+      const message = `Prepare Order #${order.orderNumber} for ${customerName} • Delivery: ${deliveryDate}, ${slotDisplay} • Items: ${itemsSummary} • Reminder: ${reminderAt}`;
+
+      const staffUsers = await User.find({
+        role: { $in: ['ADMIN', 'KITCHEN'] },
+        isActive: true,
+      }).select('_id name email role notificationPreferences');
+
+      const eligibleUsers = staffUsers.filter((u) => {
+        const prefs = u.notificationPreferences;
+        if (!prefs) return true;
+        if (prefs.push === false) return false;
+        return true;
+      });
+
+      if (eligibleUsers.length === 0) {
+        return { success: true, inAppCount: 0, pushCount: 0 };
+      }
+
+      for (const user of eligibleUsers) {
+        const inAppKey = `prep_reminder_${user._id}_${order._id}`;
+        try {
+          await Notification.findOneAndUpdate(
+            { idempotencyKey: inAppKey },
+            {
+              $setOnInsert: {
+                user: user._id,
+                order: order._id,
+                channel: 'IN_APP',
+                eventType: 'PREPARATION_REMINDER',
+                recipient: user._id.toString(),
+                subject: subject.slice(0, 200),
+                message,
+                status: 'SENT',
+                isRead: false,
+                sentAt: new Date(),
+                metadata: {
+                  orderNumber: order.orderNumber,
+                  customerName,
+                  deliveryDate,
+                  deliverySlot: slotDisplay,
+                  items: (order.items || []).map((it) => ({
+                    productName: it.productName,
+                    variantName: it.variantName || '',
+                    quantity: it.quantity,
+                  })),
+                  reminderAt,
+                  isLatePrep: isLate,
+                },
+              },
+            },
+            { upsert: true, returnDocument: 'after' }
+          );
+        } catch {
+          // ignore duplicate idempotency key
+        }
+      }
+
+      // Send FCM Web Push if configured
+      const eligibleUserIds = eligibleUsers.map((u) => u._id);
+      const devices = await DeviceToken.find({
+        user: { $in: eligibleUserIds },
+        isActive: true,
+      });
+
+      const messaging = getMessaging();
+      const isConfigured = isFirebaseConfigured();
+      let pushCount = 0;
+
+      if (devices.length > 0 && isConfigured && messaging) {
+        for (const device of devices) {
+          try {
+            await messaging.send({
+              token: device.token,
+              notification: {
+                title: subject,
+                body: message.slice(0, 180),
+              },
+              data: {
+                eventType: 'PREPARATION_REMINDER',
+                orderId: order._id.toString(),
+                orderNumber: order.orderNumber,
+                url: `/orders?id=${order.orderNumber}`,
+              },
+            });
+            pushCount++;
+          } catch {
+            // Non-blocking push failure
+          }
+        }
+      }
+
+      return { success: true, inAppCount: eligibleUsers.length, pushCount };
+    } catch (err) {
+      console.error('[NotificationDispatcher] Error in dispatchPreparationReminder:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
 }
 
 module.exports = NotificationDispatcher;

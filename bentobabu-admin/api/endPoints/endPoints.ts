@@ -34,6 +34,7 @@ export const ADMIN_API_ENDPOINTS = {
     DETAIL: (id: string) => `/admin/orders/${id}`,
     HISTORY: (id: string) => `/admin/orders/${id}/history`,
     ASSIGN_DELIVERY: (id: string) => `/admin/orders/${id}/assign-delivery`,
+    ACKNOWLEDGE_PREPARATION: (id: string) => `/admin/orders/${id}/acknowledge-preparation`,
     CANCEL: (id: string) => `/admin/orders/${id}/cancel`,
     KITCHEN_STATUS: (id: string) => `/operations/kitchen/orders/${id}/status`,
     DELIVERY_STATUS: (id: string) => `/operations/delivery/orders/${id}/status`,
@@ -96,6 +97,7 @@ export const ADMIN_API_ENDPOINTS = {
     DATE_SCHEDULE: (date: string) => `/admin/delivery/schedules/dates/${date}`,
     UPDATE_DATE_SCHEDULE: (date: string) => `/admin/delivery/schedules/dates/${date}`,
     RESTORE_DATE_SCHEDULE: (date: string) => `/admin/delivery/schedules/dates/${date}`,
+    REMINDER_SETTINGS: "/admin/delivery/reminder-settings",
   },
   COUPONS: {
     LIST: "/coupons",

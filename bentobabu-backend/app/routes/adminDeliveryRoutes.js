@@ -28,5 +28,9 @@ router.put('/slots/:id', AdminDeliveryController.updateSlot);
 router.put('/slots/:id/status', AdminDeliveryController.updateSlotStatus);
 router.delete('/slots/:id', AdminDeliveryController.deleteSlot);
 
+// Preparation Reminder Settings
+router.get('/reminder-settings', AdminDeliveryController.getReminderSettings);
+router.put('/reminder-settings', AdminDeliveryController.updateReminderSettings);
+
 module.exports = router;
 

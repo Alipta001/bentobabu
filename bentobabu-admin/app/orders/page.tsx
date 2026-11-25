@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
+import React, { useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Search,
@@ -15,10 +15,13 @@ import {
   RefreshCw,
   AlertTriangle,
   Loader2,
+  Calendar,
+  Bell,
 } from "lucide-react";
 import { AdminShell } from "@/components/layout/AdminShell";
 import {
-  useAdminOrders,
+  useAdminOrdersWithSummary,
+  useAcknowledgePreparation,
   useUpdateOrderStatus,
   useAdminCancellationRequests,
   useApproveCancellationRequest,
@@ -26,7 +29,7 @@ import {
   useRetryRefund,
 } from "@/hooks/useAdminQueries";
 import { orderService } from "@/services/orderService";
-import { OrderStatus } from "@/types";
+import { Order, OrderStatus } from "@/types";
 
 const STATUS_FILTERS: { label: string; value: string }[] = [
   { label: "All Orders", value: "all" },
@@ -48,6 +51,11 @@ function OrdersContent() {
 
   const [activeStatus, setActiveStatus] = useState<string>(urlStatus);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [deliveryDateFilter, setDeliveryDateFilter] = useState<"all" | "today" | "tomorrow" | "upcoming" | "custom">("all");
+  const [customDeliveryDate, setCustomDeliveryDate] = useState<string>(() =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date())
+  );
+  const [selectedSlotKey, setSelectedSlotKey] = useState<string>("all");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(() => urlId || null);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -76,10 +84,94 @@ function OrdersContent() {
     }
   };
 
-  const { data: orders = [], isLoading, refetch } = useAdminOrders({
+  const { data: ordersResponse, isLoading, refetch } = useAdminOrdersWithSummary({
     status: activeStatus,
     search: searchQuery,
+    deliveryDateFilter: deliveryDateFilter === "custom" ? undefined : deliveryDateFilter,
+    deliveryDate: deliveryDateFilter === "custom" ? customDeliveryDate : undefined,
+    deliverySlotKey: selectedSlotKey,
   });
+
+  const orders = ordersResponse?.orders || [];
+  const dateSummary = ordersResponse?.dateSummary || { totalOrders: orders.length, totalItems: 0, slots: [] };
+  const acknowledgeMutation = useAcknowledgePreparation();
+
+  const groupedBySlot = useMemo(() => {
+    const groups = new Map<string, { label: string; startTime: string; orders: typeof orders; totalItems: number }>();
+    for (const ord of orders) {
+      const key = ord.deliverySlotKey || "unscheduled";
+      const label = ord.deliverySlotLabel || ord.deliverySlot || "Unscheduled Slot";
+      const startTime = ord.deliverySlotStartTime || "99:99";
+      const qty = (ord.items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+      if (!groups.has(key)) {
+        groups.set(key, { label, startTime, orders: [], totalItems: 0 });
+      }
+      const g = groups.get(key)!;
+      g.orders.push(ord);
+      g.totalItems += qty;
+    }
+    return Array.from(groups.entries()).sort((a, b) =>
+      a[1].startTime.localeCompare(b[1].startTime)
+    );
+  }, [orders]);
+
+  const formatReminderTimeIST = (iso?: string | null) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    return new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    }).format(d);
+  };
+
+  const renderReminderBadge = (order: Order) => {
+    const status = order.status === "cancelled" ? "CANCELLED" : order.preparationReminder?.status || "NOT_APPLICABLE";
+    switch (status) {
+      case "UPCOMING":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200">
+            <Clock className="w-3 h-3" />
+            Upcoming {order.preparationReminder?.reminderAt ? `(${formatReminderTimeIST(order.preparationReminder.reminderAt)})` : ""}
+          </span>
+        );
+      case "DUE":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+            <Bell className="w-3 h-3" />
+            Reminder Due
+          </span>
+        );
+      case "LATE_PREP":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-900 border border-rose-300">
+            <AlertTriangle className="w-3 h-3" />
+            Late Prep
+          </span>
+        );
+      case "ACKNOWLEDGED":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-200">
+            <CheckCircle2 className="w-3 h-3" />
+            Prep Acknowledged
+          </span>
+        );
+      case "CANCELLED":
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
+            Cancelled
+          </span>
+        );
+      default:
+        return (
+          <span className="text-[10px] text-[#8A9A86]">—</span>
+        );
+    }
+  };
 
   const {
     data: cancellationData,
@@ -258,8 +350,86 @@ function OrdersContent() {
 
       {activeTab === "orders" ? (
         <>
-          {/* Top Controls: Filter Tabs & Search Bar */}
+          {/* Top Controls: Date-Wise Filters, Status Tabs & Search Bar */}
           <div className="bg-white p-6 rounded-3xl border border-[#E5DFC5] shadow-xs space-y-4">
+            {/* Date-Wise Delivery Filter Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#F0ECE1]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-[#667266] mr-1">
+                  <Calendar className="w-3.5 h-3.5 text-[#354B35]" />
+                  Delivery Date:
+                </span>
+                {[
+                  { label: "All Dates", value: "all" as const },
+                  { label: "Today's Orders", value: "today" as const },
+                  { label: "Tomorrow's Orders", value: "tomorrow" as const },
+                  { label: "Upcoming Orders", value: "upcoming" as const },
+                  { label: "Custom Date", value: "custom" as const },
+                ].map((df) => (
+                  <button
+                    key={df.value}
+                    onClick={() => {
+                      setDeliveryDateFilter(df.value);
+                      setSelectedSlotKey("all");
+                    }}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                      deliveryDateFilter === df.value
+                        ? "bg-[#354B35] text-white shadow-xs"
+                        : "bg-[#F7F3EA] text-[#667266] hover:bg-[#EDE8DE]"
+                    }`}
+                  >
+                    {df.label}
+                  </button>
+                ))}
+                {deliveryDateFilter === "custom" && (
+                  <input
+                    type="date"
+                    value={customDeliveryDate}
+                    onChange={(e) => {
+                      setCustomDeliveryDate(e.target.value);
+                      setSelectedSlotKey("all");
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[#F7F3EA] border border-[#E5DFC5] text-xs font-semibold text-[#1F271F]"
+                  />
+                )}
+              </div>
+
+              {deliveryDateFilter !== "all" && (
+                <div className="text-xs font-semibold text-[#354B35] bg-[#EBF0E9] px-3 py-1.5 rounded-xl">
+                  {dateSummary.totalOrders} orders • {dateSummary.totalItems} total meals/items
+                </div>
+              )}
+            </div>
+
+            {/* Slot Breakdown Pills when a Delivery Date Filter is active */}
+            {deliveryDateFilter !== "all" && dateSummary.slots.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 pb-2">
+                <button
+                  onClick={() => setSelectedSlotKey("all")}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                    selectedSlotKey === "all"
+                      ? "bg-[#1E2B1E] text-white border-[#1E2B1E]"
+                      : "bg-[#F9F7F1] text-[#667266] border-[#E5DFC5] hover:bg-[#EDE8DE]"
+                  }`}
+                >
+                  All Slots ({dateSummary.totalOrders})
+                </button>
+                {dateSummary.slots.map((s) => (
+                  <button
+                    key={s.slotKey}
+                    onClick={() => setSelectedSlotKey(s.slotKey)}
+                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
+                      selectedSlotKey === s.slotKey
+                        ? "bg-[#354B35] text-white border-[#354B35]"
+                        : "bg-[#F9F7F1] text-[#1F271F] border-[#E5DFC5] hover:bg-[#EDE8DE]"
+                    }`}
+                  >
+                    {s.label}: {s.orderCount} order{s.orderCount !== 1 ? "s" : ""} ({s.totalItems} items)
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Status Pill Filters */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2">
           {STATUS_FILTERS.map((f) => (
@@ -320,17 +490,161 @@ function OrdersContent() {
               <thead>
                 <tr className="bg-[#F7F3EA] border-b border-[#E5DFC5] text-[11px] uppercase tracking-wider text-[#667266]">
                   <th className="py-3.5 px-6 font-bold">Order ID</th>
-                  <th className="py-3.5 px-4 font-bold">Date & Time</th>
+                  <th className="py-3.5 px-4 font-bold">Delivery Schedule</th>
                   <th className="py-3.5 px-4 font-bold">Customer Details</th>
-                  <th className="py-3.5 px-4 font-bold">Items & Bento</th>
-                  <th className="py-3.5 px-4 font-bold">Total Bill</th>
-                  <th className="py-3.5 px-4 font-bold">Payment</th>
+                  <th className="py-3.5 px-4 font-bold">Items & Qty</th>
+                  <th className="py-3.5 px-4 font-bold">Prep Reminder</th>
+                  <th className="py-3.5 px-4 font-bold">Total & Payment</th>
                   <th className="py-3.5 px-4 font-bold">Status</th>
                   <th className="py-3.5 px-6 font-bold text-right">Quick Transition</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F0ECE1]">
-                {orders.map((order) => (
+                {(deliveryDateFilter !== "all"
+                  ? groupedBySlot.flatMap(([slotKey, group]) => [
+                      <tr key={`group-${slotKey}`} className="bg-[#F9F7F1] border-y border-[#E5DFC5]">
+                        <td colSpan={8} className="py-2.5 px-6">
+                          <div className="flex items-center justify-between">
+                            <span className="font-serif font-bold text-xs text-[#1E2B1E] flex items-center gap-2">
+                              <Clock className="w-3.5 h-3.5 text-[#354B35]" />
+                              {group.label}
+                              {group.startTime !== "99:99" ? ` (${group.startTime})` : ""}
+                            </span>
+                            <span className="text-[11px] font-semibold text-[#354B35]">
+                              {group.orders.length} order{group.orders.length !== 1 ? "s" : ""} • {group.totalItems} items
+                            </span>
+                          </div>
+                        </td>
+                      </tr>,
+                      ...group.orders.map((order) => (
+                        <tr
+                          key={order.id}
+                          onClick={() => setSelectedOrderId(order.id)}
+                          className="hover:bg-[#F9F7F1] transition-colors cursor-pointer"
+                        >
+                          <td className="py-4 px-6 font-mono font-bold text-[#354B35]">
+                            {order.id}
+                          </td>
+                          <td className="py-4 px-4 text-[#667266]">
+                            <div className="font-semibold text-[#1F271F]">
+                              {order.deliveryDateStr || new Date(order.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                            </div>
+                            <div className="text-[10px] text-[#354B35] font-medium">
+                              {order.deliverySlotLabel || order.deliverySlot || "Standard"}
+                              {order.deliverySlotStartTime && order.deliverySlotEndTime ? ` (${order.deliverySlotStartTime}–${order.deliverySlotEndTime})` : ""}
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="font-semibold text-[#1F271F]">{order.customerName}</div>
+                            <div className="text-[11px] text-[#667266]">{order.customerPhone}</div>
+                          </td>
+                          <td className="py-4 px-4 text-[#667266]">
+                            <div className="flex items-center gap-3">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={order.items[0]?.productImage || "/images/placeholder.png"}
+                                alt={order.items[0]?.productName || "Bento Item"}
+                                onError={handleImageError}
+                                className="w-10 h-10 rounded-xl object-cover border border-[#E5DFC5] bg-[#F7F3EA] shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <div className="font-medium text-[#1F271F] line-clamp-1">
+                                  {order.items[0]?.productName || "Bento Item"}
+                                  {order.items[0]?.variantName ? ` (${order.items[0].variantName})` : ""}
+                                </div>
+                                <div className="text-[10px] text-[#B99A60] font-semibold">
+                                  {(order.items || []).reduce((s, it) => s + (it.quantity || 0), 0)} total items
+                                  {order.items.length > 1 ? ` (${order.items.length} lines)` : ""}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">{renderReminderBadge(order)}</td>
+                          <td className="py-4 px-4">
+                            <div className="font-bold text-[#1F271F]">₹{order.total}</div>
+                            <span
+                              className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                order.paymentStatus === "paid"
+                                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                  : order.paymentStatus === "pending"
+                                  ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                  : "bg-red-50 text-red-800 border border-red-200"
+                              }`}
+                            >
+                              {order.paymentStatus} • {order.paymentMethod.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-bold capitalize ${
+                                order.status === "delivered"
+                                  ? "bg-emerald-100 text-emerald-900"
+                                  : order.status === "preparing"
+                                  ? "bg-amber-100 text-amber-900"
+                                  : order.status === "ready_for_dispatch"
+                                  ? "bg-sky-100 text-sky-900"
+                                  : order.status === "rider_accepted"
+                                  ? "bg-purple-100 text-purple-900"
+                                  : order.status === "picked_up" || order.status === "out_for_delivery"
+                                  ? "bg-blue-100 text-blue-900"
+                                  : order.status === "cancelled"
+                                  ? "bg-red-100 text-red-900"
+                                  : "bg-gray-100 text-gray-800"
+                              }`}
+                            >
+                              {order.status.replace(/_/g, " ")}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                            {(order.preparationReminder?.status === "DUE" || order.preparationReminder?.status === "LATE_PREP") && (
+                              <button
+                                onClick={() => acknowledgeMutation.mutate(order._backendId || order.id)}
+                                disabled={acknowledgeMutation.isPending}
+                                className="mr-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-700 cursor-pointer"
+                              >
+                                Acknowledge Prep
+                              </button>
+                            )}
+                            {order.status === "pending" && (
+                              <button
+                                onClick={() => handleStatusChange(order.id, "confirmed")}
+                                className="px-3 py-1.5 rounded-xl bg-[#354B35] text-white text-[11px] font-bold hover:bg-[#253525] cursor-pointer"
+                              >
+                                Accept Order
+                              </button>
+                            )}
+                            {order.status === "confirmed" && (
+                              <button
+                                onClick={() => handleStatusChange(order.id, "preparing")}
+                                className="px-3 py-1.5 rounded-xl bg-amber-600 text-white text-[11px] font-bold hover:bg-amber-700 cursor-pointer"
+                              >
+                                Mark Preparing
+                              </button>
+                            )}
+                            {order.status === "preparing" && (
+                              <button
+                                onClick={() => handleStatusChange(order.id, "ready_for_dispatch")}
+                                className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-700 cursor-pointer"
+                              >
+                                Ready to Dispatch
+                              </button>
+                            )}
+                            {order.status === "ready_for_dispatch" && (
+                              <span className="text-[11px] text-sky-800 font-semibold">Awaiting Rider</span>
+                            )}
+                            {order.status === "rider_accepted" && (
+                              <button
+                                onClick={() => handleStatusChange(order.id, "picked_up")}
+                                className="px-3 py-1.5 rounded-xl bg-purple-600 text-white text-[11px] font-bold hover:bg-purple-700 cursor-pointer"
+                              >
+                                Confirm Pickup
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )),
+                    ])
+                  : orders.map((order) => (
                   <tr
                     key={order.id}
                     onClick={() => setSelectedOrderId(order.id)}
@@ -341,14 +655,14 @@ function OrdersContent() {
                     </td>
 
                     <td className="py-4 px-4 text-[#667266]">
-                      <div>
-                        {new Date(order.createdAt).toLocaleDateString("en-IN", {
+                      <div className="font-semibold text-[#1F271F]">
+                        {order.deliveryDateStr || new Date(order.createdAt).toLocaleDateString("en-IN", {
                           day: "numeric",
                           month: "short",
                         })}
                       </div>
-                      <div className="text-[10px] opacity-75">
-                        {new Date(order.createdAt).toLocaleTimeString("en-IN", {
+                      <div className="text-[10px] text-[#354B35] font-medium">
+                        {order.deliverySlotLabel || order.deliverySlot || new Date(order.createdAt).toLocaleTimeString("en-IN", {
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
@@ -378,22 +692,22 @@ function OrdersContent() {
                             {order.items[0]?.productName || "Bento Item"}
                             {order.items[0]?.variantName ? ` (${order.items[0].variantName})` : ""}
                           </div>
-                          {order.items.length > 1 && (
-                            <div className="text-[10px] text-[#B99A60] font-semibold">
-                              +{order.items.length - 1} other item{order.items.length > 2 ? "s" : ""}
-                            </div>
-                          )}
+                          <div className="text-[10px] text-[#B99A60] font-semibold">
+                            {(order.items || []).reduce((s, it) => s + (it.quantity || 0), 0)} total items
+                            {order.items.length > 1 ? ` (${order.items.length} lines)` : ""}
+                          </div>
                         </div>
                       </div>
                     </td>
 
-                    <td className="py-4 px-4 font-bold text-[#1F271F]">
-                      ₹{order.total}
+                    <td className="py-4 px-4">
+                      {renderReminderBadge(order)}
                     </td>
 
                     <td className="py-4 px-4">
+                      <div className="font-bold text-[#1F271F]">₹{order.total}</div>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                           order.paymentStatus === "paid"
                             ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                             : order.paymentStatus === "pending"
@@ -432,6 +746,15 @@ function OrdersContent() {
                       className="py-4 px-6 text-right"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {(order.preparationReminder?.status === "DUE" || order.preparationReminder?.status === "LATE_PREP") && (
+                        <button
+                          onClick={() => acknowledgeMutation.mutate(order._backendId || order.id)}
+                          disabled={acknowledgeMutation.isPending}
+                          className="mr-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-700 cursor-pointer"
+                        >
+                          Acknowledge Prep
+                        </button>
+                      )}
                       {order.status === "pending" && (
                         <button
                           onClick={() => handleStatusChange(order.id, "confirmed")}
@@ -501,7 +824,7 @@ function OrdersContent() {
                       )}
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>
@@ -799,6 +1122,76 @@ function OrdersContent() {
                   </div>
                 </div>
               )}
+
+              {/* Preparation Reminder & Schedule Card */}
+              <div className="p-4 bg-white rounded-2xl border border-[#E5DFC5] space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-[#667266] flex items-center gap-1.5">
+                    <Bell className="w-3.5 h-3.5 text-[#B99A60]" />
+                    <span>Delivery & Kitchen Preparation Reminder</span>
+                  </h4>
+                  {renderReminderBadge(selectedOrder)}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-[#F9F7F1] border border-[#F0ECE1]">
+                    <div className="text-[10px] text-[#667266]">Delivery Date</div>
+                    <div className="font-bold text-[#1F271F]">
+                      {selectedOrder.deliveryDateStr || "—"}
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-[#F9F7F1] border border-[#F0ECE1]">
+                    <div className="text-[10px] text-[#667266]">Delivery Slot</div>
+                    <div className="font-bold text-[#1F271F]">
+                      {selectedOrder.deliverySlotLabel || selectedOrder.deliverySlot || "Standard"}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedOrder.preparationReminder?.reminderAt && (
+                  <div className="text-[11px] text-[#667266]">
+                    Scheduled Reminder:{" "}
+                    <strong className="text-[#1F271F]">
+                      {formatReminderTimeIST(selectedOrder.preparationReminder.reminderAt)} IST
+                    </strong>
+                    {typeof selectedOrder.preparationReminder.leadMinutes === "number" && (
+                      <span> ({selectedOrder.preparationReminder.leadMinutes} min before slot)</span>
+                    )}
+                  </div>
+                )}
+
+                {selectedOrder.preparationReminder?.status === "ACKNOWLEDGED" &&
+                  selectedOrder.preparationReminder?.acknowledgedAt && (
+                    <div className="text-[11px] text-emerald-800 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200">
+                      Acknowledged on{" "}
+                      <strong>
+                        {formatReminderTimeIST(selectedOrder.preparationReminder.acknowledgedAt)} IST
+                      </strong>
+                      {typeof selectedOrder.preparationReminder.acknowledgedBy === "object" &&
+                      selectedOrder.preparationReminder.acknowledgedBy?.name
+                        ? ` by ${selectedOrder.preparationReminder.acknowledgedBy.name}`
+                        : ""}
+                    </div>
+                  )}
+
+                {selectedOrder.status !== "cancelled" &&
+                  selectedOrder.status !== "delivered" &&
+                  selectedOrder.preparationReminder?.status !== "ACKNOWLEDGED" && (
+                    <button
+                      type="button"
+                      disabled={acknowledgeMutation.isPending}
+                      onClick={() =>
+                        acknowledgeMutation.mutate((selectedOrder as any)._backendId || selectedOrder.id)
+                      }
+                      className="w-full py-2.5 rounded-xl bg-[#354B35] text-white text-xs font-bold hover:bg-[#253525] transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-[#DFC89B]" />
+                      <span>
+                        {acknowledgeMutation.isPending ? "Acknowledging..." : "Acknowledge Preparation"}
+                      </span>
+                    </button>
+                  )}
+              </div>
 
               {/* Status Transition Control Card */}
               <div className="p-4 bg-[#F7F3EA] rounded-2xl border border-[#E5DFC5] space-y-3">

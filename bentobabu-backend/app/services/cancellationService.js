@@ -606,6 +606,10 @@ class CancellationService {
     // 5. Update Order Status
     order.orderStatus = 'CANCELLED';
     order.cancellationReason = finalReason;
+    if (!order.preparationReminder) order.preparationReminder = {};
+    order.preparationReminder.status = 'CANCELLED';
+    order.preparationReminder.lockToken = null;
+    order.preparationReminder.lockExpiresAt = null;
     order.statusHistory.push({
       status: 'CANCELLED',
       changedBy: adminId,

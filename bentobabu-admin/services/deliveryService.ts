@@ -379,4 +379,34 @@ export const deliveryService = {
 
     return res.data?.data;
   },
+
+  async getReminderSettings(): Promise<{
+    reminderMinutes: Record<string, number>;
+    slots: import("@/types").SlotReminderSetting[];
+  }> {
+    const res = await adminApiClient.get<{
+      success: boolean;
+      data: {
+        reminderMinutes: Record<string, number>;
+        slots: import("@/types").SlotReminderSetting[];
+      };
+    }>(ADMIN_API_ENDPOINTS.DELIVERY.REMINDER_SETTINGS);
+
+    return res.data?.data || { reminderMinutes: {}, slots: [] };
+  },
+
+  async updateReminderSettings(reminderMinutes: Record<string, number>): Promise<{
+    reminderMinutes: Record<string, number>;
+    recalculatedCount: number;
+  }> {
+    const res = await adminApiClient.put<{
+      success: boolean;
+      data: {
+        reminderMinutes: Record<string, number>;
+        recalculatedCount: number;
+      };
+    }>(ADMIN_API_ENDPOINTS.DELIVERY.REMINDER_SETTINGS, { reminderMinutes });
+
+    return res.data?.data || { reminderMinutes, recalculatedCount: 0 };
+  },
 };
