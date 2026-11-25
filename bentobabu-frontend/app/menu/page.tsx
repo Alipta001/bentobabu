@@ -17,6 +17,7 @@ import { Footer } from "@/components/layout/Footer";
 import { ProductCard } from "@/components/product/ProductCard";
 import { useProducts, useCategories } from "@/hooks/useQueries";
 import { DietaryType, ProductFilterOptions } from "@/types";
+import { deduplicateProductsById } from "@/lib/menuUtils";
 
 function getKolkataToday(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -125,6 +126,13 @@ export default function MenuPage() {
     error,
     refetch,
   } = useProducts(filterPayload);
+
+  const isSearchActive = Boolean(debouncedSearch.trim());
+
+  const displayedProducts = useMemo(
+    () => (isSearchActive ? deduplicateProductsById(products) : products),
+    [isSearchActive, products]
+  );
 
   const signatureProducts = useMemo(() => {
     const seen = new Set<string>();
@@ -495,7 +503,7 @@ export default function MenuPage() {
                     <span>Try Again</span>
                   </button>
                 </div>
-              ) : products.length === 0 ? (
+              ) : displayedProducts.length === 0 ? (
                 <div className="bg-white rounded-3xl p-12 text-center border border-[#E5DFC5] space-y-4 max-w-lg mx-auto">
                   <div className="w-16 h-16 rounded-full bg-[#EDE8DE] flex items-center justify-center mx-auto text-[#8A9A86]">
                     <Search className="w-8 h-8" />
@@ -516,59 +524,105 @@ export default function MenuPage() {
                   </button>
                 </div>
               ) : (
-                <div className="space-y-10">
-                  {signatureProducts.length > 0 && (
-                    <section
-                      aria-labelledby="signature-items-heading"
-                      className="space-y-4 pb-8 border-b border-[#E5DFC5]"
-                    >
-                      <div className="flex items-end justify-between gap-4">
-                        <div className="space-y-1">
-                          <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[#755C2B]">
-                            <Sparkles className="w-3.5 h-3.5 text-[#B99A60]" />
-                            <span>Chef&apos;s Curation</span>
+                <div className="space-y-8 sm:space-y-10">
+                  {!isSearchActive && signatureProducts.length > 0 && (
+                    <>
+                      <section
+                        aria-labelledby="signature-items-heading"
+                        className="space-y-4"
+                      >
+                        <div className="flex items-end justify-between gap-4">
+                          <div className="space-y-1">
+                            <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[#755C2B]">
+                              <Sparkles className="w-3.5 h-3.5 text-[#B99A60]" />
+                              <span>Chef&apos;s Curation</span>
+                            </div>
+                            <h2
+                              id="signature-items-heading"
+                              className="font-serif text-2xl sm:text-3xl font-bold text-[#243324]"
+                            >
+                              Signature Items
+                            </h2>
+                            <p className="text-xs sm:text-sm text-[#4A584A]">
+                              Our specially selected favourites.
+                            </p>
                           </div>
-                          <h2
-                            id="signature-items-heading"
-                            className="font-serif text-2xl sm:text-3xl font-bold text-[#243324]"
-                          >
-                            Signature Items
-                          </h2>
-                          <p className="text-xs sm:text-sm text-[#4A584A]">
-                            Our specially selected favourites.
-                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {signatureProducts.map((product, idx) => (
+                            <ProductCard
+                              key={`signature-${product.id}`}
+                              product={product}
+                              priority={idx === 0}
+                              deliveryDate={selectedDate}
+                            />
+                          ))}
+                        </div>
+                      </section>
+
+                      {/* Premium Section Divider */}
+                      <div
+                        role="separator"
+                        aria-label="Full Daily Menu"
+                        className="py-2 sm:py-3 flex items-center gap-3 sm:gap-4"
+                      >
+                        <div className="flex-1 flex flex-col gap-1">
+                          <div className="h-px bg-gradient-to-r from-transparent via-[#B99A60]/60 to-[#B99A60]/80" />
+                          <div className="h-px bg-gradient-to-r from-transparent via-[#354B35]/20 to-[#354B35]/35" />
+                        </div>
+                        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-[#DFC89B] shadow-xs shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#B99A60]" aria-hidden="true" />
+                          <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#354B35]">
+                            Full Daily Menu
+                          </span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#B99A60]" aria-hidden="true" />
+                        </div>
+                        <div className="flex-1 flex flex-col gap-1">
+                          <div className="h-px bg-gradient-to-l from-transparent via-[#B99A60]/60 to-[#B99A60]/80" />
+                          <div className="h-px bg-gradient-to-l from-transparent via-[#354B35]/20 to-[#354B35]/35" />
                         </div>
                       </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {signatureProducts.map((product, idx) => (
-                          <ProductCard
-                            key={`signature-${product.id}`}
-                            product={product}
-                            priority={idx === 0}
-                            deliveryDate={selectedDate}
-                          />
-                        ))}
-                      </div>
-                    </section>
+                    </>
                   )}
 
-                  <div className="space-y-4">
-                    <h2 className="sr-only">Available Meals</h2>
-                    <div className="text-xs text-[#4F5B4F] font-medium flex items-center justify-between">
-                      <span>Showing {products.length} fresh healthy dishes</span>
-                    </div>
+                  <section
+                    aria-labelledby={isSearchActive ? "search-results-heading" : undefined}
+                    className="space-y-4"
+                  >
+                    {isSearchActive ? (
+                      <div className="space-y-1">
+                        <h2
+                          id="search-results-heading"
+                          className="font-serif text-2xl sm:text-3xl font-bold text-[#243324]"
+                        >
+                          Search Results
+                        </h2>
+                        <p className="text-xs text-[#4F5B4F] font-medium">
+                          Showing {displayedProducts.length} matching{" "}
+                          {displayedProducts.length === 1 ? "dish" : "dishes"} for &ldquo;
+                          {debouncedSearch.trim()}&rdquo;
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <h2 className="sr-only">Available Meals</h2>
+                        <div className="text-xs text-[#4F5B4F] font-medium flex items-center justify-between">
+                          <span>Showing {displayedProducts.length} fresh healthy dishes</span>
+                        </div>
+                      </>
+                    )}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {products.map((product, idx) => (
+                      {displayedProducts.map((product, idx) => (
                         <ProductCard
                           key={product.id}
                           product={product}
-                          priority={signatureProducts.length === 0 && idx === 0}
+                          priority={(isSearchActive || signatureProducts.length === 0) && idx === 0}
                           deliveryDate={selectedDate}
                         />
                       ))}
                     </div>
-                  </div>
+                  </section>
                 </div>
               )}
             </div>
