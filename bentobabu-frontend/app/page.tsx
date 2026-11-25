@@ -113,10 +113,10 @@ const faqs = [
     q: "Are the nutritional metrics (calories, protein) lab-tested?",
     a: "Yes. Every standardized recipe is formulated in consultation with certified clinical sports nutritionists and verified with standard food testing databases for exact macro distributions.",
   },
-  {
-    q: "Do you offer daily or weekly office meal subscriptions?",
-    a: "Yes, our Executive and Fitness Meal subscriptions allow you to pre-schedule your work lunches or post-workout meals from Monday through Friday with flexible pause and cancel options.",
-  },
+  // {
+  //   q: "Do you offer daily or weekly office meal subscriptions?",
+  //   a: "Yes, our Executive and Fitness Meal subscriptions allow you to pre-schedule your work lunches or post-workout meals from Monday through Friday with flexible pause and cancel options.",
+  // },
 ];
 
 export default async function HomePage() {
