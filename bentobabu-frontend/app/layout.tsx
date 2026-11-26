@@ -2,9 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/providers/Providers";
 import { brandConfig } from "@/config/brand";
+import { SITE_URL } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: `${brandConfig.name} | ${brandConfig.tagline}`,
     template: `%s | ${brandConfig.name}`,

@@ -25,6 +25,9 @@ export const metadata: Metadata = {
   title: "Terms of Service | BentoBabu",
   description:
     "Read the Terms of Service governing the use of BentoBabu's website, food ordering, payments, and delivery services.",
+  alternates: {
+    canonical: "/terms",
+  },
 };
 
 export default function TermsOfServicePage() {

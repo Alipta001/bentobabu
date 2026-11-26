@@ -1,4 +1,5 @@
 import React from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -11,6 +12,34 @@ import { productService } from "@/services/productService";
 
 interface CategoryPageProps {
   params: Promise<{ slug: string }>;
+}
+
+export async function generateMetadata({
+  params,
+}: CategoryPageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const category = await categoryService.getBySlug(slug);
+
+  if (!category) {
+    return {
+      title: "Category Not Found",
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const plainDescription = (category.description || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+
+  return {
+    title: category.name,
+    description: plainDescription || `Explore fresh ${category.name} meals on BentoBabu.`,
+    alternates: {
+      canonical: `/categories/${category.slug}`,
+    },
+  };
 }
 
 export default async function CategoryPage({ params }: CategoryPageProps) {

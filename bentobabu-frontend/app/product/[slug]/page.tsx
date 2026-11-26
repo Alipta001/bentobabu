@@ -1,4 +1,5 @@
 import React from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -8,6 +9,41 @@ import { productService } from "@/services/productService";
 interface ProductPageProps {
   params: Promise<{ slug: string }>;
   searchParams?: Promise<{ date?: string }>;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await productService.getBySlug(slug);
+
+  if (!product) {
+    return {
+      title: "Product Not Found",
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const plainDescription = (product.description || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+
+  return {
+    title: product.name,
+    description: plainDescription || `Order fresh ${product.name} from BentoBabu.`,
+    alternates: {
+      canonical: `/product/${product.slug}`,
+    },
+    openGraph: {
+      title: product.name,
+      description: plainDescription || `Order fresh ${product.name} from BentoBabu.`,
+      images: product.imageUrl ? [{ url: product.imageUrl, alt: product.name }] : undefined,
+    },
+  };
 }
 
 export default async function ProductDetailPage({ params, searchParams }: ProductPageProps) {

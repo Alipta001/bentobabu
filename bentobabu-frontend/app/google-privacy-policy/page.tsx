@@ -25,6 +25,9 @@ export const metadata: Metadata = {
   title: "Privacy Policy | BentoBabu",
   description:
     "Learn how BentoBabu accesses, uses, stores, and protects information received through Google Sign-In.",
+  alternates: {
+    canonical: "/google-privacy-policy",
+  },
 };
 
 export default function GooglePrivacyPolicyPage() {

@@ -1,4 +1,5 @@
 import React from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -22,6 +23,12 @@ import { mergeBrandConfig } from "@/services/brandService";
 import { INITIAL_PRODUCTS } from "@/lib/data/products";
 import { Category, Product, VideoContent } from "@/types";
 import { normalizeProduct } from "@/services/productService";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+  },
+};
 
 async function getHomeData(): Promise<{
   categories: Category[];

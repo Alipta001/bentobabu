@@ -33,6 +33,9 @@ export async function generateMetadata({
     description:
       video.description?.slice(0, 160) ||
       `Watch ${video.title} and discover healthy mindful cooking recipes on BentoBabu.`,
+    alternates: {
+      canonical: `/videos/${video.slug || slug}`,
+    },
     openGraph: {
       title: `${video.title} | BentoBabu`,
       description:
