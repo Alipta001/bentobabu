@@ -100,7 +100,7 @@ export function Header() {
               <span>Farm Fresh</span>
             </span>
             <span className="truncate text-[#E5DFC5]">
-              Daily organic harvest • Zero preservatives • Free express delivery above ₹499
+              Daily organic harvest • Zero preservatives • Free delivery
             </span>
           </div>
           <div className="hidden md:flex items-center gap-5 text-xs text-[#DFC89B]/90 shrink-0">

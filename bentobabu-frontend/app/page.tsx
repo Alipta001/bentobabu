@@ -175,13 +175,13 @@ export default async function HomePage() {
                   </div>
                   <div>
                     <div className="font-serif text-2xl font-bold text-[#354B35]">
-                      35m
+                      60m
                     </div>
                     <div className="text-xs text-[#4A584A]">Average Delivery</div>
                   </div>
                   <div>
                     <div className="font-serif text-2xl font-bold text-[#354B35]">
-                      40+ g
+                      15+ g
                     </div>
                     <div className="text-xs text-[#4A584A]">Peak Protein Bowls</div>
                   </div>
