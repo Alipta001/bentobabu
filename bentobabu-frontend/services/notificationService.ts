@@ -22,35 +22,30 @@ export const notificationService = {
     notifications: Notification[];
     unreadCount: number;
   }> {
-    try {
-      const response = await apiClient.get<
-        ApiResponse<{ notifications: any[]; unreadCount?: number }>
-      >(API_ENDPOINTS.NOTIFICATIONS.LIST, { params: options });
+    const response = await apiClient.get<
+      ApiResponse<{ notifications: any[]; unreadCount?: number }>
+    >(API_ENDPOINTS.NOTIFICATIONS.LIST, { params: options });
 
-      const raw = response.data;
-      const data = (raw && "data" in raw && raw.data) ? raw.data : (raw as any);
-      const list = Array.isArray(data?.notifications) ? data.notifications : [];
+    const raw = response.data;
+    const data = (raw && "data" in raw && raw.data) ? raw.data : (raw as any);
+    const list = Array.isArray(data?.notifications) ? data.notifications : [];
 
-      const notifications: Notification[] = list.map((n: any) => ({
-        id: n.id || n._id || "",
-        _id: n._id || n.id || "",
-        channel: n.channel || "IN_APP",
-        eventType: n.eventType || "GENERAL",
-        subject: n.subject || "Notification",
-        message: n.message || "",
-        isRead: n.isRead ?? false,
-        createdAt: n.createdAt || new Date().toISOString(),
-        metadata: n.metadata,
-      }));
+    const notifications: Notification[] = list.map((n: any) => ({
+      id: n.id || n._id || "",
+      _id: n._id || n.id || "",
+      channel: n.channel || "IN_APP",
+      eventType: n.eventType || "GENERAL",
+      subject: n.subject || "Notification",
+      message: n.message || "",
+      isRead: n.isRead ?? false,
+      createdAt: n.createdAt || new Date().toISOString(),
+      metadata: n.metadata,
+    }));
 
-      return {
-        notifications,
-        unreadCount: data?.unreadCount || notifications.filter((n) => !n.isRead).length,
-      };
-    } catch (err) {
-      console.error("[notificationService] Error fetching notifications:", err);
-      return { notifications: [], unreadCount: 0 };
-    }
+    return {
+      notifications,
+      unreadCount: data?.unreadCount ?? notifications.filter((n) => !n.isRead).length,
+    };
   },
 
   /**

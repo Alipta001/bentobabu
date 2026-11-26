@@ -221,6 +221,7 @@ export function useNotifications(isRead?: boolean, enabled: boolean = true) {
     queryKey: QUERY_KEYS.NOTIFICATIONS(isRead),
     queryFn: () => notificationService.getNotifications(isRead !== undefined ? { isRead } : undefined),
     enabled,
+    refetchInterval: enabled ? 30000 : false,
   });
 }
 

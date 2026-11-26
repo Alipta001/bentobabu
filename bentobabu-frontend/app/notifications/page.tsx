@@ -4,15 +4,13 @@ import React, { useState } from "react";
 import Link from "next/link";
 import {
   Bell,
-  CheckCircle2,
   Mail,
-  MessageSquare,
   Check,
   Clock,
   ArrowLeft,
   AlertCircle,
-  ShieldCheck,
   Loader2,
+  RotateCcw,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -32,7 +30,7 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [markingAll, setMarkingAll] = useState(false);
 
-  const { data: notifData, isLoading } = useNotifications(
+  const { data: notifData, isLoading, isError, refetch } = useNotifications(
     filter === "unread" ? false : undefined,
     !!user
   );
@@ -63,7 +61,7 @@ export default function NotificationsPage() {
     }
   };
 
-  const handleTogglePreference = (channel: "email" | "whatsapp") => {
+  const handleTogglePreference = (channel: "email") => {
     if (!preferences) return;
     updatePreferencesMutation.mutate({
       ...preferences,
@@ -148,6 +146,26 @@ export default function NotificationsPage() {
                 <div className="bg-white rounded-3xl p-12 text-center border border-[#E5DFC5] text-xs text-[#6B776A]">
                   <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[#354B35]" />
                   <span>Loading your notifications...</span>
+                </div>
+              ) : isError && !notifData ? (
+                <div className="bg-white rounded-3xl p-12 text-center border border-[#E5DFC5] space-y-3">
+                  <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto text-red-600">
+                    <AlertCircle className="w-7 h-7" />
+                  </div>
+                  <h3 className="font-serif text-lg font-bold text-[#222922]">
+                    Unable to Load Notifications
+                  </h3>
+                  <p className="text-xs text-[#6B776A] max-w-sm mx-auto">
+                    We couldn&apos;t fetch your latest updates right now. Please try again.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => refetch()}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#354B35] text-white text-xs font-semibold hover:bg-[#253525] transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Try Again</span>
+                  </button>
                 </div>
               ) : notifications.length === 0 ? (
                 <div className="bg-white rounded-3xl p-12 text-center border border-[#E5DFC5] space-y-3">
@@ -253,37 +271,6 @@ export default function NotificationsPage() {
                       />
                     </button>
                   </div>
-
-                  {/* WhatsApp Toggle (Explicit Consent) */}
-                  <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#F7F3EA] border border-[#E5DFC5]">
-                    <div className="flex items-center gap-3">
-                      <MessageSquare className="w-4 h-4 text-emerald-600" />
-                      <div>
-                        <div className="text-xs font-bold text-[#222922]">WhatsApp Updates</div>
-                        <div className="text-[10px] text-[#6B776A]">Instant status alerts & OTP</div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleTogglePreference("whatsapp")}
-                      className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
-                        preferences?.whatsapp ? "bg-emerald-600" : "bg-gray-300"
-                      }`}
-                    >
-                      <span
-                        className={`inline-block w-4 h-4 transform rounded-full bg-white transition-transform ${
-                          preferences?.whatsapp ? "translate-x-6" : "translate-x-1"
-                        } mt-1`}
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 leading-relaxed flex items-start gap-2">
-                  <ShieldCheck className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                  <span>
-                    WhatsApp notifications require your explicit opt-in consent. We never send spam and you can toggle this off anytime.
-                  </span>
                 </div>
               </div>
             </div>
