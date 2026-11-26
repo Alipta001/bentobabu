@@ -8,7 +8,7 @@ import {
   CheckCircle2,
   Utensils,
   Award,
-  Truck,
+  MapPin,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -107,7 +107,7 @@ const faqs = [
   },
   {
     q: "What is your delivery turnaround time?",
-    a: "We deliver within 45 to 60 minutes of Rider confirmation. Each order is dispatched in high-grade eco-friendly insulated packaging that maintains optimal serving temperature without plastic sweating.",
+    a: "We deliver within 45 to 60 minutes of Rider confirmation. Each order is prepared in our Barrackpore kitchen and carefully packed for delivery.",
   },
   {
     q: "Are the nutritional metrics (calories, protein) lab-tested?",
@@ -417,25 +417,25 @@ export default async function HomePage() {
               </div>
 
               {/* Pillar 3 */}
-              <div className="bg-[#243324] rounded-3xl p-8 border border-[#4A654A] space-y-4">
-                <div className="w-14 h-14 rounded-2xl bg-[#354B35] flex items-center justify-center text-[#DFC89B]">
-                  <Truck className="w-7 h-7" />
+              <div className="bg-[#243324] rounded-3xl p-8 border border-[#B99A60]/45 shadow-md space-y-4">
+                <div className="w-14 h-14 rounded-2xl bg-[#DFC89B]/15 border border-[#DFC89B]/35 flex items-center justify-center text-[#DFC89B]">
+                  <MapPin className="w-7 h-7" />
                 </div>
                 <h3 className="font-serif text-xl font-bold text-white">
-                  Eco-Insulated Bento Delivery
+                  Freshly Prepared, Close to Home
                 </h3>
                 <p className="text-xs text-[#B5C4B1] leading-relaxed">
-                  Delivered hot and crisp in biodegradable heat-locking containers within
-                  35-45 minutes of cooking.
+                  Wholesome meals prepared with care in our Barrackpore kitchen, bringing fresh,
+                  balanced food closer to your everyday routine.
                 </p>
                 <ul className="space-y-2 text-xs text-[#EDE8DE]/90 pt-2">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-[#DFC89B]" />
-                    <span>Zero plastic sweating</span>
+                    <span>Locally prepared in Barrackpore</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-[#DFC89B]" />
-                    <span>Tamper-evident hygiene seal</span>
+                    <span>Carefully packed for your delivery</span>
                   </li>
                 </ul>
               </div>
@@ -490,11 +490,11 @@ export default async function HomePage() {
                   3
                 </div>
                 <h3 className="font-serif text-xl font-bold text-[#222922]">
-                  Insulated 35m Delivery
+                  Fresh from Our Kitchen
                 </h3>
                 <p className="text-xs text-[#4F5B4F] leading-relaxed">
-                  Rushed directly to your home, school, gym, or desk at optimal eating
-                  temperature.
+                  Your meal is prepared in our Barrackpore kitchen, carefully packed, and sent
+                  for delivery.
                 </p>
               </div>
             </div>

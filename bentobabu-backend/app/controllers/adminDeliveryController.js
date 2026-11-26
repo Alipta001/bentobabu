@@ -470,6 +470,16 @@ class AdminDeliveryController {
             return res.status(400).json({ success: false, message: 'Capacity must be an integer >= 1.' });
           }
 
+          const rawCutoff = s.orderCutoffMinutes === undefined || s.orderCutoffMinutes === null
+            ? 0
+            : Number(s.orderCutoffMinutes);
+          if (!Number.isInteger(rawCutoff) || rawCutoff < 0 || rawCutoff > 1440) {
+            return res.status(400).json({
+              success: false,
+              message: 'Cutoff minutes must be an integer between 0 and 1440.',
+            });
+          }
+
           cleanedSlots.push({
             slotKey: s.slotKey || DeliverySlotService.generateSlotKey(s.label, s.startTime, s.endTime),
             label: s.label.trim(),
@@ -477,7 +487,7 @@ class AdminDeliveryController {
             endTime: s.endTime,
             capacity: cap,
             isActive: s.isActive !== false,
-            orderCutoffMinutes: Math.max(0, Number(s.orderCutoffMinutes) || 0),
+            orderCutoffMinutes: rawCutoff,
           });
         }
       }
@@ -643,6 +653,15 @@ class AdminDeliveryController {
           if (!cs.label || !cs.label.trim()) continue;
           if (!cs.startTime || !timeFormat.test(cs.startTime)) continue;
           if (!cs.endTime || !timeFormat.test(cs.endTime) || cs.endTime <= cs.startTime) continue;
+          const rawCutoff = cs.orderCutoffMinutes === undefined || cs.orderCutoffMinutes === null
+            ? 0
+            : Number(cs.orderCutoffMinutes);
+          if (!Number.isInteger(rawCutoff) || rawCutoff < 0 || rawCutoff > 1440) {
+            return res.status(400).json({
+              success: false,
+              message: 'Cutoff minutes must be an integer between 0 and 1440.',
+            });
+          }
           cleanedCustomSlots.push({
             slotKey: cs.slotKey || DeliverySlotService.generateSlotKey(cs.label, cs.startTime, cs.endTime),
             label: cs.label.trim(),
@@ -650,6 +669,7 @@ class AdminDeliveryController {
             endTime: cs.endTime,
             capacity: Math.max(1, Number(cs.capacity) || 20),
             isActive: cs.isActive !== false,
+            orderCutoffMinutes: rawCutoff,
           });
         }
       }

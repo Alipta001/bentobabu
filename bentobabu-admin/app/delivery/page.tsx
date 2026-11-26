@@ -1881,12 +1881,13 @@ export default function DeliveryZonesPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
-                    Cutoff (Mins Before)
+                    Cutoff (Mins Before, 0–1440)
                   </label>
                   <input
                     type="number"
                     min={0}
-                    max={360}
+                    max={1440}
+                    step={1}
                     required
                     value={weeklySlotCutoff}
                     onChange={(e) => setWeeklySlotCutoff(Number(e.target.value))}
@@ -2125,12 +2126,13 @@ export default function DeliveryZonesPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-[#1E2B1E] mb-1">
-                    Cutoff (Mins Before)
+                    Cutoff (Mins Before, 0–1440)
                   </label>
                   <input
                     type="number"
                     min={0}
-                    max={360}
+                    max={1440}
+                    step={1}
                     required
                     value={dateSlotCutoff}
                     onChange={(e) => setDateSlotCutoff(Number(e.target.value))}

@@ -71,6 +71,12 @@ const customDateSlotSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    orderCutoffMinutes: {
+      type: Number,
+      default: 0,
+      min: [0, 'Cutoff minutes cannot be negative'],
+      max: [1440, 'Cutoff minutes cannot exceed 1440'],
+    },
   },
   { _id: true }
 );

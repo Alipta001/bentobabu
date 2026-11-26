@@ -58,9 +58,9 @@ export function Footer() {
             <div className="w-12 h-12 rounded-2xl bg-[#354B35] flex items-center justify-center text-[#B99A60]">
               <Clock className="w-6 h-6" />
             </div>
-            <div className="font-semibold text-white text-sm">Punctual Fresh Delivery</div>
+            <div className="font-semibold text-white text-sm">Freshly Prepared Meals</div>
             <div className="text-xs text-[#B5C4B1] max-w-[200px]">
-              Insulated temperature-retaining meal bentos delivered in 35-45 minutes.
+              Wholesome meals prepared daily with care in our local kitchen.
             </div>
           </div>
         </div>
