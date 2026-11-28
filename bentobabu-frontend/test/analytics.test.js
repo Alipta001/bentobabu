@@ -734,6 +734,135 @@ function run() {
   analytics.trackViewCart([], 0);
   analytics.trackViewItemList("menu", "Menu", []);
 
+  // 8o. Defensive hardening for malformed order.items, nested product data, and mapProductToGa4Item inputs
+  const defWin = createMockWindow();
+  global.window = defWin.win;
+  process.env.NEXT_PUBLIC_ENABLE_ANALYTICS = "true";
+  analytics.ensureConsentModeInitialized();
+
+  // 1) Null order item in trackPurchaseFromOrder -> skips null item, returns false if no valid items, never marks tracked
+  assert.strictEqual(
+    analytics.trackPurchaseFromOrder({
+      id: "ord_null_item",
+      orderNumber: "BB-NULL-1",
+      orderStatus: "CONFIRMED",
+      paymentStatus: "PAID",
+      paymentMethod: "RAZORPAY",
+      items: [null, undefined],
+    }),
+    false
+  );
+  assert.strictEqual(analytics.hasTrackedPurchase("ord_null_item"), false);
+
+  // 2) Undefined order.items -> returns false safely, never throws or marks tracked
+  assert.strictEqual(
+    analytics.trackPurchaseFromOrder({
+      id: "ord_undef_items",
+      orderNumber: "BB-UNDEF-1",
+      orderStatus: "CONFIRMED",
+      paymentStatus: "PAID",
+      paymentMethod: "RAZORPAY",
+    }),
+    false
+  );
+  assert.strictEqual(analytics.hasTrackedPurchase("ord_undef_items"), false);
+
+  // 3) Non-iterable order.items -> returns false safely, never throws or marks tracked
+  assert.strictEqual(
+    analytics.trackPurchaseFromOrder({
+      id: "ord_non_iter",
+      orderNumber: "BB-NONITER-1",
+      orderStatus: "CONFIRMED",
+      paymentStatus: "COD_PENDING",
+      paymentMethod: "COD",
+      items: { bad: true },
+    }),
+    false
+  );
+  assert.strictEqual(analytics.hasTrackedPurchase("ord_non_iter"), false);
+
+  // 4) Malformed nested product data + valid item -> skips malformed item, tracks valid item, and deduplicates
+  assert.strictEqual(
+    analytics.trackPurchaseFromOrder({
+      id: "ord_nested_malformed",
+      orderNumber: "BB-NEST-1",
+      orderStatus: "CONFIRMED",
+      paymentStatus: "PAID",
+      paymentMethod: "RAZORPAY",
+      items: [
+        null,
+        { productId: "p_bad", product: 12345, unitPrice: "bad", quantity: 1 },
+        { productId: "p_ok", product: { id: "p_ok", name: "Good Meal" }, productName: "Good Meal", unitPrice: 180, quantity: 1 },
+      ],
+    }),
+    true
+  );
+  assert.strictEqual(analytics.hasTrackedPurchase("ord_nested_malformed"), true);
+  assert.strictEqual(
+    analytics.trackPurchaseFromOrder({
+      id: "ord_nested_malformed",
+      orderNumber: "BB-NEST-1",
+      orderStatus: "CONFIRMED",
+      paymentStatus: "PAID",
+      paymentMethod: "RAZORPAY",
+      items: [{ productId: "p_ok", productName: "Good Meal", unitPrice: 180, quantity: 1 }],
+    }),
+    false
+  );
+
+  // 5 & 6) mapProductToGa4Item and trackAddToCart/trackRemoveFromCart with null/undefined/non-object, missing id/name, invalid price/quantity
+  const lenBeforeBadCartCalls = defWin.dataLayer.length;
+  analytics.trackAddToCart(null, 1);
+  analytics.trackAddToCart(undefined, 1);
+  analytics.trackAddToCart("bad-product", 1);
+  analytics.trackRemoveFromCart(null, 1);
+  analytics.trackRemoveFromCart(undefined, 1);
+  analytics.trackRemoveFromCart(123, 1);
+  assert.strictEqual(defWin.dataLayer.length, lenBeforeBadCartCalls);
+
+  analytics.trackAddToCart({ id: "p_ok_cart", name: "Cart Bowl", price: 150 }, 2);
+  analytics.trackRemoveFromCart({ id: "p_ok_cart", name: "Cart Bowl", price: 150 }, 1);
+  assert.strictEqual(
+    defWin.dataLayer.filter((d) => d && d.event === "add_to_cart").length,
+    1
+  );
+  assert.strictEqual(
+    defWin.dataLayer.filter((d) => d && d.event === "remove_from_cart").length,
+    1
+  );
+
+  assert.strictEqual(analytics.mapProductToGa4Item(null, 1), null);
+  assert.strictEqual(analytics.mapProductToGa4Item(undefined, 1), null);
+  assert.strictEqual(analytics.mapProductToGa4Item({ id: "", name: "No ID", price: 100 }, 1), null);
+  assert.strictEqual(analytics.mapProductToGa4Item({ id: "p1", name: "   ", price: 100 }, 1), null);
+  assert.strictEqual(analytics.mapProductToGa4Item({ id: "p1", name: "Bad Price", price: Number.NaN }, 1), null);
+  assert.strictEqual(analytics.mapProductToGa4Item({ id: "p1", name: "Neg Price", price: -10 }, 1), null);
+  assert.strictEqual(analytics.mapProductToGa4Item({ id: "p1", name: "Overflow", price: Number.MAX_VALUE }, 1), null);
+  assert.strictEqual(analytics.mapProductToGa4Item({ id: "p1", name: "Zero Qty", price: 100 }, 0), null);
+  assert.strictEqual(analytics.mapProductToGa4Item({ id: "p1", name: "Frac Qty", price: 100 }, 1.5), null);
+  assert.deepStrictEqual(
+    analytics.mapProductToGa4Item({ id: "p1", name: "Valid Bowl", price: 220, category: "Bowls" }, 2, { index: 0 }),
+    { item_id: "p1", item_name: "Valid Bowl", item_category: "Bowls", price: 220, quantity: 2, index: 0 }
+  );
+
+  // 9) Checkout flow simulation: analytics failure/malformed order never interrupts clearCart or navigation
+  let cartCleared = false;
+  let navigatedTo = null;
+  const runCheckoutCompletion = (order) => {
+    analytics.trackPurchaseFromOrder(order);
+    cartCleared = true;
+    navigatedTo = `/order-success/${order.id}`;
+  };
+  runCheckoutCompletion({
+    id: "ord_checkout_safe",
+    orderStatus: "CONFIRMED",
+    paymentStatus: "PAID",
+    paymentMethod: "RAZORPAY",
+    items: null,
+  });
+  assert.strictEqual(cartCleared, true);
+  assert.strictEqual(navigatedTo, "/order-success/ord_checkout_safe");
+
   // 8h. Master gate disabled -> nothing initialized, dispatched, or tracked regardless of stored consent
   const disabledWin = createMockWindow();
   delete disabledWin.win.dataLayer;

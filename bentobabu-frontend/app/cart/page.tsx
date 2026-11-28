@@ -72,14 +72,18 @@ export default function CartPage() {
   useEffect(() => {
     if (!consentGranted || viewedCartRef.current || cartItems.length === 0) return;
     viewedCartRef.current = true;
-    const gaItems = cartItems.map((it, index) =>
-      mapProductToGa4Item(it.product, it.quantity, {
-        variantName: it.variantName,
-        unitPrice: it.unitPrice ?? it.product.price,
-        index,
-      })
-    );
-    trackViewCart(gaItems, subtotal);
+    const gaItems = cartItems
+      .map((it, index) =>
+        mapProductToGa4Item(it?.product, it?.quantity, {
+          variantName: it?.variantName,
+          unitPrice: it?.unitPrice ?? it?.product?.price,
+          index,
+        })
+      )
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+    if (gaItems.length > 0) {
+      trackViewCart(gaItems, subtotal);
+    }
   }, [consentGranted, cartItems, subtotal]);
 
   const handleApplyCoupon = async (e: React.FormEvent) => {

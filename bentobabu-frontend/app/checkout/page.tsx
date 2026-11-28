@@ -328,18 +328,22 @@ export default function CheckoutPage() {
       return;
     }
     beginCheckoutTrackedRef.current = true;
-    const gaItems = cartItems.map((it, index) =>
-      mapProductToGa4Item(it.product, it.quantity, {
-        variantName: it.variantName,
-        unitPrice: it.unitPrice ?? it.product.price,
-        index,
-      })
-    );
+    const gaItems = cartItems
+      .map((it, index) =>
+        mapProductToGa4Item(it?.product, it?.quantity, {
+          variantName: it?.variantName,
+          unitPrice: it?.unitPrice ?? it?.product?.price,
+          index,
+        })
+      )
+      .filter((item): item is NonNullable<typeof item> => item !== null);
     const itemsValue = cartItems.reduce(
       (sum, it) => sum + (it.unitPrice ?? it.product.price) * it.quantity,
       0
     );
-    trackBeginCheckout(gaItems, itemsValue, appliedCoupon?.code || null);
+    if (gaItems.length > 0) {
+      trackBeginCheckout(gaItems, itemsValue, appliedCoupon?.code || null);
+    }
   }, [consentGranted, isCartHydrated, isCartSyncing, cartItems, appliedCoupon]);
 
   const shippingTrackedKeyRef = useRef<string>("");
@@ -352,18 +356,22 @@ export default function CheckoutPage() {
     if (shippingTrackedKeyRef.current === key) return;
     shippingTrackedKeyRef.current = key;
 
-    const gaItems = cartItems.map((it, index) =>
-      mapProductToGa4Item(it.product, it.quantity, {
-        variantName: it.variantName,
-        unitPrice: it.unitPrice ?? it.product.price,
-        index,
-      })
-    );
+    const gaItems = cartItems
+      .map((it, index) =>
+        mapProductToGa4Item(it?.product, it?.quantity, {
+          variantName: it?.variantName,
+          unitPrice: it?.unitPrice ?? it?.product?.price,
+          index,
+        })
+      )
+      .filter((item): item is NonNullable<typeof item> => item !== null);
     const itemsValue = cartItems.reduce(
       (sum, it) => sum + (it.unitPrice ?? it.product.price) * it.quantity,
       0
     );
-    trackAddShippingInfo(gaItems, itemsValue, selectedSlot.label || "Standard Delivery", appliedCoupon?.code || null);
+    if (gaItems.length > 0) {
+      trackAddShippingInfo(gaItems, itemsValue, selectedSlot.label || "Standard Delivery", appliedCoupon?.code || null);
+    }
   }, [consentGranted, selectedAddressId, serviceability, selectedSlot, cartItems, appliedCoupon]);
 
   // Fallback calculation if backend summary pending

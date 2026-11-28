@@ -335,11 +335,6 @@ function toNonNegativeRupees(amount: unknown): number {
   return toNonNegativePaise(amount) / 100;
 }
 
-function toPositiveQuantity(quantity: unknown): number {
-  const n = Math.floor(Number(quantity));
-  return Number.isSafeInteger(n) && n > 0 ? n : 1;
-}
-
 function parsePurchaseQuantity(quantity: unknown): number | null {
   if (quantity === undefined || quantity === null) return 1;
   if (typeof quantity === "string" && quantity.trim() === "") return null;
@@ -405,33 +400,43 @@ function toSafePaiseProduct(unitPaise: number, quantity: number): number | null 
 }
 
 export function mapProductToGa4Item(
-  product: Product,
+  product: Product | null | undefined,
   quantity = 1,
   options?: {
     variantName?: string | null;
     unitPrice?: number;
     index?: number;
   }
-): Ga4Item {
-  const safePrice = toNonNegativeRupees(options?.unitPrice ?? product.price ?? 0);
-  const safeQuantity = toPositiveQuantity(quantity);
+): Ga4Item | null {
+  if (!product || typeof product !== "object") return null;
+  const itemId = String(product.id || product._id || product.slug || "").trim();
+  const itemName = typeof product.name === "string" ? product.name.trim() : "";
+  if (!itemId || !itemName) return null;
+
+  const unitPaise = parseExplicitNonNegativePaise(options?.unitPrice ?? product.price);
+  const safeQuantity = parsePurchaseQuantity(quantity);
+  if (unitPaise === null || safeQuantity === null) return null;
+  if (toSafePaiseProduct(unitPaise, safeQuantity) === null) return null;
+
   const item: Ga4Item = {
-    item_id: String(product.id || product._id || product.slug || ""),
-    item_name: product.name || "Bento Meal",
-    price: safePrice,
+    item_id: itemId,
+    item_name: itemName,
+    price: unitPaise / 100,
     quantity: safeQuantity,
   };
   const categoryName =
     typeof product.category === "string"
       ? product.category
-      : product.category?.name;
-  if (categoryName) {
-    item.item_category = categoryName;
+      : product.category && typeof product.category === "object"
+        ? product.category.name
+        : undefined;
+  if (typeof categoryName === "string" && categoryName.trim()) {
+    item.item_category = categoryName.trim();
   }
-  if (options?.variantName) {
-    item.item_variant = options.variantName;
+  if (typeof options?.variantName === "string" && options.variantName.trim()) {
+    item.item_variant = options.variantName.trim();
   }
-  if (typeof options?.index === "number") {
+  if (typeof options?.index === "number" && Number.isInteger(options.index) && options.index >= 0) {
     item.index = options.index;
   }
   return item;
@@ -458,9 +463,9 @@ export function trackViewItemList(
 ): void {
   if (!Array.isArray(products) || products.length === 0) return;
   const items = products
-    .filter((p): p is Product => Boolean(p))
     .slice(0, 50)
-    .map((p, index) => mapProductToGa4Item(p, 1, { index }));
+    .map((p, index) => mapProductToGa4Item(p, 1, { index }))
+    .filter((item): item is Ga4Item => item !== null);
   if (items.length === 0) return;
   pushToDataLayer(
     "view_item_list",
@@ -481,14 +486,15 @@ export function trackSelectItem(
   product: Product,
   index?: number
 ): void {
-  if (!product) return;
+  const item = mapProductToGa4Item(product, 1, { index });
+  if (!item) return;
   pushToDataLayer(
     "select_item",
     {
       ecommerce: {
         item_list_id: listId,
         item_list_name: listName,
-        items: [mapProductToGa4Item(product, 1, { index })],
+        items: [item],
       },
     },
     true
@@ -496,15 +502,16 @@ export function trackSelectItem(
 }
 
 export function trackViewItem(product: Product, unitPrice?: number, variantName?: string | null): void {
-  if (!product) return;
-  const value = toNonNegativeRupees(unitPrice ?? product.price ?? 0);
+  const value = toNonNegativeRupees(unitPrice ?? product?.price ?? 0);
+  const item = mapProductToGa4Item(product, 1, { unitPrice: value, variantName });
+  if (!item) return;
   pushToDataLayer(
     "view_item",
     {
       ecommerce: {
         currency: "INR",
         value,
-        items: [mapProductToGa4Item(product, 1, { unitPrice: value, variantName })],
+        items: [item],
       },
     },
     true
@@ -517,12 +524,21 @@ export function trackAddToCart(
   variantName?: string | null,
   unitPrice?: number
 ): void {
-  if (!product || !Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity <= 0 || !Number.isSafeInteger(quantity)) {
+  if (
+    !product ||
+    typeof product !== "object" ||
+    !Number.isFinite(quantity) ||
+    !Number.isInteger(quantity) ||
+    quantity <= 0 ||
+    !Number.isSafeInteger(quantity)
+  ) {
     return;
   }
   const unitPaise = toNonNegativePaise(unitPrice ?? product.price ?? 0);
   const linePaise = toSafePaiseProduct(unitPaise, quantity);
   if (linePaise === null) return;
+  const item = mapProductToGa4Item(product, quantity, { unitPrice: unitPaise / 100, variantName });
+  if (!item) return;
   const value = linePaise / 100;
   pushToDataLayer(
     "add_to_cart",
@@ -530,7 +546,7 @@ export function trackAddToCart(
       ecommerce: {
         currency: "INR",
         value,
-        items: [mapProductToGa4Item(product, quantity, { unitPrice: unitPaise / 100, variantName })],
+        items: [item],
       },
     },
     true
@@ -543,12 +559,21 @@ export function trackRemoveFromCart(
   variantName?: string | null,
   unitPrice?: number
 ): void {
-  if (!product || !Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity <= 0 || !Number.isSafeInteger(quantity)) {
+  if (
+    !product ||
+    typeof product !== "object" ||
+    !Number.isFinite(quantity) ||
+    !Number.isInteger(quantity) ||
+    quantity <= 0 ||
+    !Number.isSafeInteger(quantity)
+  ) {
     return;
   }
   const unitPaise = toNonNegativePaise(unitPrice ?? product.price ?? 0);
   const linePaise = toSafePaiseProduct(unitPaise, quantity);
   if (linePaise === null) return;
+  const item = mapProductToGa4Item(product, quantity, { unitPrice: unitPaise / 100, variantName });
+  if (!item) return;
   const value = linePaise / 100;
   pushToDataLayer(
     "remove_from_cart",
@@ -556,22 +581,42 @@ export function trackRemoveFromCart(
       ecommerce: {
         currency: "INR",
         value,
-        items: [mapProductToGa4Item(product, quantity, { unitPrice: unitPaise / 100, variantName })],
+        items: [item],
       },
     },
     true
   );
 }
 
-export function trackViewCart(items: Ga4Item[], valueInr: number): void {
-  if (!Array.isArray(items) || items.length === 0) return;
+function filterValidGa4Items(items: Array<Ga4Item | null | undefined>): Ga4Item[] {
+  if (!Array.isArray(items)) return [];
+  return items.filter(
+    (it): it is Ga4Item =>
+      Boolean(
+        it &&
+          typeof it === "object" &&
+          typeof it.item_id === "string" &&
+          it.item_id.trim() &&
+          typeof it.item_name === "string" &&
+          it.item_name.trim() &&
+          Number.isFinite(it.price) &&
+          it.price >= 0 &&
+          Number.isSafeInteger(it.quantity) &&
+          it.quantity > 0
+      )
+  );
+}
+
+export function trackViewCart(items: Array<Ga4Item | null | undefined>, valueInr: number): void {
+  const validItems = filterValidGa4Items(items);
+  if (validItems.length === 0) return;
   pushToDataLayer(
     "view_cart",
     {
       ecommerce: {
         currency: "INR",
         value: toNonNegativeRupees(valueInr),
-        items,
+        items: validItems,
       },
     },
     true
@@ -579,11 +624,12 @@ export function trackViewCart(items: Ga4Item[], valueInr: number): void {
 }
 
 export function trackBeginCheckout(
-  items: Ga4Item[],
+  items: Array<Ga4Item | null | undefined>,
   valueInr: number,
   couponCode?: string | null
 ): void {
-  if (!Array.isArray(items) || items.length === 0) return;
+  const validItems = filterValidGa4Items(items);
+  if (validItems.length === 0) return;
   pushToDataLayer(
     "begin_checkout",
     {
@@ -591,7 +637,7 @@ export function trackBeginCheckout(
         currency: "INR",
         value: toNonNegativeRupees(valueInr),
         ...(couponCode ? { coupon: couponCode } : {}),
-        items,
+        items: validItems,
       },
     },
     true
@@ -599,12 +645,13 @@ export function trackBeginCheckout(
 }
 
 export function trackAddShippingInfo(
-  items: Ga4Item[],
+  items: Array<Ga4Item | null | undefined>,
   valueInr: number,
   shippingTier: string,
   couponCode?: string | null
 ): void {
-  if (!Array.isArray(items) || items.length === 0 || !shippingTier) return;
+  const validItems = filterValidGa4Items(items);
+  if (validItems.length === 0 || !shippingTier) return;
   pushToDataLayer(
     "add_shipping_info",
     {
@@ -613,7 +660,7 @@ export function trackAddShippingInfo(
         value: toNonNegativeRupees(valueInr),
         shipping_tier: shippingTier,
         ...(couponCode ? { coupon: couponCode } : {}),
-        items,
+        items: validItems,
       },
     },
     true
@@ -673,7 +720,8 @@ export function buildPurchaseEcommercePayload(
   order: Order,
   couponCode?: string | null
 ) {
-  const orderId = String(order.id || order._id || "");
+  const safeOrder = order && typeof order === "object" ? order : ({} as Order);
+  const orderId = String(safeOrder.id || safeOrder._id || "");
   const rawLines: Array<{
     item_id: string;
     item_name: string;
@@ -684,7 +732,11 @@ export function buildPurchaseEcommercePayload(
   }> = [];
   let rawItemsTotalPaise = 0;
 
-  for (const it of order.items || []) {
+  const orderItems = Array.isArray(safeOrder.items) ? safeOrder.items : [];
+  for (const it of orderItems) {
+    if (!it || typeof it !== "object") continue;
+    const nestedProduct =
+      it.product && typeof it.product === "object" ? it.product : null;
     const unitPricePaise = parseExplicitNonNegativePaise(it.unitPrice ?? it.price);
     const quantity = parsePurchaseQuantity(it.quantity);
     if (unitPricePaise === null || quantity === null) continue;
@@ -695,11 +747,21 @@ export function buildPurchaseEcommercePayload(
     const nextTotalPaise = rawItemsTotalPaise + lineGrossPaise;
     if (!Number.isSafeInteger(nextTotalPaise) || nextTotalPaise < 0) continue;
 
+    const resolvedItemId = String(
+      it.productId || nestedProduct?.id || nestedProduct?._id || ""
+    ).trim();
+    const resolvedItemName =
+      typeof it.productName === "string" && it.productName.trim()
+        ? it.productName.trim()
+        : typeof nestedProduct?.name === "string" && nestedProduct.name.trim()
+          ? nestedProduct.name.trim()
+          : "Bento Meal";
+
     rawItemsTotalPaise = nextTotalPaise;
     rawLines.push({
-      item_id: String(it.productId || ""),
-      item_name: it.productName || "Bento Meal",
-      item_variant: it.variantName || undefined,
+      item_id: resolvedItemId,
+      item_name: resolvedItemName,
+      item_variant: typeof it.variantName === "string" ? it.variantName : undefined,
       unitPricePaise,
       quantity,
       lineGrossPaise,
@@ -708,7 +770,7 @@ export function buildPurchaseEcommercePayload(
 
   const couponDiscountPaise = Math.min(
     rawItemsTotalPaise,
-    toNonNegativePaise(order.couponDiscount ?? order.discount ?? 0)
+    toNonNegativePaise(safeOrder.couponDiscount ?? safeOrder.discount ?? 0)
   );
 
   // Allocate order-level coupon discount proportionally across lines using overflow-safe largest-remainder (paise-exact)
@@ -810,16 +872,23 @@ export function trackPurchaseFromOrder(
   order: Order,
   couponCode?: string | null
 ): boolean {
-  if (!hasAnalyticsConsent()) return false;
-  if (!isOrderEligibleForPurchaseTracking(order)) return false;
+  try {
+    if (!hasAnalyticsConsent()) return false;
+    if (!isOrderEligibleForPurchaseTracking(order)) return false;
 
-  const orderId = String(order.id || order._id || "");
-  if (!orderId || hasTrackedPurchase(orderId)) return false;
+    const orderId = String(order.id || order._id || "").trim();
+    if (!orderId || hasTrackedPurchase(orderId)) return false;
 
-  const ecommerce = buildPurchaseEcommercePayload(order, couponCode);
-  if (!pushToDataLayer("purchase", { ecommerce }, true)) {
+    const ecommerce = buildPurchaseEcommercePayload(order, couponCode);
+    if (!ecommerce || !Array.isArray(ecommerce.items) || ecommerce.items.length === 0) {
+      return false;
+    }
+    if (!pushToDataLayer("purchase", { ecommerce }, true)) {
+      return false;
+    }
+    markPurchaseTracked(orderId);
+    return true;
+  } catch {
     return false;
   }
-  markPurchaseTracked(orderId);
-  return true;
 }
