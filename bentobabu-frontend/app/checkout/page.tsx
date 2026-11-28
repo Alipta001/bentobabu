@@ -40,6 +40,13 @@ import { paymentService } from "@/services/paymentService";
 import { DeliverySlotPicker } from "@/components/checkout/DeliverySlotPicker";
 import { Address, DeliverySlot, CheckoutSummary } from "@/types";
 import { buildLoginUrl, buildRegisterUrl } from "@/lib/authRedirect";
+import {
+  mapProductToGa4Item,
+  trackAddShippingInfo,
+  trackBeginCheckout,
+  trackPurchaseFromOrder,
+} from "@/lib/analytics";
+import { useAnalyticsConsent } from "@/components/analytics/useAnalyticsConsent";
 
 const loadRazorpayScript = (): Promise<boolean> => {
   return new Promise((resolve) => {
@@ -313,6 +320,52 @@ export default function CheckoutPage() {
     };
   }, [isCartHydrated, isCartSyncing, cartFingerprint, selectedAddressId, selectedSlot, appliedCoupon]);
 
+  const consentGranted = useAnalyticsConsent();
+
+  const beginCheckoutTrackedRef = useRef(false);
+  useEffect(() => {
+    if (!consentGranted || beginCheckoutTrackedRef.current || !isCartHydrated || isCartSyncing || cartItems.length === 0) {
+      return;
+    }
+    beginCheckoutTrackedRef.current = true;
+    const gaItems = cartItems.map((it, index) =>
+      mapProductToGa4Item(it.product, it.quantity, {
+        variantName: it.variantName,
+        unitPrice: it.unitPrice ?? it.product.price,
+        index,
+      })
+    );
+    const itemsValue = cartItems.reduce(
+      (sum, it) => sum + (it.unitPrice ?? it.product.price) * it.quantity,
+      0
+    );
+    trackBeginCheckout(gaItems, itemsValue, appliedCoupon?.code || null);
+  }, [consentGranted, isCartHydrated, isCartSyncing, cartItems, appliedCoupon]);
+
+  const shippingTrackedKeyRef = useRef<string>("");
+  useEffect(() => {
+    if (!consentGranted || !selectedAddressId || !serviceability?.serviceable || !selectedSlot || cartItems.length === 0) {
+      return;
+    }
+    const slotId = selectedSlot.id || selectedSlot._id || selectedSlot.label;
+    const key = `${selectedAddressId}:${slotId}`;
+    if (shippingTrackedKeyRef.current === key) return;
+    shippingTrackedKeyRef.current = key;
+
+    const gaItems = cartItems.map((it, index) =>
+      mapProductToGa4Item(it.product, it.quantity, {
+        variantName: it.variantName,
+        unitPrice: it.unitPrice ?? it.product.price,
+        index,
+      })
+    );
+    const itemsValue = cartItems.reduce(
+      (sum, it) => sum + (it.unitPrice ?? it.product.price) * it.quantity,
+      0
+    );
+    trackAddShippingInfo(gaItems, itemsValue, selectedSlot.label || "Standard Delivery", appliedCoupon?.code || null);
+  }, [consentGranted, selectedAddressId, serviceability, selectedSlot, cartItems, appliedCoupon]);
+
   // Fallback calculation if backend summary pending
   const clientSubtotal = cartItems.reduce(
     (acc, item) => acc + (item.unitPrice ?? item.product.price) * item.quantity,
@@ -488,6 +541,10 @@ export default function CheckoutPage() {
               });
 
               if (verifyRes.success) {
+                trackPurchaseFromOrder(
+                  { ...createdOrder, orderStatus: "CONFIRMED", paymentStatus: "PAID" },
+                  appliedCoupon?.code || null
+                );
                 dispatch(clearCart());
                 router.push(`/order-success/${createdOrder.id}`);
               } else {
@@ -521,7 +578,6 @@ export default function CheckoutPage() {
           theme: { color: "#354B35" },
         };
 
-        // @ts-expect-error Razorpay attached to window
         const rzp = new window.Razorpay(options);
         rzp.on("payment.failed", function (failRes: { error?: { description?: string } }) {
           setIsSubmitting(false);
@@ -538,6 +594,10 @@ export default function CheckoutPage() {
         await paymentService.confirmCodOrder(createdOrder.id);
       } catch {
         // Even if COD confirmation endpoint was optional, backend set status to CONFIRMED
+      }
+
+      if (String(createdOrder.orderStatus || "").toUpperCase() === "CONFIRMED") {
+        trackPurchaseFromOrder(createdOrder, appliedCoupon?.code || null);
       }
 
       dispatch(clearCart());

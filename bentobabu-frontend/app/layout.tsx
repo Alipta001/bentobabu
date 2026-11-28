@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/providers/Providers";
+import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
 import { brandConfig } from "@/config/brand";
 import { SITE_URL } from "@/lib/seo";
 
@@ -64,7 +65,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full scroll-smooth">
       <body className="min-h-full flex flex-col font-sans bg-[#F7F3EA] text-[#222922] antialiased selection:bg-[#354B35] selection:text-white">
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <AnalyticsProvider />
+        </Providers>
       </body>
     </html>
   );

@@ -12,14 +12,25 @@ import { useToast } from "@/context/ToastContext";
 import { useOrderingStatus } from "@/context/OrderingStatusContext";
 import { getOptimizedImageUrl, isCloudinaryUrl } from "@/utils/mediaUrl";
 import { stripHtmlTags } from "@/utils/textFormat";
+import { trackAddToCart, trackRemoveFromCart, trackSelectItem } from "@/lib/analytics";
 
 interface ProductCardProps {
   product: Product;
   priority?: boolean;
   deliveryDate?: string;
+  listId?: string;
+  listName?: string;
+  index?: number;
 }
 
-function ProductCardComponent({ product, priority = false, deliveryDate }: ProductCardProps) {
+function ProductCardComponent({
+  product,
+  priority = false,
+  deliveryDate,
+  listId = "menu",
+  listName = "Menu",
+  index,
+}: ProductCardProps) {
   const { addItem, setQuantity } = useCartSync();
   const { showToast } = useToast();
   const { acceptingOrders } = useOrderingStatus();
@@ -41,6 +52,7 @@ function ProductCardComponent({ product, priority = false, deliveryDate }: Produ
     e.stopPropagation();
     if (isSoldOut || !product.isAvailable) return;
     addItem(product, 1);
+    trackAddToCart(product, 1);
     setJustAdded(true);
     showToast({
       title: `Added to Cart`,
@@ -63,12 +75,14 @@ function ProductCardComponent({ product, priority = false, deliveryDate }: Produ
       return;
     }
     setQuantity(product.id, quantityInCart + 1);
+    trackAddToCart(product, 1);
   };
 
   const handleDecrement = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setQuantity(product.id, quantityInCart - 1);
+    trackRemoveFromCart(product, 1);
   };
 
   const productHref = deliveryDate
@@ -78,7 +92,11 @@ function ProductCardComponent({ product, priority = false, deliveryDate }: Produ
   return (
     <div className="group relative flex flex-col bg-white rounded-3xl border border-[#E5DFC5] shadow-xs hover:shadow-xl hover:border-[#354B35]/30 transition-all duration-300 overflow-hidden">
       {/* Product Image & Badges */}
-      <Link href={productHref} className="relative aspect-4/3 w-full overflow-hidden bg-[#EDE8DE] block">
+      <Link
+        href={productHref}
+        onClick={() => trackSelectItem(listId, listName, product, index)}
+        className="relative aspect-4/3 w-full overflow-hidden bg-[#EDE8DE] block"
+      >
         <Image
           src={getOptimizedImageUrl(product.imageUrl, "card")}
           alt={product.name}

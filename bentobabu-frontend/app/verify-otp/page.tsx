@@ -7,6 +7,7 @@ import { Mail, Phone, Lock, Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle2, 
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { authService } from "@/services/authService";
+import { trackSignUp } from "@/lib/analytics";
 import { verifyMsg91Otp, retryMsg91Otp } from "@/lib/msg91";
 import { getSafeReturnUrl, DEFAULT_POST_LOGIN_PATH } from "@/lib/authRedirect";
 
@@ -248,6 +249,7 @@ function VerifyOtpContent() {
           challengeId,
           otp: fullOtp,
         });
+        trackSignUp("email_otp");
 
         authService.clearStoredChallenge();
         authService.clearDraftRegistration();

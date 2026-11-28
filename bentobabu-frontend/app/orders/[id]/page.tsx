@@ -29,6 +29,7 @@ import { DownloadReceiptButton } from "@/components/order/DownloadReceiptButton"
 import { useOrder, useCancelOrder, useRequestCancellation, useUserProfile } from "@/hooks/useQueries";
 import { OrderStatus } from "@/types";
 import { buildLoginUrl } from "@/lib/authRedirect";
+import { isOrderEligibleForPurchaseTracking, trackPurchaseFromOrder } from "@/lib/analytics";
 
 const TIMELINE_STAGES: Array<{
   key: OrderStatus;
@@ -112,6 +113,14 @@ export default function OrderTrackingPage() {
       router.replace(buildLoginUrl(currentPath));
     }
   }, [isUserLoading, user, router]);
+
+  // Safe fallback purchase tracking for confirmed orders not yet tracked during checkout
+  React.useEffect(() => {
+    if (!user || !order) return;
+    if (isOrderEligibleForPurchaseTracking(order)) {
+      trackPurchaseFromOrder(order);
+    }
+  }, [user, order]);
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
