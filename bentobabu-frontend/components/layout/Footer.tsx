@@ -15,7 +15,6 @@ import {
 import { brandConfig } from "@/config/brand";
 import { useBrandConfig } from "@/hooks/useBrandConfig";
 import { useCategories } from "@/hooks/useQueries";
-import { openPrivacySettings } from "@/lib/analytics";
 
 export function Footer() {
   const brand = useBrandConfig();
@@ -249,13 +248,7 @@ export function Footer() {
             &copy; {new Date().getFullYear()} {brand.name}. All rights reserved.
           </div>
           <div className="flex flex-wrap items-center gap-6">
-            <button
-              type="button"
-              onClick={() => openPrivacySettings()}
-              className="hover:text-white transition-colors underline underline-offset-2"
-            >
-              Privacy Settings
-            </button>
+            <span>Privacy Policy</span>
             <Link
               href="/google-privacy-policy"
               className="hover:text-white transition-colors"

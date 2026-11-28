@@ -39,7 +39,7 @@ declare global {
 const GTM_ID_REGEX = /^GTM-[A-Z0-9]+$/;
 
 export function isAnalyticsEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_ENABLE_ANALYTICS === "true";
+  return process.env.NEXT_PUBLIC_ENABLE_ANALYTICS?.trim() === "true";
 }
 
 export function validateGtmId(rawId?: string): string {
@@ -61,28 +61,15 @@ export function subscribeAnalyticsConsent(callback: () => void): () => void {
 }
 
 export function requiresAnalyticsConsent(): boolean {
-  return process.env.NEXT_PUBLIC_REQUIRE_ANALYTICS_CONSENT !== "false";
+  return false;
 }
 
 export function getAnalyticsConsent(): AnalyticsConsentStatus {
-  if (typeof window === "undefined") return "unset";
-  try {
-    const raw = window.localStorage.getItem(CONSENT_STORAGE_KEY);
-    if (!raw) return "unset";
-    const parsed = JSON.parse(raw) as { status?: string };
-    if (parsed?.status === "granted" || parsed?.status === "denied") {
-      return parsed.status;
-    }
-    return "unset";
-  } catch {
-    return "unset";
-  }
+  return isAnalyticsEnabled() ? "granted" : "unset";
 }
 
 export function hasAnalyticsConsent(): boolean {
-  if (!isAnalyticsEnabled()) return false;
-  if (!requiresAnalyticsConsent()) return true;
-  return getAnalyticsConsent() === "granted";
+  return isAnalyticsEnabled();
 }
 
 export function ensureDataLayerAndGtag(): boolean {

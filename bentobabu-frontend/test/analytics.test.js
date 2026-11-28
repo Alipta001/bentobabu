@@ -87,18 +87,12 @@ function run() {
     }
   };
 
-  assert.strictEqual(analytics.getAnalyticsConsent(), "unset");
-  assert.strictEqual(analytics.hasAnalyticsConsent(), false);
+  // 2. Automatic analytics enabled when master gate is true (no consent banner required)
+  assert.strictEqual(analytics.requiresAnalyticsConsent(), false);
+  assert.strictEqual(analytics.getAnalyticsConsent(), "granted");
+  assert.strictEqual(analytics.hasAnalyticsConsent(), true);
 
-  // 3. Denied consent blocks all dataLayer events & pre-consent interactions are never replayed
-  analytics.setAnalyticsConsent("denied");
-  assert.strictEqual(analytics.hasAnalyticsConsent(), false);
-  const lenBefore = dataLayer.length;
-  analytics.trackSearch("protein bowl");
-  analytics.trackAddToCart({ id: "p1", name: "Bowl A", price: 200 }, 1);
-  assert.strictEqual(dataLayer.length, lenBefore);
-
-  // 4. Mid-page consent acceptance: unconsented mount does NOT lock out ref, acceptance fires current view once, withdrawal stops future events
+  // 3. Automatic view_item & page_view deduplication across rerenders
   let viewedProductRef = null;
   const sampleProd = { id: "p_mid", name: "Mid-Page Bowl", price: 250 };
   const runViewItemEffect = () => {
@@ -108,31 +102,14 @@ function run() {
     analytics.trackViewItem(sampleProd);
   };
 
-  // Initial mount while denied: no event, ref stays null
   runViewItemEffect();
-  assert.strictEqual(viewedProductRef, null);
-  assert.strictEqual(dataLayer.some((d) => d && d.event === "view_item"), false);
-
-  // Subscribe like useAnalyticsConsent and accept consent on the same page
-  const unsub = analytics.subscribeAnalyticsConsent(runViewItemEffect);
-  analytics.setAnalyticsConsent("granted");
-  assert.strictEqual(analytics.hasAnalyticsConsent(), true);
+  runViewItemEffect();
   assert.strictEqual(viewedProductRef, "p_mid");
   assert.strictEqual(
     dataLayer.filter((d) => d && d.event === "view_item").length,
     1,
-    "view_item must fire once on mid-page consent grant"
+    "view_item must fire once across rerenders"
   );
-  // Old pre-consent add_to_cart must NOT be replayed
-  assert.strictEqual(
-    dataLayer.some((d) => d && d.event === "add_to_cart"),
-    false,
-    "Pre-consent interactions must not be replayed"
-  );
-
-  // Rerender while granted must not duplicate view_item
-  runViewItemEffect();
-  assert.strictEqual(dataLayer.filter((d) => d && d.event === "view_item").length, 1);
 
   // Page view deduplication across rerenders
   let lastPageRef = null;
@@ -148,15 +125,15 @@ function run() {
   analytics.trackSearch("millet bowl");
   assert.ok(dataLayer.some((d) => d && d.event === "search" && d.search_term === "millet bowl"));
 
-  // Consent withdrawal stops all future events
-  analytics.setAnalyticsConsent("denied");
-  unsub();
+  // 4. Master gate disabled blocks all events immediately
+  process.env.NEXT_PUBLIC_ENABLE_ANALYTICS = "false";
   assert.strictEqual(analytics.hasAnalyticsConsent(), false);
-  const lenAfterWithdraw = dataLayer.length;
-  analytics.trackSearch("after withdraw");
+  const lenWhenDisabled = dataLayer.length;
+  analytics.trackSearch("while disabled");
   analytics.trackAddToCart(sampleProd, 1);
   analytics.trackPageView("/cart");
-  assert.strictEqual(dataLayer.length, lenAfterWithdraw);
+  assert.strictEqual(dataLayer.length, lenWhenDisabled);
+  process.env.NEXT_PUBLIC_ENABLE_ANALYTICS = "true";
 
   // 5. URL & Search PII sanitization
   assert.strictEqual(
@@ -308,17 +285,19 @@ function run() {
       return entry;
     });
 
-  // 8a. First-time visitor: no stored consent -> default denied only, no update, banner should prompt
+  // 8a. Fresh visit with analytics enabled -> automatically queues default denied FIRST, analytics granted SECOND, then events
   const firstVisit = createMockWindow();
   global.window = firstVisit.win;
   process.env.NEXT_PUBLIC_ENABLE_ANALYTICS = "true";
-  process.env.NEXT_PUBLIC_REQUIRE_ANALYTICS_CONSENT = "true";
   const canTrackFirst = analytics.ensureConsentModeInitialized();
-  assert.strictEqual(canTrackFirst, false);
-  assert.strictEqual(analytics.getAnalyticsConsent(), "unset");
-  assert.strictEqual(analytics.hasAnalyticsConsent(), false);
+  assert.strictEqual(canTrackFirst, true);
+  assert.strictEqual(analytics.isConsentModeInitialized(), true);
+  assert.strictEqual(analytics.hasAnalyticsConsent(), true);
+  // Calling again must not duplicate consent default/update
+  assert.strictEqual(analytics.ensureConsentModeInitialized(), true);
+  analytics.trackPageView("/menu");
   const firstCmds = toCmdList(firstVisit.dataLayer);
-  assert.strictEqual(firstCmds.length, 1);
+  assert.strictEqual(firstCmds.length, 3);
   assert.strictEqual(firstCmds[0][0], "consent");
   assert.strictEqual(firstCmds[0][1], "default");
   assert.deepStrictEqual(firstCmds[0][2], {
@@ -328,74 +307,15 @@ function run() {
     ad_personalization: "denied",
     wait_for_update: 500,
   });
-
-  // 8b. Returning visitor with granted consent -> default denied FIRST, update granted SECOND, then events
-  const returningGranted = createMockWindow();
-  returningGranted.win.localStorage.setItem(
-    analytics.CONSENT_STORAGE_KEY,
-    JSON.stringify({ status: "granted", updatedAt: "2026-11-28T00:00:00.000Z" })
-  );
-  global.window = returningGranted.win;
-  const canTrackReturning = analytics.ensureConsentModeInitialized();
-  assert.strictEqual(canTrackReturning, true);
-  // Calling again must not duplicate consent default/update
-  assert.strictEqual(analytics.ensureConsentModeInitialized(), true);
-  analytics.trackPageView("/menu");
-  const grantedCmds = toCmdList(returningGranted.dataLayer);
-  assert.strictEqual(grantedCmds.length, 3);
-  assert.strictEqual(grantedCmds[0][0], "consent");
-  assert.strictEqual(grantedCmds[0][1], "default");
-  assert.strictEqual(grantedCmds[0][2].analytics_storage, "denied");
-  assert.strictEqual(grantedCmds[1][0], "consent");
-  assert.strictEqual(grantedCmds[1][1], "update");
-  assert.strictEqual(grantedCmds[1][2].analytics_storage, "granted");
-  assert.strictEqual(grantedCmds[2].event, "page_view");
-
-  // 8c. Returning visitor with denied consent -> remains denied, no update, no events
-  const returningDenied = createMockWindow();
-  returningDenied.win.localStorage.setItem(
-    analytics.CONSENT_STORAGE_KEY,
-    JSON.stringify({ status: "denied", updatedAt: "2026-11-28T00:00:00.000Z" })
-  );
-  global.window = returningDenied.win;
-  assert.strictEqual(analytics.ensureConsentModeInitialized(), false);
-  analytics.trackSearch("biryani");
-  const deniedCmds = toCmdList(returningDenied.dataLayer);
-  assert.strictEqual(deniedCmds.length, 1);
-  assert.strictEqual(deniedCmds[0][1], "default");
-  assert.strictEqual(deniedCmds[0][2].analytics_storage, "denied");
-
-  // 8d. Unavailable localStorage -> fails closed (denied), no events
-  const brokenStorageWin = createMockWindow();
-  brokenStorageWin.win.localStorage.getItem = () => {
-    throw new Error("SecurityError");
-  };
-  global.window = brokenStorageWin.win;
-  assert.strictEqual(analytics.ensureConsentModeInitialized(), false);
-  assert.strictEqual(analytics.hasAnalyticsConsent(), false);
-  analytics.trackSearch("blocked");
-  assert.strictEqual(brokenStorageWin.dataLayer.length, 1);
-
-  // 8e. Malformed consent data -> fails closed (denied), no events
-  const malformedWin = createMockWindow();
-  malformedWin.win.localStorage.setItem(analytics.CONSENT_STORAGE_KEY, "{not-valid-json");
-  global.window = malformedWin.win;
-  assert.strictEqual(analytics.getAnalyticsConsent(), "unset");
-  assert.strictEqual(analytics.ensureConsentModeInitialized(), false);
-  malformedWin.win.localStorage.setItem(
-    analytics.CONSENT_STORAGE_KEY,
-    JSON.stringify({ status: "unexpected_value" })
-  );
-  assert.strictEqual(analytics.getAnalyticsConsent(), "unset");
-  assert.strictEqual(analytics.hasAnalyticsConsent(), false);
-
-  // 8f. Consent withdrawal -> update denied queued, subsequent events blocked
-  global.window = returningGranted.win;
-  analytics.setAnalyticsConsent("denied");
-  assert.strictEqual(analytics.hasAnalyticsConsent(), false);
-  const lenBeforeWithdraw = returningGranted.dataLayer.length;
-  analytics.trackSearch("should not track");
-  assert.strictEqual(returningGranted.dataLayer.length, lenBeforeWithdraw);
+  assert.strictEqual(firstCmds[1][0], "consent");
+  assert.strictEqual(firstCmds[1][1], "update");
+  assert.deepStrictEqual(firstCmds[1][2], {
+    analytics_storage: "granted",
+    ad_storage: "denied",
+    ad_user_data: "denied",
+    ad_personalization: "denied",
+  });
+  assert.strictEqual(firstCmds[2].event, "page_view");
 
   // 8g. Initialization failure leaves window uninitialized & blocks consent grant update and events
   process.env.NEXT_PUBLIC_ENABLE_ANALYTICS = "true";
@@ -500,79 +420,47 @@ function run() {
   assert.strictEqual(updateRetryCmds[1][2].analytics_storage, "granted");
   assert.strictEqual(updateRetryCmds[2].event, "page_view");
 
-  // Case 5: New visitor clicks Accept while granted update fails -> GTM eligibility stays false until lifecycle retry succeeds
-  const newVisitorWin = createMockWindow();
-  let failNewVisitorUpdate = true;
-  newVisitorWin.win.gtag = function (cmd, action, payload) {
-    if (cmd === "consent" && action === "update" && failNewVisitorUpdate) {
-      throw new Error("new visitor update failure");
+  // Case 5: Lifecycle retry recovers automatic initialization without duplicating default denied
+  const lifecycleWin = createMockWindow();
+  let failLifecycleUpdate = true;
+  lifecycleWin.win.gtag = function (cmd, action, payload) {
+    if (cmd === "consent" && action === "update" && failLifecycleUpdate) {
+      throw new Error("transient lifecycle update failure");
     }
-    newVisitorWin.dataLayer.push([cmd, action, payload]);
+    lifecycleWin.dataLayer.push([cmd, action, payload]);
   };
-  global.window = newVisitorWin.win;
+  global.window = lifecycleWin.win;
 
   assert.strictEqual(analytics.ensureConsentModeInitialized(), false);
-  assert.strictEqual(analytics.hasAnalyticsConsent(), false);
-
-  // Visitor clicks Accept
-  analytics.setAnalyticsConsent("granted");
-  assert.strictEqual(analytics.hasAnalyticsConsent(), true);
   assert.strictEqual(analytics.isConsentModeInitialized(), false);
-  assert.strictEqual(analytics.isConsentModeInitialized() && analytics.hasAnalyticsConsent(), false);
 
-  // Simulate lifecycle listener attachment & cleanup as in AnalyticsProvider
-  const docListeners = new Map();
-  const mockDoc = {
-    visibilityState: "visible",
-    addEventListener: (t, cb) => {
-      const list = docListeners.get(t) || [];
-      list.push(cb);
-      docListeners.set(t, list);
-    },
-    removeEventListener: (t, cb) => {
-      const list = docListeners.get(t) || [];
-      docListeners.set(t, list.filter((item) => item !== cb));
-    },
-  };
   const onFocusOrOnline = () => {
     analytics.ensureConsentModeInitialized();
   };
-  const onVisChange = () => {
-    if (mockDoc.visibilityState === "visible") analytics.ensureConsentModeInitialized();
-  };
-  newVisitorWin.win.addEventListener("focus", onFocusOrOnline);
-  newVisitorWin.win.addEventListener("online", onFocusOrOnline);
-  mockDoc.addEventListener("visibilitychange", onVisChange);
+  lifecycleWin.win.addEventListener("focus", onFocusOrOnline);
+  lifecycleWin.win.addEventListener("online", onFocusOrOnline);
 
   // Update still failing -> retry keeps GTM eligibility false
-  newVisitorWin.win.dispatchEvent({ type: "focus" });
+  lifecycleWin.win.dispatchEvent({ type: "focus" });
   assert.strictEqual(analytics.isConsentModeInitialized() && analytics.hasAnalyticsConsent(), false);
 
-  // Update recovers -> visibilitychange retry succeeds without duplicating default denied
-  failNewVisitorUpdate = false;
-  onVisChange();
+  // Update recovers -> online retry succeeds without duplicating default denied
+  failLifecycleUpdate = false;
+  lifecycleWin.win.dispatchEvent({ type: "online" });
   assert.strictEqual(analytics.isConsentModeInitialized() && analytics.hasAnalyticsConsent(), true);
   analytics.trackPageView("/checkout");
 
-  // Cleanup removes listeners
-  newVisitorWin.win.removeEventListener("focus", onFocusOrOnline);
-  newVisitorWin.win.removeEventListener("online", onFocusOrOnline);
-  mockDoc.removeEventListener("visibilitychange", onVisChange);
-  assert.strictEqual((docListeners.get("visibilitychange") || []).length, 0);
+  lifecycleWin.win.removeEventListener("focus", onFocusOrOnline);
+  lifecycleWin.win.removeEventListener("online", onFocusOrOnline);
 
-  const newVisitorCmds = toCmdList(newVisitorWin.dataLayer);
-  assert.strictEqual(newVisitorCmds.length, 3);
-  assert.strictEqual(newVisitorCmds[0][0], "consent");
-  assert.strictEqual(newVisitorCmds[0][1], "default");
-  assert.strictEqual(newVisitorCmds[1][0], "consent");
-  assert.strictEqual(newVisitorCmds[1][1], "update");
-  assert.strictEqual(newVisitorCmds[1][2].analytics_storage, "granted");
-  assert.strictEqual(newVisitorCmds[2].event, "page_view");
-
-  // Withdrawal immediately blocks tracking again
-  analytics.setAnalyticsConsent("denied");
-  assert.strictEqual(analytics.hasAnalyticsConsent(), false);
-  assert.strictEqual(analytics.isConsentModeInitialized() && analytics.hasAnalyticsConsent(), false);
+  const lifecycleCmds = toCmdList(lifecycleWin.dataLayer);
+  assert.strictEqual(lifecycleCmds.length, 3);
+  assert.strictEqual(lifecycleCmds[0][0], "consent");
+  assert.strictEqual(lifecycleCmds[0][1], "default");
+  assert.strictEqual(lifecycleCmds[1][0], "consent");
+  assert.strictEqual(lifecycleCmds[1][1], "update");
+  assert.strictEqual(lifecycleCmds[1][2].analytics_storage, "granted");
+  assert.strictEqual(lifecycleCmds[2].event, "page_view");
 
   // 8i. Invalid/NaN/negative/overflow ecommerce inputs fail safely without NaN or Infinity
   const guardWin = createMockWindow();

@@ -31,7 +31,7 @@ export const metadata: Metadata = {
 };
 
 export default function GooglePrivacyPolicyPage() {
-  const lastUpdated = "November 21, 2026";
+  const lastUpdated = "November 28, 2026";
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F3EA] text-[#222922]">
@@ -415,11 +415,33 @@ export default function GooglePrivacyPolicyPage() {
 
             <hr className="border-[#E5DFC5]" />
 
-            {/* 11. Contact Information */}
-            <section className="space-y-4">
+            {/* 11. Website Analytics & Telemetry */}
+            <section className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-[#F7F3EA] text-[#354B35] font-serif font-bold text-sm flex items-center justify-center border border-[#E5DFC5]">
                   11
+                </div>
+                <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#222922]">
+                  Website Analytics &amp; Performance Telemetry
+                </h2>
+              </div>
+              <p className="text-sm sm:text-base text-[#4A554A] leading-relaxed">
+                When analytics is enabled on BentoBabu, we automatically collect aggregated usage and ecommerce telemetry using <strong>Google Tag Manager / Google Analytics 4 (GA4)</strong> and <strong>Vercel Analytics</strong> to understand menu engagement, improve website performance, and measure order funnel health.
+              </p>
+              <ul className="space-y-1.5 text-xs sm:text-sm text-[#4A554A] pl-1">
+                <li>• <strong>Data collected:</strong> Sanitized page paths, allowlisted menu filters (category, dietary, sort, page, date), product view/cart/checkout/order-confirmation events, and order totals.</li>
+                <li>• <strong>Data excluded:</strong> We never send customer names, email addresses, phone numbers, delivery addresses, OTPs, passwords, authentication tokens, order notes, or payment credentials to analytics providers.</li>
+                <li>• <strong>Advertising controls:</strong> Advertising storage and personalization signals remain denied; analytics data is not used for third-party ad targeting.</li>
+              </ul>
+            </section>
+
+            <hr className="border-[#E5DFC5]" />
+
+            {/* 12. Contact Information */}
+            <section className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-[#F7F3EA] text-[#354B35] font-serif font-bold text-sm flex items-center justify-center border border-[#E5DFC5]">
+                  12
                 </div>
                 <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#222922]">
                   Contact Information

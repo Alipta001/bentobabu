@@ -15,7 +15,6 @@ import {
   sanitizeVercelUrl,
   trackPageView,
 } from "@/lib/analytics";
-import { ConsentBanner } from "./ConsentBanner";
 
 function subscribeConsent(callback: () => void): () => void {
   if (typeof window === "undefined") return () => {};
@@ -116,7 +115,6 @@ export function AnalyticsProvider() {
       <Suspense fallback={null}>
         <RoutePageViewTracker consentGranted={canTrack} />
       </Suspense>
-      <ConsentBanner />
     </>
   );
 }
