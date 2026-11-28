@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -26,6 +26,13 @@ import { cartService } from "@/services/cartService";
 import { useDeliveryConfig } from "@/hooks/useQueries";
 import { useOrderingStatus } from "@/context/OrderingStatusContext";
 import { getOptimizedImageUrl, isCloudinaryUrl } from "@/utils/mediaUrl";
+import {
+  mapProductToGa4Item,
+  trackAddToCart,
+  trackRemoveFromCart,
+  trackViewCart,
+} from "@/lib/analytics";
+import { useAnalyticsConsent } from "@/components/analytics/useAnalyticsConsent";
 
 export default function CartPage() {
   const dispatch = useAppDispatch();
@@ -59,6 +66,25 @@ export default function CartPage() {
 
   const tax = 0;
   const total = Math.max(0, subtotal - discount + tax);
+
+  const consentGranted = useAnalyticsConsent();
+  const viewedCartRef = useRef(false);
+  useEffect(() => {
+    if (!consentGranted || viewedCartRef.current || cartItems.length === 0) return;
+    viewedCartRef.current = true;
+    const gaItems = cartItems
+      .map((it, index) =>
+        mapProductToGa4Item(it?.product, it?.quantity, {
+          variantName: it?.variantName,
+          unitPrice: it?.unitPrice ?? it?.product?.price,
+          index,
+        })
+      )
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+    if (gaItems.length > 0) {
+      trackViewCart(gaItems, subtotal);
+    }
+  }, [consentGranted, cartItems, subtotal]);
 
   const handleApplyCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,7 +228,15 @@ export default function CartPage() {
                         {/* Quantity Stepper */}
                         <div className="flex items-center gap-2 bg-[#F7F3EA] border border-[#E5DFC5] rounded-full p-1">
                           <button
-                            onClick={() => setQuantity(item.product.id, item.quantity - 1, item.variantId)}
+                            onClick={() => {
+                              setQuantity(item.product.id, item.quantity - 1, item.variantId);
+                              trackRemoveFromCart(
+                                item.product,
+                                1,
+                                item.variantName,
+                                item.unitPrice ?? item.product.price
+                              );
+                            }}
                             className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5"
                             aria-label="Decrease quantity"
                           >
@@ -212,7 +246,15 @@ export default function CartPage() {
                             {item.quantity}
                           </span>
                           <button
-                            onClick={() => setQuantity(item.product.id, item.quantity + 1, item.variantId)}
+                            onClick={() => {
+                              setQuantity(item.product.id, item.quantity + 1, item.variantId);
+                              trackAddToCart(
+                                item.product,
+                                1,
+                                item.variantName,
+                                item.unitPrice ?? item.product.price
+                              );
+                            }}
                             disabled={item.product.isAvailable === false}
                             className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed"
                             aria-label="Increase quantity"
@@ -230,7 +272,15 @@ export default function CartPage() {
 
                         {/* Delete Item */}
                         <button
-                          onClick={() => removeItem(item.product.id, item.variantId)}
+                          onClick={() => {
+                            removeItem(item.product.id, item.variantId);
+                            trackRemoveFromCart(
+                              item.product,
+                              item.quantity,
+                              item.variantName,
+                              item.unitPrice ?? item.product.price
+                            );
+                          }}
                           className="text-[#8A9A86] hover:text-[#C86D51] p-1.5 transition-colors cursor-pointer"
                           title="Remove item"
                         >

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -27,6 +27,8 @@ import { useOrderingStatus } from "@/context/OrderingStatusContext";
 import { getOptimizedImageUrl, isCloudinaryUrl } from "@/utils/mediaUrl";
 import { deduplicateUrls } from "@/services/productService";
 import { ProductDescription } from "@/components/product/ProductDescription";
+import { trackAddToCart, trackViewItem } from "@/lib/analytics";
+import { useAnalyticsConsent } from "@/components/analytics/useAnalyticsConsent";
 
 interface ProductDetailViewProps {
   product: Product;
@@ -102,12 +104,28 @@ export function ProductDetailView({
       (targetVariantKey ? (item.variantId ? String(item.variantId) : null) === String(targetVariantKey) : true)
   );
 
+  const consentGranted = useAnalyticsConsent();
+  const viewedProductIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!consentGranted) return;
+    const pid = String(product.id || product._id || "");
+    if (!pid || viewedProductIdRef.current === pid) return;
+    viewedProductIdRef.current = pid;
+    trackViewItem(product, effectivePrice, selectedVariant?.name || null);
+  }, [consentGranted, product, effectivePrice, selectedVariant]);
+
   const handleAddToCart = () => {
     if (isVariantUnavailable) return;
     addItem(
       product,
       quantity,
       selectedVariant?._id || selectedVariant?.id || null,
+      selectedVariant?.name || null,
+      effectivePrice
+    );
+    trackAddToCart(
+      product,
+      quantity,
       selectedVariant?.name || null,
       effectivePrice
     );

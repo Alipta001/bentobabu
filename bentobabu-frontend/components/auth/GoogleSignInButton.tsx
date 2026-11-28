@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authService } from "@/services/authService";
+import { trackLogin, trackSignUp } from "@/lib/analytics";
 import { User } from "@/types";
 import { Loader2 } from "lucide-react";
 
@@ -124,6 +125,11 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
 
     try {
       const authResult = await authService.googleLogin(response.credential);
+      if ((authResult as { isNewUser?: boolean })?.isNewUser === true) {
+        trackSignUp("google");
+      } else {
+        trackLogin("google");
+      }
       if (onSuccess) {
         onSuccess(authResult.user);
       }

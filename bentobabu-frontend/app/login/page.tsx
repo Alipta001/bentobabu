@@ -15,6 +15,7 @@ import {
   buildRegisterUrl,
   DEFAULT_POST_LOGIN_PATH,
 } from "@/lib/authRedirect";
+import { trackLogin } from "@/lib/analytics";
 
 function LoginUrlSync({
   onTarget,
@@ -76,6 +77,7 @@ function LoginForm() {
 
     try {
       await login({ email: email.trim(), password });
+      trackLogin("password");
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.USER_PROFILE });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ORDERS });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.ADDRESSES });

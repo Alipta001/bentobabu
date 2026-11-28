@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, Suspense } from "react";
+import React, { useState, useMemo, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Filter,
@@ -18,6 +18,8 @@ import { ProductCard } from "@/components/product/ProductCard";
 import { useProducts, useCategories } from "@/hooks/useQueries";
 import { DietaryType, ProductFilterOptions } from "@/types";
 import { deduplicateProductsById } from "@/lib/menuUtils";
+import { trackSearch, trackViewItemList } from "@/lib/analytics";
+import { useAnalyticsConsent } from "@/components/analytics/useAnalyticsConsent";
 
 function getKolkataToday(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -133,6 +135,30 @@ export default function MenuPage() {
     () => (isSearchActive ? deduplicateProductsById(products) : products),
     [isSearchActive, products]
   );
+
+  const consentGranted = useAnalyticsConsent();
+
+  const lastTrackedListRef = useRef<string>("");
+  useEffect(() => {
+    if (!consentGranted || isLoading || displayedProducts.length === 0) return;
+    const listId = isAllCategory ? "menu_all" : `menu_${selectedCategory}`;
+    const listKey = `${listId}:${displayedProducts.map((p) => p.id).join(",")}`;
+    if (lastTrackedListRef.current === listKey) return;
+    lastTrackedListRef.current = listKey;
+    const catName =
+      !isAllCategory
+        ? categories.find((c) => c.id === selectedCategory || c.slug === selectedCategory)?.name || "Category Menu"
+        : "All Menu";
+    trackViewItemList(listId, catName, displayedProducts);
+  }, [consentGranted, isLoading, displayedProducts, isAllCategory, selectedCategory, categories]);
+
+  const lastTrackedSearchRef = useRef<string>("");
+  useEffect(() => {
+    const q = debouncedSearch.trim();
+    if (!consentGranted || !q || lastTrackedSearchRef.current === q) return;
+    lastTrackedSearchRef.current = q;
+    trackSearch(q);
+  }, [consentGranted, debouncedSearch]);
 
   const signatureProducts = useMemo(() => {
     const seen = new Set<string>();
